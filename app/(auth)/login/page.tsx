@@ -28,6 +28,7 @@ export default function LoginPage() {
   const supabase = createClient()
 
   // ── INICIAR SESIÓN CON CREDENCIALES ───────────────────────────────────────
+  // ── INICIAR SESIÓN CON CREDENCIALES ───────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email.trim() || !password.trim()) {
@@ -37,53 +38,105 @@ export default function LoginPage() {
 
     setLoading(true)
 
-    // Buscar si coincide con alguna cuenta demo preestablecida
-    const acc = ACUENTAS_RAPIDAS.find(a => a.email.toLowerCase() === email.trim().toLowerCase())
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+    const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
 
-    let targetRole = acc ? acc.rol : 'admin'
-    let targetName = acc ? acc.nombre : email.split('@')[0]
+    let targetRole = 'vendedora'
+    let targetName = email.split('@')[0]
+    let loginExitoso = false
 
-    // Intentar inicio de sesión real en Supabase Auth
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password.trim()
-      })
+    if (isMock) {
+      // MODO MOCK/DEMO LOCAL
+      const acc = ACUENTAS_RAPIDAS.find(a => a.email.toLowerCase() === email.trim().toLowerCase())
+      targetRole = acc ? acc.rol : 'admin'
+      targetName = acc ? acc.nombre : email.split('@')[0]
+      loginExitoso = true
+    } else {
+      // MODO PRODUCCIÓN REAL
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password: password.trim()
+        })
 
-      if (!error && data?.user) {
-        const { data: perfil } = await supabase
-          .from('usuarios')
-          .select('nombre, rol')
-          .eq('email', email.trim())
-          .single()
+        if (!error && data?.user) {
+          const { data: perfil } = await supabase
+            .from('usuarios')
+            .select('nombre, rol, activo')
+            .eq('email', email.trim())
+            .single()
 
-        if (perfil) {
-          targetRole = perfil.rol || 'admin'
-          targetName = perfil.nombre || targetName
+          if (perfil) {
+            if (!perfil.activo) {
+              toast.error('Este usuario está desactivado en el sistema')
+              setLoading(false)
+              return
+            }
+            targetRole = perfil.rol || 'vendedora'
+            targetName = perfil.nombre || targetName
+            loginExitoso = true
+          } else {
+            toast.error('El usuario no tiene un perfil configurado')
+            setLoading(false)
+            return
+          }
+        } else {
+          // Fallback para usuarios creados localmente en base de datos sin Auth de Supabase (uso de testing/demo)
+          const { data: perfil } = await supabase
+            .from('usuarios')
+            .select('nombre, rol, activo')
+            .eq('email', email.trim())
+            .single()
+
+          if (perfil) {
+            if (!perfil.activo) {
+              toast.error('Este usuario está desactivado')
+              setLoading(false)
+              return
+            }
+            // Aceptar contraseña por defecto para cuentas creadas desde la app
+            if (password === 'durey2026' || password === '123456') {
+              targetRole = perfil.rol || 'vendedora'
+              targetName = perfil.nombre || targetName
+              loginExitoso = true
+            } else {
+              toast.error('Contraseña incorrecta para este usuario')
+              setLoading(false)
+              return
+            }
+          } else {
+            toast.error('Usuario o contraseña incorrectos')
+            setLoading(false)
+            return
+          }
         }
+      } catch (err) {
+        toast.error('Error al conectar con el servidor de autenticación')
+        setLoading(false)
+        return
       }
-    } catch (err) {
-      console.log('Falla inicio Supabase Auth, continuando modo demo local:', err)
     }
 
-    // Establecer cookies de sesión
-    document.cookie = `durey_demo_role=${targetRole}; path=/; max-age=86400`
-    document.cookie = `durey_demo_name=${encodeURIComponent(targetName)}; path=/; max-age=86400`
-    document.cookie = `durey_demo_email=${encodeURIComponent(email.trim())}; path=/; max-age=86400`
+    if (loginExitoso) {
+      document.cookie = `durey_demo_role=${targetRole}; path=/; max-age=86400`
+      document.cookie = `durey_demo_name=${encodeURIComponent(targetName)}; path=/; max-age=86400`
+      document.cookie = `durey_demo_email=${encodeURIComponent(email.trim())}; path=/; max-age=86400`
 
-    toast.success(`Bienvenido a DUREY, ${targetName}`, { icon: '👋' })
+      toast.success(`Bienvenido a DUREY, ${targetName}`, { icon: '👋' })
 
-    // Redireccionar al módulo asignado por rol
-    let redirectPath = '/dashboard/admin'
-    if (targetRole === 'vendedora') redirectPath = '/dashboard/ventas'
-    else if (targetRole === 'almacenero') redirectPath = '/dashboard/almacen'
-    else if (targetRole === 'preparador') redirectPath = '/dashboard/preparado'
-    else if (targetRole === 'planchador') redirectPath = '/dashboard/planchado'
-    else if (targetRole === 'tecnico') redirectPath = '/dashboard/mantenimiento'
-    else if (targetRole === 'tejedor') redirectPath = '/dashboard/produccion'
+      let redirectPath = '/dashboard/admin'
+      if (targetRole === 'vendedora') redirectPath = '/dashboard/ventas'
+      else if (targetRole === 'almacenero') redirectPath = '/dashboard/almacen'
+      else if (targetRole === 'preparador') redirectPath = '/dashboard/preparado'
+      else if (targetRole === 'planchador') redirectPath = '/dashboard/planchado'
+      else if (targetRole === 'tecnico') redirectPath = '/dashboard/mantenimiento'
+      else if (targetRole === 'tejedor') redirectPath = '/dashboard/produccion'
+      else if (targetRole === 'supervisor') redirectPath = '/dashboard/usuarios'
 
-    router.push(redirectPath)
+      router.push(redirectPath)
+    }
   }
+
 
   // ── INICIO DE SESIÓN RÁPIDO CON 1 CLIC ───────────────────────────────────
   const loginRapido = (acc: typeof ACUENTAS_RAPIDAS[0]) => {
