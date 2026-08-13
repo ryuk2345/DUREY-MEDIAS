@@ -73,8 +73,10 @@ export default function AlmacenPage() {
   const [productoSeleccionado, setProductoSeleccionado] = useState<CatalogoMedia | null>(null)
   const [formIngreso, setFormIngreso] = useState({ docenas: '', salon_id: '', nota: '' })
   const [guardandoIngreso, setGuardandoIngreso] = useState(false)
+  const [salonDestinoManual, setSalonDestinoManual] = useState<Record<string, string>>({})
 
   const supabase = createClient()
+
 
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
@@ -649,25 +651,51 @@ export default function AlmacenPage() {
                   </td>
                   <td className="text-right">
                     {p.estado !== 'almacenado' && (
-                      <button
-                        onClick={async () => {
-                          const v = validarTransicionEstadoPaquete(p.estado as any, 'almacenado')
-                          if (!v.valido) {
-                            toast.error(`Error en paquete: ${v.error}`)
-                            return
-                          }
-                          const salonA = ubicaciones[0]?.id || ''
-                          await supabase.from('paquetes').update({ estado: 'almacenado', ubicacion_id: salonA }).eq('id', p.id)
-                          toast.success(`Saco ${p.codigo_paquete} asignado a ${ubicaciones[0]?.nombre || 'Salón A'}`)
-                          cargarDatos()
-                        }}
-                        className="btn-primary py-1 px-3 text-xs bg-emerald-600 border-none font-bold"
-                      >
-                        Confirmar Almacenamiento
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <select
+                          value={salonDestinoManual[p.id] || p.ubicacion_id || p.ubicacion?.id || ubicaciones[0]?.id || ''}
+                          onChange={e => setSalonDestinoManual(prev => ({ ...prev, [p.id]: e.target.value }))}
+                          className="bg-slate-900 border border-white/10 rounded-xl px-2 py-1 text-xs text-white font-medium"
+                        >
+                          {ubicaciones.map(u => (
+                            <option key={u.id} value={u.id}>{u.nombre}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={async () => {
+                            const v = validarTransicionEstadoPaquete(p.estado as any, 'almacenado')
+                            if (!v.valido) {
+                              toast.error(`Error en paquete: ${v.error}`)
+                              return
+                            }
+                            const destId = salonDestinoManual[p.id] || p.ubicacion_id || p.ubicacion?.id || ubicaciones[0]?.id || ''
+                            const destNombre = ubicaciones.find(u => u.id === destId)?.nombre || 'Salón'
+                            
+                            const { error } = await supabase.from('paquetes').update({ estado: 'almacenado', ubicacion_id: destId }).eq('id', p.id)
+                            if (error) {
+                              toast.error(`Error al almacenar saco: ${error.message}`)
+                              return
+                            }
+                            
+                            // Registrar en movimientos de stock
+                            await supabase.from('movimientos_stock').insert({
+                              tipo: 'ingreso_salon',
+                              referencia: `Manual Saco ${p.codigo_paquete}`,
+                              ubicacion_id: destId,
+                              docenas: p.docenas
+                            })
 
+                            toast.success(`📍 Saco ${p.codigo_paquete} almacenado en ${destNombre}`)
+                            cargarDatos()
+                          }}
+                          className="btn-primary py-1.5 px-3 text-[11px] bg-emerald-600 border-none font-bold"
+                        >
+                          Confirmar
+                        </button>
+                      </div>
                     )}
                   </td>
+
                 </tr>
               ))}
             </tbody>
