@@ -285,8 +285,11 @@ CREATE TABLE cuotas (
   monto             NUMERIC(12,2) NOT NULL,
   fecha_vencimiento DATE NOT NULL,
   estado            TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente','pagada','vencida')),
+  metodo_pago       TEXT,
+  comprobante_url   TEXT,
   created_at        TIMESTAMPTZ DEFAULT NOW()
 );
+
 
 CREATE TABLE cobros (
   id                     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
