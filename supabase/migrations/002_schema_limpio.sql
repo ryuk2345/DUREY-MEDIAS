@@ -347,12 +347,16 @@ CREATE TABLE averias_maquinas (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   maquina_id            UUID NOT NULL REFERENCES maquinas(id),
   reportado_por_id      UUID REFERENCES usuarios(id),
+  tipo_averia           TEXT,
   descripcion_operador  TEXT NOT NULL,
   estado                TEXT NOT NULL DEFAULT 'pendiente'
                         CHECK (estado IN ('pendiente','en_reparacion','resuelto')),
+  asignado_a            TEXT,
+  nivel                 TEXT DEFAULT 'CRÍTICO',
   fecha_reporte         TIMESTAMPTZ DEFAULT NOW(),
   created_at            TIMESTAMPTZ DEFAULT NOW()
 );
+
 
 CREATE TABLE reparaciones (
   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

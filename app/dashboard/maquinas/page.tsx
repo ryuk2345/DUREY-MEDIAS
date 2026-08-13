@@ -199,7 +199,7 @@ export default function MaquinasPage() {
     const { error } = await supabase.from('averias_maquinas').insert(nuevoReporte)
 
     if (error) {
-      toast.error('Error al enviar el reporte crítico')
+      toast.error(`Error al enviar el reporte crítico: ${error.message || JSON.stringify(error)}`)
       setEnviandoReporte(false)
       return
     }
