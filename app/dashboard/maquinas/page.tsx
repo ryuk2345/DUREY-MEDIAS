@@ -167,9 +167,9 @@ export default function MaquinasPage() {
 
 
   // ── GUARDAR NUEVA FALLA / REPORTE CRÍTICO ──────────────────────────────────
-  const enviarReporteCritico = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const enviarReporteCritico = async () => {
     if (!reporteForm.maquina_id) { toast.error('Selecciona la máquina averiada'); return }
+
     if (!reporteForm.descripcion.trim()) { toast.error('Ingresa la descripción detallada del síntoma'); return }
 
     setEnviandoReporte(true)
