@@ -258,11 +258,13 @@ CREATE TABLE ventas (
   asesora_id    UUID REFERENCES usuarios(id),
   tipo_pago     TEXT NOT NULL CHECK (tipo_pago IN ('directo','cuotas')),
   total_soles   NUMERIC(12,2) NOT NULL DEFAULT 0,
+  monto_adelanto NUMERIC(12,2) NOT NULL DEFAULT 0,
   estado        TEXT NOT NULL DEFAULT 'pendiente'
                 CHECK (estado IN ('pendiente','despachado','en_transito','entregado','cerrado')),
   fecha         DATE NOT NULL DEFAULT CURRENT_DATE,
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
+
 
 ALTER TABLE paquetes ADD CONSTRAINT fk_paquetes_venta
   FOREIGN KEY (venta_id) REFERENCES ventas(id);
