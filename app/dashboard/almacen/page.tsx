@@ -8,6 +8,8 @@ import {
   Loader2, X, Search, Check, RefreshCw, Barcode, Box, Layers, Zap, MapPin, ArrowRight, Plus, PackagePlus
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { validarTransicionEstadoPaquete } from '@/lib/domain/packaging'
+
 
 interface Ubicacion { id: string; nombre: string; tipo: string }
 interface Paquete {
@@ -185,6 +187,21 @@ export default function AlmacenPage() {
     setProcesandoEscaneo(true)
 
     if (saco.paqueteId) {
+      // Obtener el estado actual del paquete para validar
+      const { data: pkg } = await supabase.from('paquetes')
+        .select('estado')
+        .eq('id', saco.paqueteId)
+        .single()
+
+      if (pkg) {
+        const v = validarTransicionEstadoPaquete(pkg.estado as any, 'almacenado')
+        if (!v.valido) {
+          toast.error(`Error en paquete: ${v.error}`)
+          setProcesandoEscaneo(false)
+          return
+        }
+      }
+
       await supabase.from('paquetes').update({
         estado: 'almacenado',
         ubicacion_id: saco.salon_destino_id
@@ -199,6 +216,7 @@ export default function AlmacenPage() {
         estado: 'almacenado'
       })
     }
+
 
     // Registrar en movimientos de stock
     await supabase.from('movimientos_stock').insert({
@@ -633,6 +651,11 @@ export default function AlmacenPage() {
                     {p.estado !== 'almacenado' && (
                       <button
                         onClick={async () => {
+                          const v = validarTransicionEstadoPaquete(p.estado as any, 'almacenado')
+                          if (!v.valido) {
+                            toast.error(`Error en paquete: ${v.error}`)
+                            return
+                          }
                           const salonA = ubicaciones[0]?.id || ''
                           await supabase.from('paquetes').update({ estado: 'almacenado', ubicacion_id: salonA }).eq('id', p.id)
                           toast.success(`Saco ${p.codigo_paquete} asignado a ${ubicaciones[0]?.nombre || 'Salón A'}`)
@@ -642,6 +665,7 @@ export default function AlmacenPage() {
                       >
                         Confirmar Almacenamiento
                       </button>
+
                     )}
                   </td>
                 </tr>

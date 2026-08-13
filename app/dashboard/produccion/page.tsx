@@ -10,6 +10,8 @@ import {
   CheckCircle2, Sparkles, Filter, TrendingUp, ShieldAlert
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
+
 
 interface Marca { id: string; nombre: string }
 interface Maquina {
@@ -71,16 +73,32 @@ export default function ProduccionTejidoPage() {
       supabase.from('marcas_maquinas').select('id, nombre').order('nombre'),
       supabase.from('maquinas').select(`
         id, codigo, marca_id, tipo, estado, caracteristicas,
-        marca:marcas_maquinas!marca_id(id, nombre)
+        marca:marcas_maquinas(id, nombre)
       `).eq('tipo', 'tejedora').order('codigo'),
       supabase.from('usuarios').select('id, nombre').eq('rol', 'tejedor').eq('activo', true),
       supabase.from('catalogo_medias').select('id, codigo, modelo, publico, talla').eq('estado', 'activo').order('codigo'),
       supabase.from('turnos_produccion').select(`
         id, fecha, horario, duracion_horas, estado, tejedor_id,
-        tejedor:usuarios!tejedor_id(nombre),
+        tejedor:usuarios(nombre),
         turno_maquinas(maquina_id, catalogo_media_id)
       `).eq('estado', 'activo').order('created_at', { ascending: false })
     ])
+
+    if (mar.error) {
+      toast.error(`Error cargando marcas: ${mar.error.message}`)
+    }
+    if (maq.error) {
+      toast.error(`Error cargando máquinas: ${maq.error.message}`)
+    }
+    if (tj.error) {
+      toast.error(`Error cargando tejedores: ${tj.error.message}`)
+    }
+    if (cat.error) {
+      toast.error(`Error cargando catálogo: ${cat.error.message}`)
+    }
+    if (tur.error) {
+      toast.error(`Error cargando turnos: ${tur.error.message}`)
+    }
 
     setMarcas(mar.data ?? [])
     setMaquinas((maq.data ?? []) as Maquina[])
@@ -89,6 +107,7 @@ export default function ProduccionTejidoPage() {
     setTurnos((tur.data ?? []) as Turno[])
     setLoading(false)
   }, [])
+
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
 
@@ -214,6 +233,18 @@ export default function ProduccionTejidoPage() {
       return
     }
 
+    // Validar transiciones de estado de las máquinas a 'ocupada'
+    for (const mId of maquinaIds) {
+      const maq = maquinas.find(m => m.id === mId)
+      if (maq) {
+        const v = validarTransicionEstadoMaquina(maq.estado as any, 'ocupada')
+        if (!v.valido) {
+          toast.error(`Error en máquina ${maq.codigo}: ${v.error}`)
+          return
+        }
+      }
+    }
+
     // 1. Crear el turno de producción en DB
     const { data: nuevoTurno, error: tErr } = await supabase.from('turnos_produccion').insert({
       tejedor_id,
@@ -239,6 +270,9 @@ export default function ProduccionTejidoPage() {
 
     // 3. Marcar las máquinas de esa marca como ocupadas
     await supabase.from('maquinas').update({ estado: 'ocupada' }).in('id', maquinaIds)
+
+    // 4. Marcar al tejedor como ocupado
+    await supabase.from('usuarios').update({ estado: 'ocupada' }).eq('id', tejedor_id)
 
     toast.success(`✅ Lote cargado. ${maquinaIds.length} máquinas en marcha para el turno.`)
     setCargaForm({
@@ -268,6 +302,19 @@ export default function ProduccionTejidoPage() {
   const enviarReporteProduccion = async () => {
     if (!turnoSeleccionado) return
 
+    // Validar transición de las máquinas a 'activa'
+    const mIds = turnoSeleccionado.turno_maquinas.map(tm => tm.maquina_id)
+    for (const mId of mIds) {
+      const maq = maquinas.find(m => m.id === mId)
+      if (maq) {
+        const v = validarTransicionEstadoMaquina(maq.estado as any, 'activa')
+        if (!v.valido) {
+          toast.error(`Error en máquina ${maq.codigo}: ${v.error}`)
+          return
+        }
+      }
+    }
+
     const items = turnoSeleccionado.turno_maquinas.map(tm => ({
       turno_id: turnoSeleccionado.id,
       maquina_id: tm.maquina_id,
@@ -289,7 +336,7 @@ export default function ProduccionTejidoPage() {
 
       if (mini) {
         await supabase.from('minidepositos').update({
-          total_docenas: mini.total_docenas + item.docenas_producidas,
+          total_docenas: Number(mini.total_docenas) + item.docenas_producidas,
           updated_at: new Date().toISOString()
         }).eq('id', mini.id)
       } else {
@@ -303,13 +350,18 @@ export default function ProduccionTejidoPage() {
 
     // Liberar turno y máquinas
     await supabase.from('turnos_produccion').update({ estado: 'cerrado' }).eq('id', turnoSeleccionado.id)
-    const mIds = turnoSeleccionado.turno_maquinas.map(tm => tm.maquina_id)
     await supabase.from('maquinas').update({ estado: 'activa' }).in('id', mIds)
+
+    // Liberar al tejedor
+    if (turnoSeleccionado.tejedor_id) {
+      await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', turnoSeleccionado.tejedor_id)
+    }
 
     toast.success('🎉 Producción registrada. Minidepósitos actualizados.')
     setShowReporteModal(false)
     cargarDatos()
   }
+
 
   return (
     <div className="space-y-6 animate-fadeInUp pb-12">

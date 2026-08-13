@@ -89,8 +89,10 @@ CREATE TABLE maquinas (
   caracteristicas  TEXT,
   estado           TEXT NOT NULL DEFAULT 'activa'
                    CHECK (estado IN ('activa','ocupada','malograda','mantenimiento','standby','inactiva')),
+  detalle_estado   TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
+
 
 -- -------------------------------------------------------
 -- 4. PRODUCCIÓN

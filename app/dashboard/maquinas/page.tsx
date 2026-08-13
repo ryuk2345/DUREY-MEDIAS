@@ -11,6 +11,8 @@ import {
   FileText, Activity, Radio
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
+
 
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Badge } from '@/components/ui/Badge'
@@ -85,6 +87,8 @@ export default function MaquinasPage() {
     estado: 'activa'
   })
   const [marcaForm, setMarcaForm] = useState({ id: '', nombre: '' })
+  const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
+
 
   const supabase = createClient()
 
@@ -92,13 +96,26 @@ export default function MaquinasPage() {
   const cargarDatos = useCallback(async () => {
     setLoading(true)
     const [maq, mar, tec, av] = await Promise.all([
-      supabase.from('maquinas').select('*, marca:marcas_maquinas!marca_id(nombre)').order('codigo'),
+      supabase.from('maquinas').select('*, marca:marcas_maquinas(nombre)').order('codigo'),
       supabase.from('marcas_maquinas').select('*').order('nombre'),
       supabase.from('usuarios').select('*').eq('rol', 'tecnico').order('nombre'),
       supabase.from('averias_maquinas').select(`
-        *, maquina:maquinas!maquina_id(codigo, tipo)
+        *, maquina:maquinas(codigo, tipo)
       `).order('fecha_reporte', { ascending: false }).limit(10)
     ])
+
+    if (maq.error) {
+      toast.error(`Error cargando máquinas: ${maq.error.message || maq.error.details}`)
+    }
+    if (mar.error) {
+      toast.error(`Error cargando marcas: ${mar.error.message || mar.error.details}`)
+    }
+    if (tec.error) {
+      toast.error(`Error cargando técnicos: ${tec.error.message || tec.error.details}`)
+    }
+    if (av.error) {
+      toast.error(`Error cargando averías: ${av.error.message || av.error.details}`)
+    }
 
     const maqData = (maq.data ?? []) as unknown as Maquina[]
     setMaquinas(maqData)
@@ -113,7 +130,41 @@ export default function MaquinasPage() {
     setLoading(false)
   }, [reporteForm.maquina_id])
 
+  const abrirMaquinaModal = (maquina: any = null) => {
+    setErrorEnvio(null)
+    if (maquina) {
+      setMaquinaForm({
+        id: maquina.id,
+        codigo: maquina.codigo,
+        tipo: maquina.tipo,
+        marca_id: maquina.marca_id,
+        anio: maquina.anio || new Date().getFullYear(),
+        caracteristicas: maquina.caracteristicas || '',
+        estado: maquina.estado
+      })
+    } else {
+      setMaquinaForm({
+        id: '',
+        codigo: '',
+        tipo: 'tejedora',
+        marca_id: '',
+        anio: new Date().getFullYear(),
+        caracteristicas: '',
+        estado: 'activa'
+      })
+    }
+    setShowMaquinaModal(true)
+  }
+
+  const abrirMarcaModal = () => {
+    setErrorEnvio(null)
+    setMarcaForm({ id: '', nombre: '' })
+    setShowMarcaModal(true)
+  }
+
   useEffect(() => { cargarDatos() }, [cargarDatos])
+
+
 
   // ── GUARDAR NUEVA FALLA / REPORTE CRÍTICO ──────────────────────────────────
   const enviarReporteCritico = async (e: React.FormEvent) => {
@@ -124,6 +175,15 @@ export default function MaquinasPage() {
     setEnviandoReporte(true)
 
     const maqObj = maquinas.find(m => m.id === reporteForm.maquina_id)
+    if (maqObj) {
+      const v = validarTransicionEstadoMaquina(maqObj.estado as any, 'malograda')
+      if (!v.valido) {
+        toast.error(`Error de transición: ${v.error}`)
+        setEnviandoReporte(false)
+        return
+      }
+    }
+
     const tecObj = tecnicos.find(t => t.id === reporteForm.tecnico_asignado)
 
     const nuevoReporte = {
@@ -150,6 +210,27 @@ export default function MaquinasPage() {
       detalle_estado: `FALLA ${reporteForm.tipo_averia}`
     }).eq('id', reporteForm.maquina_id)
 
+    // Buscar y cerrar turnos activos para esta máquina (para evitar registros de producción inválidos)
+    const { data: turnoMaq } = await supabase.from('turno_maquinas')
+      .select('id, turno_id, turnos_produccion(id, tejedor_id, estado)')
+      .eq('maquina_id', reporteForm.maquina_id)
+      .eq('turnos_produccion.estado', 'activo')
+      .maybeSingle()
+
+    if (turnoMaq && turnoMaq.turnos_produccion) {
+      const turnoId = turnoMaq.turno_id
+      const tejedorId = turnoMaq.turnos_produccion.tejedor_id
+
+      // Cerrar el turno de tejido
+      await supabase.from('turnos_produccion').update({ estado: 'cerrado' }).eq('id', turnoId)
+      
+      // Liberar al tejedor
+      if (tejedorId) {
+        await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', tejedorId)
+      }
+      toast.warning('⚠️ Turno activo de la máquina cerrado de forma automática. Operador liberado.')
+    }
+
     toast.error(`⚠️ Reporte Crítico enviado para ${maqObj?.codigo || 'la máquina'}. Notificación enviada al equipo técnico.`, { duration: 4000 })
 
     setReporteForm(prev => ({ ...prev, descripcion: '' }))
@@ -157,9 +238,11 @@ export default function MaquinasPage() {
     cargarDatos()
   }
 
+
   // Guardar Máquina CRUD
   const guardarMaquina = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorEnvio(null)
     if (!maquinaForm.codigo.trim() || !maquinaForm.marca_id) { toast.error('Completa los campos obligatorios'); return }
 
     const payload = {
@@ -173,10 +256,20 @@ export default function MaquinasPage() {
     }
 
     if (maquinaForm.id) {
-      await supabase.from('maquinas').update(payload).eq('id', maquinaForm.id)
+      const { error } = await supabase.from('maquinas').update(payload).eq('id', maquinaForm.id)
+      if (error) {
+        setErrorEnvio(error.message || JSON.stringify(error))
+        toast.error(`Error al actualizar la máquina`)
+        return
+      }
       toast.success('Máquina actualizada')
     } else {
-      await supabase.from('maquinas').insert(payload)
+      const { error } = await supabase.from('maquinas').insert(payload)
+      if (error) {
+        setErrorEnvio(error.message || JSON.stringify(error))
+        toast.error(`Error al registrar la máquina`)
+        return
+      }
       toast.success('Nueva máquina registrada')
     }
 
@@ -185,14 +278,23 @@ export default function MaquinasPage() {
     cargarDatos()
   }
 
+
   const guardarNuevaMarca = async () => {
+    setErrorEnvio(null)
     if (!marcaForm.nombre.trim()) return
-    await supabase.from('marcas_maquinas').insert({ nombre: marcaForm.nombre.trim() })
+    const { error } = await supabase.from('marcas_maquinas').insert({ nombre: marcaForm.nombre.trim() })
+    if (error) {
+      setErrorEnvio(error.message || JSON.stringify(error))
+      toast.error(`Error al registrar la marca`)
+      return
+    }
     toast.success('Marca creada')
     setShowMarcaModal(false)
     setMarcaForm({ id: '', nombre: '' })
     cargarDatos()
   }
+
+
 
   // Filtrado en el monitor
   const averiasFiltradas = averiasTimeline.filter(a => {
@@ -552,10 +654,10 @@ export default function MaquinasPage() {
           <div className="flex justify-between items-center glass p-5 rounded-3xl border border-white/[0.08]">
             <h2 className="text-lg font-bold text-white">Inventario Completo de Maquinarias</h2>
             <div className="flex gap-3">
-              <button onClick={() => setShowMarcaModal(true)} className="btn-secondary text-xs py-2">
+              <button onClick={abrirMarcaModal} className="btn-secondary text-xs py-2">
                 <Plus className="w-4 h-4" /> Nueva Marca
               </button>
-              <button onClick={() => setShowMaquinaModal(true)} className="btn-primary text-xs py-2 bg-cyan-600 border-none">
+              <button onClick={() => abrirMaquinaModal()} className="btn-primary text-xs py-2 bg-cyan-600 border-none">
                 <Plus className="w-4 h-4" /> Registrar Máquina
               </button>
             </div>
@@ -591,18 +693,7 @@ export default function MaquinasPage() {
                     </td>
                     <td className="text-right space-x-2">
                       <button
-                        onClick={() => {
-                          setMaquinaForm({
-                            id: m.id,
-                            codigo: m.codigo,
-                            tipo: m.tipo,
-                            marca_id: m.marca_id,
-                            anio: m.anio,
-                            caracteristicas: m.caracteristicas,
-                            estado: m.estado
-                          })
-                          setShowMaquinaModal(true)
-                        }}
+                        onClick={() => abrirMaquinaModal(m)}
                         className="btn-secondary py-1 px-2.5 text-xs"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -613,6 +704,7 @@ export default function MaquinasPage() {
               </tbody>
             </table>
           </div>
+
         </div>
       )}
 
@@ -650,6 +742,12 @@ export default function MaquinasPage() {
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Características</label>
                 <textarea rows={2} placeholder="Descripción técnica..." value={maquinaForm.caracteristicas} onChange={e => setMaquinaForm({ ...maquinaForm, caracteristicas: e.target.value })} className="input-dark w-full" />
               </div>
+              {errorEnvio && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl font-bold flex flex-col gap-1 text-[11px] mb-3 animate-fadeInUp">
+                  <span>⚠️ ERROR DE BASE DE DATOS:</span>
+                  <span className="font-mono font-medium whitespace-pre-wrap">{errorEnvio}</span>
+                </div>
+              )}
               <div className="flex gap-3 pt-4">
                 <button type="button" onClick={() => setShowMaquinaModal(false)} className="btn-secondary flex-1 justify-center py-2">Cancelar</button>
                 <button type="submit" className="btn-primary flex-1 justify-center py-2 bg-cyan-600 border-none font-bold">Guardar</button>
@@ -665,6 +763,12 @@ export default function MaquinasPage() {
           <div className="glass rounded-3xl w-full max-w-sm p-7 shadow-2xl border border-white/10 animate-fadeInUp">
             <h2 className="text-lg font-bold text-white mb-4">Nueva Marca de Máquina</h2>
             <input type="text" placeholder="Ej. Rosso / Angies" value={marcaForm.nombre} onChange={e => setMarcaForm({ ...marcaForm, nombre: e.target.value })} className="input-dark w-full mb-6 font-bold" />
+            {errorEnvio && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl font-bold flex flex-col gap-1 text-[11px] mb-4 animate-fadeInUp">
+                <span>⚠️ ERROR DE BASE DE DATOS:</span>
+                <span className="font-mono font-medium whitespace-pre-wrap">{errorEnvio}</span>
+              </div>
+            )}
             <div className="flex gap-3">
               <button type="button" onClick={() => setShowMarcaModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">Cancelar</button>
               <button
@@ -678,6 +782,7 @@ export default function MaquinasPage() {
           </div>
         </div>
       )}
+
 
       {/* DIÁLOGO DE CONFIRMACIÓN DE REPORTAR FALLA CRÍTICA */}
       <ConfirmDialog

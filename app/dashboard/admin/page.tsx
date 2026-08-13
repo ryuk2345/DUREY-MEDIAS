@@ -17,6 +17,7 @@ interface KPI {
   gastos_mantenimiento: number
 }
 
+
 interface VentaMes { mes: string; ventas: number; costos: number }
 interface DeudaAtrasada { venta: string; cliente: string; asesora: string; monto: number; dias: number }
 interface TejedorTop { nombre: string; docenas: number }
@@ -60,6 +61,8 @@ export default function AdminPage() {
       costos_produccion: costosProd,
       gastos_mantenimiento: gastosMantenimiento,
     })
+     
+    
 
     // Ventas de los últimos 6 meses (simulado para demo)
     const meses = ['Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul']

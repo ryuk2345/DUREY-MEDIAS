@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Wrench, AlertTriangle, Plus, Clock, CheckCircle, TrendingUp, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
+import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
+
 
 interface Maquina { id: string; codigo: string; tipo: string; estado: string }
 interface Averia {
@@ -47,36 +49,104 @@ export default function MantenimientoPage() {
 
   const reportarAveria = async () => {
     if (!averiaForm.maquina_id || !averiaForm.descripcion) { toast.error('Selecciona la máquina y describe el problema'); return }
-    await supabase.from('averias_maquinas').insert({
+
+    const maq = maquinas.find(m => m.id === averiaForm.maquina_id)
+    if (maq) {
+      const v = validarTransicionEstadoMaquina(maq.estado as any, 'malograda')
+      if (!v.valido) {
+        toast.error(`Error en máquina: ${v.error}`)
+        return
+      }
+    }
+
+    // 1. Insertar reporte de avería
+    const { data: nuevaAveria, error: avErr } = await supabase.from('averias_maquinas').insert({
       maquina_id: averiaForm.maquina_id,
-      reportado_por_id: null, // del usuario logueado
+      reportado_por_id: null,
       descripcion_operador: averiaForm.descripcion,
       estado: 'pendiente',
-    })
+    }).select().single()
+
+    if (avErr) {
+      toast.error('Error al reportar la avería')
+      return
+    }
+
+    // 2. Cambiar estado a malograda
     await supabase.from('maquinas').update({ estado: 'malograda' }).eq('id', averiaForm.maquina_id)
+
+    // 3. Buscar y cerrar turnos activos para esta máquina (para evitar registros de producción inválidos)
+    const { data: turnoMaq } = await supabase.from('turno_maquinas')
+      .select('id, turno_id, turnos_produccion(id, tejedor_id, estado)')
+      .eq('maquina_id', averiaForm.maquina_id)
+      .eq('turnos_produccion.estado', 'activo')
+      .maybeSingle()
+
+    if (turnoMaq && turnoMaq.turnos_produccion) {
+      const turnoId = turnoMaq.turno_id
+      const tejedorId = turnoMaq.turnos_produccion.tejedor_id
+
+      // Cerrar el turno de tejido
+      await supabase.from('turnos_produccion').update({ estado: 'cerrado' }).eq('id', turnoId)
+      
+      // Liberar al tejedor
+      if (tejedorId) {
+        await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', tejedorId)
+      }
+      toast.warning('⚠️ Turno activo de la máquina cerrado de forma automática. Operador liberado.')
+    }
+
     toast.error(`Avería reportada — Máquina marcada como MALOGRADA`, { icon: '⚠️' })
     setShowAveriaModal(false)
     setAveriaForm({ maquina_id: '', descripcion: '' })
     cargarDatos()
   }
 
+  const iniciarReparacion = async (averia: Averia) => {
+    const maq = maquinas.find(m => m.codigo === averia.maquina?.codigo)
+    if (!maq) { toast.error('Máquina no encontrada'); return }
+
+    const v = validarTransicionEstadoMaquina(maq.estado as any, 'mantenimiento')
+    if (!v.valido) {
+      toast.error(`Error en máquina: ${v.error}`)
+      return
+    }
+
+    await supabase.from('maquinas').update({ estado: 'mantenimiento' }).eq('id', maq.id)
+    await supabase.from('averias_maquinas').update({ estado: 'en_reparacion' }).eq('id', averia.id)
+
+    toast.info('🔧 Reparación iniciada. Máquina en estado MANTENIMIENTO.')
+    cargarDatos()
+  }
+
   const registrarReparacion = async () => {
     if (!averiaSeleccionada || !reparacionForm.descripcion_tecnico) { toast.error('Completa el diagnóstico técnico'); return }
+
+    const maq = maquinas.find(m => m.codigo === averiaSeleccionada.maquina?.codigo)
+    if (!maq) { toast.error('Máquina no encontrada'); return }
+
+    const v = validarTransicionEstadoMaquina(maq.estado as any, 'activa')
+    if (!v.valido) {
+      toast.error(`Error en máquina: ${v.error}`)
+      return
+    }
+
     await supabase.from('reparaciones').insert({
       averia_id: averiaSeleccionada.id,
-      tecnico_id: null, // del usuario logueado
+      tecnico_id: null,
       descripcion_tecnico: reparacionForm.descripcion_tecnico,
       costo_repuestos: parseFloat(reparacionForm.costo_repuestos || '0'),
       costo_mano_obra: parseFloat(reparacionForm.costo_mano_obra || '0'),
     })
+
     await supabase.from('averias_maquinas').update({ estado: 'resuelto' }).eq('id', averiaSeleccionada.id)
-    // Liberar la máquina
-    const maqId = maquinas.find(m => m.codigo === averiaSeleccionada.maquina?.codigo)?.id
-    if (maqId) await supabase.from('maquinas').update({ estado: 'activa' }).eq('id', maqId)
-    toast.success('Reparación registrada — Máquina habilitada')
+    await supabase.from('maquinas').update({ estado: 'activa' }).eq('id', maq.id)
+
+    toast.success('Reparación registrada — Máquina habilitada (Activa)')
     setShowRepararModal(false)
     cargarDatos()
   }
+
 
   const averiasPendientes = averias.filter(a => a.estado === 'pendiente' || a.estado === 'en_reparacion')
   const averiasResueltas = averias.filter(a => a.estado === 'resuelto')
@@ -151,29 +221,52 @@ export default function MantenimientoPage() {
                   <CheckCircle className="w-10 h-10 mb-2 opacity-30 text-emerald-400" />
                   <p>No hay averías pendientes ✓</p>
                 </div>
-              ) : averiasPendientes.map(a => (
-                <div key={a.id} className="glass rounded-2xl p-6 border border-red-500/20">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="badge badge-danger">● MALOGRADA</span>
-                        <code className="text-amber-300 font-mono text-sm">{a.maquina?.codigo}</code>
-                        <span className="text-slate-500 text-xs capitalize">{a.maquina?.tipo}</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-xs text-slate-500 mb-1 font-semibold uppercase">Reporte del Operario:</p>
-                          <p className="text-slate-300 text-sm">{a.descripcion_operador}</p>
-                          <p className="text-slate-600 text-xs mt-1">Reportado por: {a.reportado_por?.nombre} · {formatearFecha(a.fecha_reporte)}</p>
+              ) : averiasPendientes.map(a => {
+                const isEnReparacion = a.estado === 'en_reparacion'
+                return (
+                  <div key={a.id} className={`glass rounded-2xl p-6 border ${isEnReparacion ? 'border-cyan-500/25 bg-cyan-500/[0.01]' : 'border-red-500/20'}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          {isEnReparacion ? (
+                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                              🔧 En Reparación
+                            </span>
+                          ) : (
+                            <span className="badge badge-danger">● MALOGRADA</span>
+                          )}
+                          <code className="text-amber-300 font-mono text-sm">{a.maquina?.codigo}</code>
+                          <span className="text-slate-500 text-xs capitalize">{a.maquina?.tipo}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1 font-semibold uppercase">Reporte del Operario:</p>
+                            <p className="text-slate-300 text-sm">{a.descripcion_operador}</p>
+                            <p className="text-slate-600 text-xs mt-1">Reportado por: {a.reportado_por?.nombre} · {formatearFecha(a.fecha_reporte)}</p>
+                          </div>
                         </div>
                       </div>
+                      
+                      {isEnReparacion ? (
+                        <button
+                          onClick={() => { setAveriaSeleccionada(a); setShowRepararModal(true) }}
+                          className="btn-primary text-sm py-2 ml-4 bg-cyan-600 hover:bg-cyan-500 border-none shadow-lg shadow-cyan-600/20 text-white"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" /> Registrar Reparación
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => iniciarReparacion(a)}
+                          className="btn-primary text-sm py-2 ml-4 bg-amber-600 hover:bg-amber-500 border-none shadow-lg shadow-amber-600/20 text-white"
+                        >
+                          <Wrench className="w-3.5 h-3.5" /> Iniciar Reparación
+                        </button>
+                      )}
                     </div>
-                    <button onClick={() => { setAveriaSeleccionada(a); setShowRepararModal(true) }} className="btn-primary text-sm py-2 ml-4">
-                      <Wrench className="w-3.5 h-3.5" /> Registrar Reparación
-                    </button>
                   </div>
-                </div>
-              ))}
+                )
+              })}
+
             </div>
           )}
 

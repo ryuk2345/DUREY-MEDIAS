@@ -17,6 +17,26 @@ console.log('--- EJECUTANDO PRUEBAS DE DOMINIO Y REGLAS DE NEGOCIO ---')
 
 // 1. Pruebas de Transición de Máquinas
 assertEqual(
+  validarTransicionEstadoMaquina('activa', 'ocupada'),
+  { valido: true },
+  'Máquina: Cambio de activa a ocupada (inicio turno) debe ser válido'
+)
+assertEqual(
+  validarTransicionEstadoMaquina('ocupada', 'activa'),
+  { valido: true },
+  'Máquina: Cambio de ocupada a activa (fin turno) debe ser válido'
+)
+assertEqual(
+  validarTransicionEstadoMaquina('ocupada', 'malograda'),
+  { valido: true },
+  'Máquina: Cambio de ocupada a malograda (avería en marcha) debe ser válido'
+)
+assertEqual(
+  validarTransicionEstadoMaquina('ocupada', 'mantenimiento').valido,
+  false,
+  'Máquina: Cambio directo de ocupada a mantenimiento no está permitido (debe pasar por malograda primero)'
+)
+assertEqual(
   validarTransicionEstadoMaquina('activa', 'malograda'),
   { valido: true },
   'Máquina: Cambio de activa a malograda debe ser válido'
@@ -26,6 +46,7 @@ assertEqual(
   false,
   'Máquina: Cambio directo de malograda a standby no está permitido (debe pasar por mantenimiento)'
 )
+
 
 // 2. Pruebas de Finanzas y Cronogramas
 assertEqual(

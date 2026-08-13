@@ -42,6 +42,8 @@ export default function UsuariosPage() {
   // Modales
   const [showModal, setShowModal] = useState(false)
   const [editUser, setEditUser] = useState<Usuario | null>(null)
+  const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
+
 
   // Formulario
   const [form, setForm] = useState({
@@ -88,12 +90,14 @@ export default function UsuariosPage() {
   // ── ABRIR MODAL CREAR / EDITAR ───────────────────────────────────────────
   const abrirCrearModal = () => {
     setEditUser(null)
+    setErrorEnvio(null)
     setForm({ nombre: '', email: '', rol: 'tejedor', password: '', activo: true })
     setShowModal(true)
   }
 
   const abrirEditarModal = (u: Usuario) => {
     setEditUser(u)
+    setErrorEnvio(null)
     setForm({
       nombre: u.nombre,
       email: u.email,
@@ -106,6 +110,7 @@ export default function UsuariosPage() {
 
   // ── GUARDAR USUARIO (CREAR O ACTUALIZAR) ──────────────────────────────────
   const guardarUsuario = async () => {
+    setErrorEnvio(null)
     if (!form.nombre.trim() || !form.email.trim() || !form.rol) {
       toast.error('Completa el nombre, email y rol del usuario')
       return
@@ -120,6 +125,7 @@ export default function UsuariosPage() {
       }).eq('id', editUser.id)
 
       if (error) {
+        setErrorEnvio(error.message || JSON.stringify(error))
         toast.error('Error al actualizar el usuario')
         return
       }
@@ -133,7 +139,8 @@ export default function UsuariosPage() {
       })
 
       if (error) {
-        toast.error('Error al crear el usuario: ' + error.message)
+        setErrorEnvio(error.message || JSON.stringify(error))
+        toast.error('Error al crear el usuario')
         return
       }
       toast.success('🎉 Usuario creado exitosamente')
@@ -142,6 +149,7 @@ export default function UsuariosPage() {
     setShowModal(false)
     cargarUsuarios()
   }
+
 
   const toggleActivo = async (u: Usuario) => {
     const nuevoEstado = !u.activo
@@ -440,6 +448,13 @@ export default function UsuariosPage() {
               </div>
             </div>
 
+            {errorEnvio && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl font-bold flex flex-col gap-1 text-[11px] mt-4 animate-fadeInUp">
+                <span>⚠️ ERROR DE BASE DE DATOS:</span>
+                <span className="font-mono font-medium whitespace-pre-wrap">{errorEnvio}</span>
+              </div>
+            )}
+
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
                 Cancelar
@@ -449,6 +464,7 @@ export default function UsuariosPage() {
                 {editUser ? 'Guardar Cambios' : 'Crear Usuario'}
               </button>
             </div>
+
           </div>
         </div>
       )}

@@ -9,6 +9,8 @@ import {
   Play, Wrench, Search, Sparkles, Activity, TrendingUp, ShieldAlert
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
+
 
 interface MiniDeposito {
   id: string
@@ -84,18 +86,34 @@ export default function RemalladoMonitorPage() {
     setLoading(true)
     const [mini, lot, rem, maq, cat] = await Promise.all([
       supabase.from('minidepositos')
-        .select('id, total_docenas, horario, catalogo_media_id, catalogo_media:catalogo_medias!catalogo_media_id(id, codigo)')
+        .select('id, total_docenas, horario, catalogo_media_id, catalogo_media:catalogo_medias(id, codigo)')
         .order('total_docenas', { ascending: false }),
       supabase.from('lotes_remallado')
         .select(`id, docenas_asignadas, docenas_pendientes, estado, catalogo_media_id, remalladora_id, maquina_remalladora_id,
-          catalogo_media:catalogo_medias!catalogo_media_id(id, codigo),
-          remalladora:usuarios!remalladora_id(id, nombre),
-          maquina_remalladora:maquinas!maquina_remalladora_id(id, codigo)
+          catalogo_media:catalogo_medias(id, codigo),
+          remalladora:usuarios(id, nombre),
+          maquina_remalladora:maquinas(id, codigo)
         `).eq('estado', 'en_proceso'),
       supabase.from('usuarios').select('id, nombre, estado').eq('rol', 'remalladora').eq('activo', true),
-      supabase.from('maquinas').select('id, codigo, marca_id, tipo, estado, marca:marcas_maquinas!marca_id(id, nombre)').eq('tipo', 'remalladora').order('codigo'),
+      supabase.from('maquinas').select('id, codigo, marca_id, tipo, estado, marca:marcas_maquinas(id, nombre)').eq('tipo', 'remalladora').order('codigo'),
       supabase.from('catalogo_medias').select('id, codigo, modelo, publico').eq('estado', 'activo').order('codigo'),
     ])
+
+    if (mini.error) {
+      toast.error(`Error cargando minidepósitos: ${mini.error.message}`)
+    }
+    if (lot.error) {
+      toast.error(`Error cargando lotes: ${lot.error.message}`)
+    }
+    if (rem.error) {
+      toast.error(`Error cargando remalladoras: ${rem.error.message}`)
+    }
+    if (maq.error) {
+      toast.error(`Error cargando máquinas: ${maq.error.message}`)
+    }
+    if (cat.error) {
+      toast.error(`Error cargando catálogo: ${cat.error.message}`)
+    }
 
     setMinidepositos((mini.data ?? []) as unknown as MiniDeposito[])
     setLotes((lot.data ?? []) as unknown as LoteRemallado[])
@@ -104,6 +122,7 @@ export default function RemalladoMonitorPage() {
     setCatalogo((cat.data ?? []) as CatalogoMedia[])
     setLoading(false)
   }, [])
+
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
 
@@ -176,6 +195,16 @@ export default function RemalladoMonitorPage() {
 
     const numDocenas = parseFloat(docenas_asignadas) || LIMITE_DOCENAS
 
+    // Validar transición de la máquina a 'ocupada'
+    const maquinaActual = maquinasRem.find(m => m.id === maquina_id)
+    if (maquinaActual) {
+      const v = validarTransicionEstadoMaquina(maquinaActual.estado as any, 'ocupada')
+      if (!v.valido) {
+        toast.error(`Error en máquina: ${v.error}`)
+        return
+      }
+    }
+
     // 1. Crear el lote de remallado
     const { error: loteErr } = await supabase.from('lotes_remallado').insert({
       minideposito_id: minideposito_id || null,
@@ -189,9 +218,24 @@ export default function RemalladoMonitorPage() {
 
     if (loteErr) { toast.error('Error al iniciar lote de remallado'); return }
 
-    // 2. Si vino de un minidepósito, reiniciar sus docenas
+    // 2. Si vino de un minidepósito, restar sus docenas en lugar de borrar entero
     if (minideposito_id) {
-      await supabase.from('minidepositos').update({ total_docenas: 0 }).eq('id', minideposito_id)
+      const { data: mini } = await supabase.from('minidepositos')
+        .select('total_docenas')
+        .eq('id', minideposito_id)
+        .single()
+
+      if (mini) {
+        const nuevoTotal = Math.max(0, Number(mini.total_docenas) - numDocenas)
+        if (nuevoTotal <= 0) {
+          await supabase.from('minidepositos').delete().eq('id', minideposito_id)
+        } else {
+          await supabase.from('minidepositos').update({
+            total_docenas: nuevoTotal,
+            updated_at: new Date().toISOString()
+          }).eq('id', minideposito_id)
+        }
+      }
     }
 
     // 3. Marcar máquina y operadora como ocupadas
@@ -226,6 +270,16 @@ export default function RemalladoMonitorPage() {
     if (isNaN(remalladas) || remalladas < 0) { toast.error('Ingresa las docenas remalladas correctamente'); return }
     if (isNaN(restantes) || restantes < 0) { toast.error('Ingresa las docenas restantes correctamente'); return }
 
+    // Validar transición de la máquina a 'activa'
+    const maquinaActual = maquinasRem.find(m => m.id === loteSeleccionado.maquina_remalladora_id)
+    if (maquinaActual) {
+      const v = validarTransicionEstadoMaquina(maquinaActual.estado as any, 'activa')
+      if (!v.valido) {
+        toast.error(`Error en máquina: ${v.error}`)
+        return
+      }
+    }
+
     // 1. Guardar reporte de remallado
     const { error: repErr } = await supabase.from('reportes_remallado').insert({
       lote_id: loteSeleccionado.id,
@@ -248,7 +302,7 @@ export default function RemalladoMonitorPage() {
       .select('id, docenas').eq('catalogo_media_id', mediaId).single()
     if (slpExist) {
       await supabase.from('stock_listo_planchar')
-        .update({ docenas: slpExist.docenas + remalladas }).eq('id', slpExist.id)
+        .update({ docenas: Number(slpExist.docenas) + remalladas }).eq('id', slpExist.id)
     } else {
       await supabase.from('stock_listo_planchar')
         .insert({ catalogo_media_id: mediaId, docenas: remalladas })
@@ -266,6 +320,7 @@ export default function RemalladoMonitorPage() {
     setShowReporteModal(false)
     cargarDatos()
   }
+
 
   // ── TRASPASO POR SATURACIÓN ───────────────────────────────────────────────
   const ejecutarTraspaso = async () => {

@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearFecha, formatearMoneda, generarCodigoGuia } from '@/lib/utils'
+import { validarTransicionEstadoPaquete } from '@/lib/domain/packaging'
+
 
 interface Venta {
   id: string
@@ -140,6 +142,13 @@ export default function DespachoPage() {
       toast.warning(`Supera la cantidad de docenas vendidas para esta media (${itemRequerido.docenas} doc.)`)
     }
 
+    // Validar transición a 'preparado_envio'
+    const v = validarTransicionEstadoPaquete(paquete.estado as any, 'preparado_envio')
+    if (!v.valido) {
+      toast.error(`Error en paquete: ${v.error}`)
+      return
+    }
+
     // Asociar paquete a la venta y cambiar estado a 'preparado_envio' (Empaquetado para Envío)
     const { error } = await supabase.from('paquetes').update({
       venta_id: ventaSeleccionada.id,
@@ -157,6 +166,16 @@ export default function DespachoPage() {
   }
 
   const desasociarPaquete = async (paqueteId: string) => {
+    // Validar transición de regreso a 'almacenado'
+    const pkg = paquetesAsociados.find(p => p.id === paqueteId)
+    if (pkg) {
+      const v = validarTransicionEstadoPaquete(pkg.estado as any, 'almacenado')
+      if (!v.valido) {
+        toast.error(`Error en paquete: ${v.error}`)
+        return
+      }
+    }
+
     const { error } = await supabase.from('paquetes').update({
       venta_id: null,
       estado: 'almacenado'
@@ -177,6 +196,16 @@ export default function DespachoPage() {
       return
     }
     setProcesando(true)
+
+    // Validar transiciones a 'en_transito' para cada paquete asociado
+    for (const p of paquetesAsociados) {
+      const v = validarTransicionEstadoPaquete(p.estado as any, 'en_transito')
+      if (!v.valido) {
+        toast.error(`Error en paquete ${p.codigo_paquete}: ${v.error}`)
+        setProcesando(false)
+        return
+      }
+    }
 
     // Obtener secuencia de guías
     const { count } = await supabase.from('guias_remision').select('*', { count: 'exact', head: true })
@@ -235,6 +264,16 @@ export default function DespachoPage() {
     if (!ventaSeleccionada) return
     setProcesando(true)
 
+    // Validar transiciones a 'entregado' para cada paquete asociado
+    for (const p of paquetesAsociados) {
+      const v = validarTransicionEstadoPaquete(p.estado as any, 'entregado')
+      if (!v.valido) {
+        toast.error(`Error en paquete ${p.codigo_paquete}: ${v.error}`)
+        setProcesando(false)
+        return
+      }
+    }
+
     // En un flujo real, se subiría la firma al Storage y se obtendría la URL.
     // Aquí simulamos guardando un valor estático para firma_cargo_url
     const cargoUrl = archivoFirma ? `firma_cargo_${ventaSeleccionada.codigo_venta}.jpg` : 'cargo_recibido_firmado.jpg'
@@ -263,6 +302,7 @@ export default function DespachoPage() {
     setArchivoFirma(null)
     setVentaSeleccionada(null)
     setProcesando(false)
+
     cargarDatos()
   }
 
