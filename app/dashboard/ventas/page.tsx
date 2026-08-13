@@ -128,15 +128,21 @@ export default function VentasPage() {
       supabase.from('catalogo_medias').select('id, codigo, modelo, publico').eq('estado', 'activo').order('codigo'),
       supabase.from('ventas').select(`
         id, codigo_venta, total_soles, tipo_pago, estado, fecha,
-        cliente:clientes!cliente_id(id, nombre, numero_documento, telefono, direccion),
-        asesora:usuarios!asesora_id(id, nombre)
+        cliente:clientes(id, nombre, numero_documento, telefono, direccion),
+        asesora:usuarios(id, nombre)
       `).order('created_at', { ascending: false }).limit(30),
       supabase.from('cuotas').select(`
         id, numero_cuota, monto, fecha_vencimiento, estado, metodo_pago, comprobante_url,
-        venta:ventas!venta_id(id, codigo_venta, total_soles, cliente:clientes!cliente_id(id, nombre, numero_documento, telefono, direccion), asesora:usuarios!asesora_id(id, nombre))
+        venta:ventas(id, codigo_venta, total_soles, cliente:clientes(id, nombre, numero_documento, telefono, direccion), asesora:usuarios(id, nombre))
       `).order('fecha_vencimiento'),
       supabase.from('cajas_diarias').select('*').eq('fecha', hoy).single(),
     ])
+
+    if (cli.error) toast.error(`Error al cargar clientes: ${cli.error.message}`)
+    if (vend.error) toast.error(`Error al cargar vendedoras: ${vend.error.message}`)
+    if (cat.error) toast.error(`Error al cargar catálogo: ${cat.error.message}`)
+    if (ven.error) toast.error(`Error al cargar ventas: ${ven.error.message}`)
+    if (deu.error) toast.error(`Error al cargar deudas: ${deu.error.message}`)
 
     setClientes(cli.data ?? [])
     setVendedoras(vend.data ?? [])
@@ -151,6 +157,7 @@ export default function VentasPage() {
 
     setLoading(false)
   }, [vendedoraSeleccionadaId])
+
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
 
