@@ -193,7 +193,7 @@ export default function MaquinasPage() {
       estado: 'pendiente',
       asignado_a: tecObj ? tecObj.nombre : 'Por Asignar',
       nivel: 'CRÍTICO',
-      fecha_reporte: new Date().toISOString().replace('T', ' ').substring(0, 19)
+      fecha_reporte: new Date().toISOString()
     }
 
     const { error } = await supabase.from('averias_maquinas').insert(nuevoReporte)
