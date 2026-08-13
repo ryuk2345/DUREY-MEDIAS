@@ -348,7 +348,7 @@ export default function PlanchadoPage() {
         })
         .eq('id', cronoForm.id)
 
-      if (error) { toast.error('Error al actualizar asignación'); return }
+      if (error) { toast.error('Error al actualizar asignación: ' + (error.message || JSON.stringify(error))); return }
       toast.success('✅ Asignación actualizada en el cronograma')
     } else {
       const { error } = await supabase.from('cronograma_planchado').insert({
@@ -360,9 +360,10 @@ export default function PlanchadoPage() {
         valor_criterio: cronoForm.valor_criterio,
       })
 
-      if (error) { toast.error('Error al guardar asignación'); return }
+      if (error) { toast.error('Error al guardar asignación: ' + (error.message || JSON.stringify(error))); return }
       toast.success('✅ Nueva asignación agregada al cronograma')
     }
+
 
     setShowCronoModal(false)
     cargarDatos()

@@ -171,7 +171,8 @@ CREATE TABLE cronograma_planchado (
   anio            INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM NOW()),
   planchador_id   UUID NOT NULL REFERENCES usuarios(id),
   dia_semana      TEXT NOT NULL CHECK (dia_semana IN ('lunes','martes','miercoles','jueves','viernes','sabado')),
-  criterio        TEXT NOT NULL CHECK (criterio IN ('talla','publico')),
+  criterio        TEXT NOT NULL CHECK (criterio IN ('talla','publico','media')),
+
   valor_criterio  TEXT NOT NULL,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
