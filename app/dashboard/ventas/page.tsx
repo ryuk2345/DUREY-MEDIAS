@@ -548,30 +548,22 @@ export default function VentasPage() {
 
     setGuardandoVenta(true)
 
-    let clienteId = clienteForm.id
+    // Usar upsert para evitar errores de DNI/RUC duplicado y asegurar que siempre tengamos un ID válido
+    const { data: nuevoCliente, error: cErr } = await supabase.from('clientes').upsert({
+      tipo_documento: clienteForm.tipo_documento,
+      numero_documento: clienteForm.numero_documento.trim(),
+      nombre: clienteForm.nombre.trim(),
+      telefono: clienteForm.telefono ? clienteForm.telefono.trim() : '',
+      direccion: clienteForm.direccion ? clienteForm.direccion.trim() : '',
+    }, { onConflict: 'numero_documento' }).select().single()
 
-    if (!clienteId) {
-      const { data: nuevoCliente, error: cErr } = await supabase.from('clientes').insert({
-        tipo_documento: clienteForm.tipo_documento,
-        numero_documento: clienteForm.numero_documento,
-        nombre: clienteForm.nombre,
-        telefono: clienteForm.telefono,
-        direccion: clienteForm.direccion,
-      }).select().single()
-
-      if (cErr) {
-        toast.error('Error al guardar datos del cliente')
-        setGuardandoVenta(false)
-        return
-      }
-      clienteId = nuevoCliente?.id
-    } else {
-      await supabase.from('clientes').update({
-        telefono: clienteForm.telefono,
-        direccion: clienteForm.direccion,
-        nombre: clienteForm.nombre
-      }).eq('id', clienteId)
+    if (cErr || !nuevoCliente) {
+      toast.error(`Error al guardar datos del cliente: ${cErr?.message || 'Error al obtener el registro'}`)
+      setGuardandoVenta(false)
+      return
     }
+
+    const clienteId = nuevoCliente.id
 
     const { count } = await supabase.from('ventas').select('*', { count: 'exact', head: true })
     const codigoVenta = generarCodigoVenta((count ?? 0) + 1001)
@@ -586,7 +578,12 @@ export default function VentasPage() {
       estado: 'pendiente',
     }).select().single()
 
-    if (error || !venta) { toast.error('Error al registrar la venta'); setGuardandoVenta(false); return }
+    if (error || !venta) { 
+      toast.error(`Error al registrar la venta: ${error?.message || 'Fallo en la inserción'}`)
+      setGuardandoVenta(false)
+      return 
+    }
+
 
     await supabase.from('items_venta').insert(
       carrito.map(i => ({ venta_id: venta.id, catalogo_media_id: i.catalogo_media_id, docenas: i.docenas, precio_docena: i.precio_docena }))
