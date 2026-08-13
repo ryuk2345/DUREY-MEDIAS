@@ -1,0 +1,323 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: 220 90% 56%;
+  --color-primary-dark: 220 90% 45%;
+  --color-accent: 175 80% 45%;
+  --color-surface: 220 20% 10%;
+  --color-surface-2: 220 18% 14%;
+  --color-surface-3: 220 16% 18%;
+  --color-border: 220 15% 22%;
+  --color-text: 220 15% 92%;
+  --color-text-muted: 220 12% 55%;
+
+  /* Colores por módulo */
+  --color-tejido: 265 80% 65%;
+  --color-remallado: 35 90% 60%;
+  --color-planchado: 0 80% 62%;
+  --color-preparado: 155 70% 50%;
+  --color-almacen: 200 85% 55%;
+  --color-ventas: 330 75% 60%;
+  --color-mantenimiento: 25 85% 58%;
+  --color-reportes: 160 60% 48%;
+  --color-admin: 270 75% 65%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: hsl(220, 20%, 8%);
+  color: hsl(220, 15%, 92%);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(220, 20%, 10%);
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(220, 15%, 28%);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(220, 15%, 38%);
+}
+
+/* Glassmorphism */
+.glass {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-hover:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.13);
+  transition: all 0.2s ease;
+}
+
+/* Gradientes por módulo */
+.gradient-tejido   { background: linear-gradient(135deg, #7c3aed22, #5b21b611); }
+.gradient-remallado { background: linear-gradient(135deg, #d9770022, #92400e11); }
+.gradient-planchado { background: linear-gradient(135deg, #dc262622, #7f1d1d11); }
+.gradient-preparado { background: linear-gradient(135deg, #05966922, #064e3b11); }
+.gradient-almacen  { background: linear-gradient(135deg, #038ba822, #0e708611); }
+.gradient-ventas   { background: linear-gradient(135deg, #db277722, #9d174d11); }
+.gradient-mant     { background: linear-gradient(135deg, #d9770022, #78350f11); }
+.gradient-admin    { background: linear-gradient(135deg, #7c3aed22, #4c1d9511); }
+
+/* Animaciones */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-ring {
+  0%   { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.4); }
+  70%  { transform: scale(1);    box-shadow: 0 0 0 8px rgba(96, 165, 250, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(96, 165, 250, 0); }
+}
+
+.animate-fadeInUp { animation: fadeInUp 0.4s ease both; }
+.animate-pulse-ring { animation: pulse-ring 2s infinite; }
+
+/* Tarjetas de módulo */
+.module-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+.module-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* Barra de progreso personalizada */
+.progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+/* Inputs oscuros */
+.input-dark {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: white;
+  padding: 10px 14px;
+  transition: border-color 0.2s;
+  width: 100%;
+  outline: none;
+}
+.input-dark:focus {
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(255,255,255,0.07);
+}
+.input-dark::placeholder {
+  color: rgba(255,255,255,0.3);
+}
+
+/* Botones */
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+}
+
+.btn-secondary {
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-secondary:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+/* Badges de estado */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.badge-success { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
+.badge-warning { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
+.badge-danger  { background: rgba(239,68,68,0.15);  color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+.badge-info    { background: rgba(59,130,246,0.15);  color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+.badge-neutral { background: rgba(148,163,184,0.1);  color: #94a3b8; border: 1px solid rgba(148,163,184,0.15); }
+.badge-purple  { background: rgba(139,92,246,0.15);  color: #a78bfa; border: 1px solid rgba(139,92,246,0.2); }
+
+/* Tablas */
+.table-dark {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+}
+.table-dark th {
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.5);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  text-align: left;
+}
+.table-dark td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.85);
+}
+.table-dark tr:hover td {
+  background: rgba(255,255,255,0.03);
+}
+.table-dark tr:last-child td {
+  border-bottom: none;
+}
+
+/* Sidebar */
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.6);
+  transition: all 0.2s;
+  cursor: pointer;
+  text-decoration: none;
+  min-height: 44px; /* Mínimo táctil */
+}
+.sidebar-item:hover {
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.9);
+}
+.sidebar-item.active {
+  background: rgba(59,130,246,0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59,130,246,0.2);
+}
+
+/* ── RESPONSIVE: Touch targets mínimos ───────────────────────────────── */
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  min-height: 40px;
+}
+
+/* En mobile, botones más grandes para dedos */
+@media (max-width: 640px) {
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+
+  .input-dark {
+    min-height: 44px;
+    font-size: 16px; /* Evita zoom en iOS al tocar inputs */
+  }
+
+  /* Tablas scrollables en horizontal en mobile */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Cards apiladas verticalmente en mobile */
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+}
+
+/* ── Tabla adaptativa en mobile (card layout) ─────────────────────────── */
+@media (max-width: 640px) {
+  .table-dark th { 
+    padding: 10px 12px; 
+    font-size: 0.7rem;
+  }
+  .table-dark td { 
+    padding: 10px 12px; 
+    font-size: 0.8rem;
+  }
+}
+
+/* ── Safe area para notch y home indicator ───────────────────────────── */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Fade in animación (usada en mobile drawer) ───────────────────────── */
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.25s ease both;
+}
+
