@@ -49,8 +49,10 @@ CREATE TABLE usuarios (
                 'planchador','preparador','almacenero','vendedora','tecnico'
               )),
   activo      BOOLEAN DEFAULT TRUE,
+  estado      TEXT DEFAULT 'disponible',
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
 
 -- -------------------------------------------------------
 -- 2. CATÁLOGO DE MEDIAS
