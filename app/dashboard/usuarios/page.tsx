@@ -129,13 +129,11 @@ export default function UsuariosPage() {
         nombre: form.nombre.trim(),
         email: form.email.trim(),
         rol: form.rol,
-        activo: form.activo,
-        estado: 'disponible',
-        fecha: new Date().toISOString().split('T')[0]
+        activo: form.activo
       })
 
       if (error) {
-        toast.error('Error al crear el usuario')
+        toast.error('Error al crear el usuario: ' + error.message)
         return
       }
       toast.success('🎉 Usuario creado exitosamente')
