@@ -1,12 +1,19 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-// Rutas accesibles por rol
+// Rutas accesibles por rol (en el dashboard)
 const ROLE_ROUTES: Record<string, string[]> = {
-  admin: ['/admin', '/produccion', '/remallado', '/planchado', '/preparado', '/almacen', '/ventas', '/despacho', '/mantenimiento', '/catalogo', '/reportes'],
-  supervisor: ['/produccion', '/remallado', '/planchado', '/preparado', '/almacen', '/despacho', '/catalogo', '/reportes'],
-  tejedor: ['/produccion'],
-  remalladora: ['/remallado'],
+  admin: [
+    '/admin', '/usuarios', '/catalogo', '/maquinas', '/produccion', 
+    '/remallado', '/planchado', '/preparado', '/almacen', '/ventas', 
+    '/despacho', '/mantenimiento', '/reportes'
+  ],
+  supervisor: [
+    '/usuarios', '/catalogo', '/maquinas', '/produccion', '/remallado', 
+    '/planchado', '/preparado', '/almacen', '/despacho', '/reportes'
+  ],
+  tejedor: ['/produccion', '/mantenimiento'],
+  remalladora: ['/remallado', '/mantenimiento'],
   planchador: ['/planchado'],
   preparador: ['/preparado'],
   almacenero: ['/almacen', '/despacho'],
@@ -49,14 +56,30 @@ export async function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
-  // Redirigir al login si no está autenticado y está en ruta protegida
+  // 1. Redirigir al login si no está autenticado y está en ruta protegida
   if (!user && pathname.startsWith('/dashboard')) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Redirigir al dashboard si ya está autenticado y entra al login
+  // 2. Redirigir al dashboard si ya está autenticado y entra al login
   if (user && (pathname === '/login' || pathname === '/')) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  // 3. Control de acceso estricto por rol en las subrutas del dashboard
+  if (user && pathname.startsWith('/dashboard') && pathname !== '/dashboard') {
+    const role = demoRole || 'vendedora'
+    const allowedRoutes = ROLE_ROUTES[role] || []
+
+    // Obtener la subruta (ejemplo: /dashboard/ventas/crear -> /ventas)
+    const segments = pathname.split('/')
+    const moduleName = '/' + segments[2]
+
+    // Si la subruta solicitada no está permitida para el rol del usuario, denegar
+    if (!allowedRoutes.includes(moduleName)) {
+      // Redirigir a la raíz del dashboard para que le asigne su primer módulo permitido
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
   }
 
   return supabaseResponse
