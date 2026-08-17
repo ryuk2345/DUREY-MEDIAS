@@ -9,7 +9,8 @@ import { toast } from 'sonner'
 import {
   Shirt, LayoutDashboard, Cog, Layers, Scissors, Wind,
   Package, Warehouse, ShoppingCart, Truck, Wrench,
-  BarChart3, LogOut, ChevronRight, Cpu, Users, Menu, X
+  BarChart3, LogOut, ChevronRight, Cpu, Users, Menu, X,
+  ClipboardList, Database
 } from 'lucide-react'
 
 const MODULO_CONFIG: Record<string, { label: string; icon: React.ReactNode; href: string; color: string }> = {
@@ -25,6 +26,8 @@ const MODULO_CONFIG: Record<string, { label: string; icon: React.ReactNode; href
   ventas:       { label: 'Ventas',       icon: <ShoppingCart className="w-5 h-5" />,    href: '/dashboard/ventas',        color: 'text-pink-400' },
   despacho:     { label: 'Despacho',     icon: <Truck className="w-5 h-5" />,           href: '/dashboard/despacho',      color: 'text-blue-400' },
   mantenimiento:{ label: 'Mantenimiento',icon: <Wrench className="w-5 h-5" />,         href: '/dashboard/mantenimiento', color: 'text-amber-400' },
+  materia_prima:{ label: 'Materia Prima',icon: <Database className="w-5 h-5" />,         href: '/dashboard/materia-prima', color: 'text-emerald-300' },
+  planilla_diccionario:{ label: 'Planillas & Costos',icon: <ClipboardList className="w-5 h-5" />, href: '/dashboard/planilla-diccionario', color: 'text-cyan-300' },
   reportes:     { label: 'Reportes',     icon: <BarChart3 className="w-5 h-5" />,       href: '/dashboard/reportes',      color: 'text-teal-400' },
 }
 

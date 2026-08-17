@@ -245,6 +245,44 @@ export default function ProduccionTejidoPage() {
       }
     }
 
+    // --- VALIDACIÓN DE MATERIA PRIMA (HILO) ---
+    const mediaIdsToCheck = maquinaIds.map(id => maquinas_seleccionadas[id])
+    const { data: mediasInfo, error: mediaErr } = await supabase
+      .from('catalogo_medias')
+      .select('id, codigo, peso_docena_g, materia_prima_id, materia_prima:materia_prima(material, color, stock_kg)')
+      .in('id', mediaIdsToCheck)
+
+    if (mediaErr) {
+      toast.error(`Error al validar materia prima: ${mediaErr.message}`)
+      return
+    }
+
+    const yarnRequirements: Record<string, { material: string; color: string; needed: number; stock: number }> = {}
+    for (const tm of mediaIdsToCheck) {
+      const mInfo = mediasInfo?.find(m => m.id === tm)
+      if (mInfo && mInfo.materia_prima_id) {
+        const weightNeededKg = (15 * (Number(mInfo.peso_docena_g) || 360.00)) / 1000
+        const yKey = mInfo.materia_prima_id
+        if (!yarnRequirements[yKey]) {
+          yarnRequirements[yKey] = {
+            material: (mInfo.materia_prima as any)?.material || 'Algodón',
+            color: (mInfo.materia_prima as any)?.color || 'Blanco',
+            needed: 0,
+            stock: Number((mInfo.materia_prima as any)?.stock_kg || 0)
+          }
+        }
+        yarnRequirements[yKey].needed += weightNeededKg
+      }
+    }
+
+    for (const yKey of Object.keys(yarnRequirements)) {
+      const req = yarnRequirements[yKey]
+      if (req.stock < req.needed) {
+        toast.error(`⚠️ Alerta: Falta de materia prima. Se requieren ${req.needed.toFixed(2)} Kg de ${req.material} ${req.color} pero solo quedan ${req.stock.toFixed(2)} Kg.`)
+        return
+      }
+    }
+
     // 1. Crear el turno de producción en DB
     const { data: nuevoTurno, error: tErr } = await supabase.from('turnos_produccion').insert({
       tejedor_id,
@@ -258,6 +296,20 @@ export default function ProduccionTejidoPage() {
       toast.error('Error al iniciar el turno de tejido')
       return
     }
+
+    // --- DESCONTAR STOCK DE HILO Y REGISTRAR CONSUMO ---
+    for (const yKey of Object.keys(yarnRequirements)) {
+      const req = yarnRequirements[yKey]
+      const newStock = req.stock - req.needed
+      await supabase.from('materia_prima').update({ stock_kg: newStock }).eq('id', yKey)
+      await supabase.from('movimientos_materia_prima').insert({
+        materia_prima_id: yKey,
+        tipo: 'consumo_produccion',
+        cantidad_kg: req.needed,
+        referencia_id: nuevoTurno.id
+      })
+    }
+
 
     // 2. Insertar las asignaciones de máquina-media
     const asignaciones = maquinaIds.map(id => ({

@@ -76,8 +76,8 @@ export const ROLES_LABELS: Record<string, string> = {
 }
 
 export const MODULOS_POR_ROL: Record<string, string[]> = {
-  admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'ventas', 'despacho', 'mantenimiento', 'reportes'],
-  supervisor: ['usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'despacho', 'reportes'],
+  admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'ventas', 'despacho', 'mantenimiento', 'materia_prima', 'planilla_diccionario', 'reportes'],
+  supervisor: ['usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'despacho', 'materia_prima', 'planilla_diccionario', 'reportes'],
   tejedor: ['produccion', 'mantenimiento'],
   remalladora: ['remallado', 'mantenimiento'],
   planchador: ['planchado'],

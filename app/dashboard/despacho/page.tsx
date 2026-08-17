@@ -296,6 +296,18 @@ export default function DespachoPage() {
     // Retirar paquetes del inventario activo (estado = entregado) y remover ubicación
     const paqueteIds = paquetesAsociados.map(p => p.id)
     if (paqueteIds.length > 0) {
+      // Registrar salida por venta en movimientos_stock
+      const movimientosVenta = paquetesAsociados.map(p => ({
+        tipo: 'salida_venta',
+        referencia: `Despacho Venta ${ventaSeleccionada.codigo_venta}`,
+        ubicacion_id: p.ubicacion_id,
+        docenas: Number(p.total_docenas || 1) // o cantidad en docenas del paquete
+      })).filter(m => m.ubicacion_id !== null)
+
+      if (movimientosVenta.length > 0) {
+        await supabase.from('movimientos_stock').insert(movimientosVenta)
+      }
+
       await supabase.from('paquetes').update({
         estado: 'entregado',
         ubicacion_id: null
