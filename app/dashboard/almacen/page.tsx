@@ -75,7 +75,42 @@ export default function AlmacenPage() {
   const [guardandoIngreso, setGuardandoIngreso] = useState(false)
   const [salonDestinoManual, setSalonDestinoManual] = useState<Record<string, string>>({})
 
+  // ── NUEVO SALÓN MODAL STATES ──────────────────────────────────────────────
+  const [showModalNuevoSalon, setShowModalNuevoSalon] = useState(false)
+  const [nuevoSalonNombre, setNuevoSalonNombre] = useState('')
+  const [guardandoSalon, setGuardandoSalon] = useState(false)
+
   const supabase = createClient()
+
+  const crearNuevoSalon = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!nuevoSalonNombre.trim()) {
+      toast.error('Ingresa el nombre del salón')
+      return
+    }
+
+    setGuardandoSalon(true)
+    try {
+      const { error } = await supabase.from('ubicaciones').insert({
+        nombre: nuevoSalonNombre.trim(),
+        tipo: 'salon',
+        capacidad_max_bultos: 50,
+        activo: true
+      })
+
+      if (error) throw error
+
+      toast.success(`📍 Salón ${nuevoSalonNombre.trim()} creado exitosamente`)
+      setShowModalNuevoSalon(false)
+      setNuevoSalonNombre('')
+      cargarDatos()
+    } catch (err: any) {
+      toast.error(`Error al crear el salón: ${err.message}`)
+    } finally {
+      setGuardandoSalon(false)
+    }
+  }
+
 
 
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
@@ -367,7 +402,13 @@ export default function AlmacenPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setShowModalNuevoSalon(true)}
+            className="btn-secondary text-xs py-2.5 px-4 rounded-2xl flex items-center gap-2 font-bold border-cyan-500/20 text-cyan-300 hover:bg-cyan-500/10"
+          >
+            <Plus className="w-4 h-4" /> Añadir Salón
+          </button>
           <button
             onClick={() => { setShowModalIngreso(true); setFormIngreso(f => ({ ...f, salon_id: ubicaciones[0]?.id || '' })) }}
             className="btn-primary text-xs py-2.5 px-4 rounded-2xl flex items-center gap-2 font-bold bg-emerald-600 hover:bg-emerald-500 border-none shadow-lg shadow-emerald-600/20"
@@ -991,6 +1032,55 @@ export default function AlmacenPage() {
           </div>
         </div>
       )}
+
+      {/* ── MODAL: CREAR NUEVO SALÓN ─────────────────────────────────────────── */}
+      {showModalNuevoSalon && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">📍 Añadir Nuevo Salón Logístico</h2>
+              <button 
+                onClick={() => { setShowModalNuevoSalon(false); setNuevoSalonNombre('') }} 
+                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={crearNuevoSalon} className="space-y-5 text-xs">
+              <div className="space-y-2">
+                <label className="block text-slate-300 font-bold uppercase tracking-wider">Nombre del Salón</label>
+                <input 
+                  type="text" 
+                  value={nuevoSalonNombre}
+                  onChange={e => setNuevoSalonNombre(e.target.value)}
+                  placeholder="Ej: Salón D, Salón E, Almacén Especial" 
+                  className="input-dark w-full text-sm py-2.5 font-bold"
+                  required 
+                />
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button 
+                  type="button" 
+                  onClick={() => { setShowModalNuevoSalon(false); setNuevoSalonNombre('') }} 
+                  className="btn-secondary flex-1 justify-center py-2.5"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={guardandoSalon} 
+                  className="btn-primary flex-1 justify-center py-2.5 bg-cyan-600 hover:bg-cyan-500 border-none font-bold text-white"
+                >
+                  {guardandoSalon ? 'Creando...' : 'Crear Salón'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
