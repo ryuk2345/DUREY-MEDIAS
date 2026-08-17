@@ -35,15 +35,20 @@ export default function MantenimientoPage() {
       supabase.from('maquinas').select('id, codigo, tipo, estado').order('codigo'),
       supabase.from('averias_maquinas').select(`
         id, descripcion_operador, estado, fecha_reporte,
-        maquina:maquinas!maquina_id(codigo, tipo),
-        reportado_por:usuarios!reportado_por_id(nombre),
+        maquina:maquinas(codigo, tipo),
+        reportado_por:usuarios(nombre),
         reparaciones(id, costo_total)
       `).order('fecha_reporte', { ascending: false }),
     ])
+
+    if (maq.error) toast.error(`Error al cargar máquinas: ${maq.error.message}`)
+    if (av.error) toast.error(`Error al cargar averías: ${av.error.message}`)
+
     setMaquinas(maq.data ?? [])
     setAverias((av.data ?? []) as Averia[])
     setLoading(false)
   }, [])
+
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
 
@@ -68,7 +73,7 @@ export default function MantenimientoPage() {
     }).select().single()
 
     if (avErr) {
-      toast.error('Error al reportar la avería')
+      toast.error(`Error al reportar la avería: ${avErr.message}`)
       return
     }
 

@@ -85,20 +85,26 @@ export default function AlmacenPage() {
       supabase.from('ubicaciones').select('*').eq('activo', true).order('nombre'),
       supabase.from('paquetes').select(`
         id, codigo_paquete, docenas, total_pares, detalles_contenido, estado,
-        preparador:usuarios!preparador_id(nombre),
-        catalogo_media:catalogo_medias!catalogo_media_id(sku, codigo),
-        ubicacion:ubicaciones!ubicacion_id(id, nombre)
+        preparador:usuarios(nombre),
+        catalogo_media:catalogo_medias(sku, codigo),
+        ubicacion:ubicaciones(id, nombre)
       `).order('created_at', { ascending: false })
     ])
+
+    if (ub.error) toast.error(`Error al cargar ubicaciones: ${ub.error.message}`)
+    if (pq.error) toast.error(`Error al cargar paquetes: ${pq.error.message}`)
+
     setUbicaciones(ub.data ?? [])
     setPaquetes((pq.data ?? []) as Paquete[])
     setLoading(false)
   }, [])
 
   const cargarCatalogo = useCallback(async () => {
-    const { data } = await supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla').eq('estado', 'activo').order('modelo')
+    const { data, error } = await supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla').eq('estado', 'activo').order('modelo')
+    if (error) toast.error(`Error al cargar catálogo: ${error.message}`)
     setCatalogoItems(data ?? [])
   }, [])
+
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
   useEffect(() => { cargarCatalogo() }, [cargarCatalogo])

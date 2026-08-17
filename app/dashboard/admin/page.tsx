@@ -36,20 +36,27 @@ export default function AdminPage() {
     const inicioMes = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`
 
     const [cobros, cuotasPend, reparaciones] = await Promise.all([
-      supabase.from('cobros').select('monto').eq('estado_validacion', 'validado').gte('fecha', inicioMes),
+      supabase.from('cobros').select('monto').gte('fecha', inicioMes).eq('estado_validacion', 'validado'),
       supabase.from('cuotas').select('monto').eq('estado', 'pendiente'),
       supabase.from('reparaciones').select('costo_total').gte('fecha_reparacion', inicioMes),
     ])
+
+    if (cobros.error) toast.error(`Error al cargar cobros del mes: ${cobros.error.message}`)
+    if (cuotasPend.error) toast.error(`Error al cargar cuotas pendientes: ${cuotasPend.error.message}`)
+    if (reparaciones.error) toast.error(`Error al cargar reparaciones: ${reparaciones.error.message}`)
 
     const ingresosRecaudados = (cobros.data ?? []).reduce((s, c) => s + c.monto, 0)
     const cuentasCobrar = (cuotasPend.data ?? []).reduce((s, c) => s + c.monto, 0)
     const gastosMantenimiento = (reparaciones.data ?? []).reduce((s, r) => s + (r.costo_total ?? 0), 0)
 
     // Costos de producción del mes
-    const { data: prodData } = await supabase
+    const { data: prodData, error: prodErr } = await supabase
       .from('reportes_produccion')
-      .select('docenas_producidas, catalogo_media:catalogo_medias!catalogo_media_id(costo_produccion_docena)')
+      .select('docenas_producidas, catalogo_media:catalogo_medias(costo_produccion_docena)')
       .gte('fecha', inicioMes)
+    
+    if (prodErr) toast.error(`Error al cargar costos de producción: ${prodErr.message}`)
+
     const costosProd = (prodData ?? []).reduce((s, r) => {
       const costo = (r.catalogo_media as {costo_produccion_docena: number})?.costo_produccion_docena ?? 0
       return s + r.docenas_producidas * costo
@@ -61,9 +68,7 @@ export default function AdminPage() {
       costos_produccion: costosProd,
       gastos_mantenimiento: gastosMantenimiento,
     })
-     
     
-
     // Ventas de los últimos 6 meses (simulado para demo)
     const meses = ['Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul']
     setVentasMes(meses.map((mes, i) => ({
@@ -73,13 +78,15 @@ export default function AdminPage() {
     })))
 
     // Deudas atrasadas
-    const { data: cuotasAtrasadas } = await supabase
+    const { data: cuotasAtrasadas, error: atrErr } = await supabase
       .from('cuotas')
-      .select(`monto, fecha_vencimiento, venta:ventas!venta_id(codigo_venta, cliente:clientes!cliente_id(nombre), asesora:usuarios!asesora_id(nombre))`)
+      .select(`monto, fecha_vencimiento, venta:ventas(codigo_venta, cliente:clientes(nombre), asesora:usuarios(nombre))`)
       .eq('estado', 'pendiente')
       .lt('fecha_vencimiento', hoy.toISOString().split('T')[0])
       .order('fecha_vencimiento')
       .limit(10)
+
+    if (atrErr) toast.error(`Error al cargar deudas vencidas: ${atrErr.message}`)
 
     setDeudasAtrasadas((cuotasAtrasadas ?? []).map(c => {
       const v = c.venta as {codigo_venta: string; cliente: {nombre: string}; asesora: {nombre: string}}
@@ -88,10 +95,12 @@ export default function AdminPage() {
     }))
 
     // Top tejedores del mes
-    const { data: prodTejedores } = await supabase
+    const { data: prodTejedores, error: tejErr } = await supabase
       .from('reportes_produccion')
-      .select('docenas_producidas, turno:turnos_produccion!turno_id(tejedor:usuarios!tejedor_id(nombre))')
+      .select('docenas_producidas, turno:turnos_produccion(tejedor:usuarios(nombre))')
       .gte('fecha', inicioMes)
+
+    if (tejErr) toast.error(`Error al cargar producción de tejedores: ${tejErr.message}`)
 
     const tejedorMap: Record<string, number> = {}
     ;(prodTejedores ?? []).forEach(r => {

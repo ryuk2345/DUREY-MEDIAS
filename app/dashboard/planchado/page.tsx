@@ -83,13 +83,18 @@ export default function PlanchadoPage() {
     const [pl, st, cr, cat] = await Promise.all([
       supabase.from('usuarios').select('id, nombre').eq('rol', 'planchador').eq('activo', true).order('nombre'),
       supabase.from('stock_listo_planchar')
-        .select('id, docenas, catalogo_media_id, catalogo_media:catalogo_medias!catalogo_media_id(id, codigo, talla, publico)')
+        .select('id, docenas, catalogo_media_id, catalogo_media:catalogo_medias(id, codigo, talla, publico)')
         .gt('docenas', 0),
       supabase.from('cronograma_planchado')
-        .select('id, semana, anio, dia_semana, criterio, valor_criterio, planchador_id, planchador:usuarios!planchador_id(nombre)')
+        .select('id, semana, anio, dia_semana, criterio, valor_criterio, planchador_id, planchador:usuarios(nombre)')
         .eq('semana', semanaSeleccionada).eq('anio', anioSeleccionado),
       supabase.from('catalogo_medias').select('id, codigo, talla, publico').eq('estado', 'activo').order('codigo'),
     ])
+
+    if (pl.error) toast.error(`Error al cargar planchadores: ${pl.error.message}`)
+    if (st.error) toast.error(`Error al cargar stock listo para planchar: ${st.error.message}`)
+    if (cr.error) toast.error(`Error al cargar cronograma: ${cr.error.message}`)
+    if (cat.error) toast.error(`Error al cargar catálogo de medias: ${cat.error.message}`)
 
     setPlanchadores(pl.data ?? [])
     setStock((st.data ?? []) as StockPlanchar[])
@@ -97,6 +102,7 @@ export default function PlanchadoPage() {
     setCatalogo((cat.data ?? []) as CatalogoMedia[])
     setLoading(false)
   }, [semanaSeleccionada, anioSeleccionado])
+
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
 

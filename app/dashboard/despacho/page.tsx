@@ -69,22 +69,27 @@ export default function DespachoPage() {
     const [ven, paq] = await Promise.all([
       supabase.from('ventas').select(`
         id, codigo_venta, estado, fecha, total_soles,
-        cliente:clientes!cliente_id(nombre, numero_documento),
+        cliente:clientes(nombre, numero_documento),
         items_venta(
           id, catalogo_media_id, docenas,
-          catalogo_media:catalogo_medias!catalogo_media_id(codigo, modelo, publico)
+          catalogo_media:catalogo_medias(codigo, modelo, publico)
         )
       `).in('estado', ['pendiente', 'despachado', 'en_transito']).order('created_at', { ascending: false }),
       supabase.from('paquetes').select(`
         id, codigo_paquete, docenas, estado, venta_id,
-        catalogo_media:catalogo_medias!catalogo_media_id(codigo),
-        ubicacion:ubicaciones!ubicacion_id(nombre)
+        catalogo_media:catalogo_medias(codigo),
+        ubicacion:ubicaciones(nombre)
       `).in('estado', ['almacenado', 'preparado_envio', 'en_transito'])
     ])
+
+    if (ven.error) toast.error(`Error al cargar ventas: ${ven.error.message}`)
+    if (paq.error) toast.error(`Error al cargar paquetes: ${paq.error.message}`)
+
     setVentas((ven.data ?? []) as unknown as Venta[])
     setPaquetesDisponibles((paq.data ?? []) as unknown as Paquete[])
     setLoading(false)
   }, [])
+
 
   useEffect(() => {
     cargarDatos()

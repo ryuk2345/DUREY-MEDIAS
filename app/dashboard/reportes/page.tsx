@@ -36,10 +36,11 @@ export default function ReportesPage() {
 
       switch (moduloSeleccionado) {
         case 'produccion': {
-          const { data: rows } = await supabase
+          const { data: rows, error } = await supabase
             .from('reportes_produccion')
-            .select('fecha, docenas_producidas, maquina:maquinas!maquina_id(codigo), catalogo_media:catalogo_medias!catalogo_media_id(codigo)')
+            .select('fecha, docenas_producidas, maquina:maquinas(codigo), catalogo_media:catalogo_medias(codigo)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
+          if (error) toast.error(`Error al generar reporte de producción: ${error.message}`)
           data = (rows ?? []).map(r => ({
             Fecha: formatearFecha(r.fecha as string),
             Máquina: (r.maquina as {codigo:string})?.codigo,
@@ -49,10 +50,11 @@ export default function ReportesPage() {
           break
         }
         case 'remallado': {
-          const { data: rows } = await supabase
+          const { data: rows, error } = await supabase
             .from('reportes_remallado')
-            .select('fecha, docenas_remalladas, docenas_restantes, lote:lotes_remallado!lote_id(catalogo_media:catalogo_medias!catalogo_media_id(codigo))')
+            .select('fecha, docenas_remalladas, docenas_restantes, lote:lotes_remallado(catalogo_media:catalogo_medias(codigo))')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
+          if (error) toast.error(`Error al generar reporte de remallado: ${error.message}`)
           data = (rows ?? []).map(r => ({
             Fecha: formatearFecha(r.fecha as string),
             'Tipo de Media': ((r.lote as {catalogo_media:{codigo:string}})?.catalogo_media)?.codigo,
@@ -62,10 +64,11 @@ export default function ReportesPage() {
           break
         }
         case 'planchado': {
-          const { data: rows } = await supabase
+          const { data: rows, error } = await supabase
             .from('reportes_planchado')
-            .select('fecha, docenas_planchadas, docenas_defectuosas, planchador:usuarios!planchador_id(nombre), catalogo_media:catalogo_medias!catalogo_media_id(codigo)')
+            .select('fecha, docenas_planchadas, docenas_defectuosas, planchador:usuarios(nombre), catalogo_media:catalogo_medias(codigo)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
+          if (error) toast.error(`Error al generar reporte de planchado: ${error.message}`)
           data = (rows ?? []).map(r => ({
             Fecha: formatearFecha(r.fecha as string),
             Planchador: (r.planchador as {nombre:string})?.nombre,
@@ -76,10 +79,11 @@ export default function ReportesPage() {
           break
         }
         case 'ventas': {
-          const { data: rows } = await supabase
+          const { data: rows, error } = await supabase
             .from('ventas')
-            .select('fecha, codigo_venta, total_soles, tipo_pago, estado, cliente:clientes!cliente_id(nombre), asesora:usuarios!asesora_id(nombre)')
+            .select('fecha, codigo_venta, total_soles, tipo_pago, estado, cliente:clientes(nombre), asesora:usuarios(nombre)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
+          if (error) toast.error(`Error al generar reporte de ventas: ${error.message}`)
           data = (rows ?? []).map(r => ({
             Fecha: formatearFecha(r.fecha as string),
             'N° Venta': r.codigo_venta,
@@ -92,10 +96,12 @@ export default function ReportesPage() {
           break
         }
         case 'mantenimiento': {
-          const { data: rows } = await supabase
+          const { data: rows, error } = await supabase
             .from('averias_maquinas')
-            .select('fecha_reporte, descripcion_operador, estado, maquina:maquinas!maquina_id(codigo), reparaciones(costo_repuestos, costo_mano_obra, costo_total)')
+            .select('fecha_reporte, descripcion_operador, estado, maquina:maquinas(codigo), reparaciones(costo_repuestos, costo_mano_obra, costo_total)')
             .gte('fecha_reporte', fechaInicio).lte('fecha_reporte', fechaFin)
+          if (error) toast.error(`Error al generar reporte de mantenimiento: ${error.message}`)
+
           data = (rows ?? []).map(r => {
             const rep = (r.reparaciones as {costo_total:number}[])?.[0]
             return {

@@ -19,8 +19,10 @@ DROP TABLE IF EXISTS ubicaciones CASCADE;
 DROP TABLE IF EXISTS stock_listo_planchar CASCADE;
 DROP TABLE IF EXISTS reportes_planchado CASCADE;
 DROP TABLE IF EXISTS cronograma_planchado CASCADE;
+DROP TABLE IF EXISTS cronograma_preparado CASCADE;
 DROP TABLE IF EXISTS reportes_remallado CASCADE;
 DROP TABLE IF EXISTS lotes_remallado CASCADE;
+
 DROP TABLE IF EXISTS minidepositos CASCADE;
 DROP TABLE IF EXISTS reportes_produccion CASCADE;
 DROP TABLE IF EXISTS turno_maquinas CASCADE;
@@ -176,6 +178,18 @@ CREATE TABLE cronograma_planchado (
   valor_criterio  TEXT NOT NULL,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE cronograma_preparado (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  semana          INTEGER NOT NULL,
+  anio            INTEGER NOT NULL DEFAULT EXTRACT(YEAR FROM NOW()),
+  preparador_id   UUID NOT NULL REFERENCES usuarios(id),
+  dia_semana      TEXT NOT NULL CHECK (dia_semana IN ('lunes','martes','miercoles','jueves','viernes','sabado')),
+  criterio        TEXT NOT NULL CHECK (criterio IN ('talla','publico','media')),
+  valor_criterio  TEXT NOT NULL,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
 
 CREATE TABLE reportes_planchado (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -422,6 +436,7 @@ ALTER TABLE minidepositos          DISABLE ROW LEVEL SECURITY;
 ALTER TABLE lotes_remallado        DISABLE ROW LEVEL SECURITY;
 ALTER TABLE reportes_remallado     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE cronograma_planchado   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE cronograma_preparado   DISABLE ROW LEVEL SECURITY;
 ALTER TABLE reportes_planchado     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_listo_planchar   DISABLE ROW LEVEL SECURITY;
 ALTER TABLE ubicaciones            DISABLE ROW LEVEL SECURITY;
@@ -436,6 +451,7 @@ ALTER TABLE cajas_diarias          DISABLE ROW LEVEL SECURITY;
 ALTER TABLE guias_remision         DISABLE ROW LEVEL SECURITY;
 ALTER TABLE averias_maquinas       DISABLE ROW LEVEL SECURITY;
 ALTER TABLE reparaciones           DISABLE ROW LEVEL SECURITY;
+
 
 -- =====================================================
 -- Base de datos en CERO y lista.
