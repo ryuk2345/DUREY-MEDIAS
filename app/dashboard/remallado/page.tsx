@@ -12,14 +12,6 @@ import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
 
 
-interface MiniDeposito {
-  id: string
-  total_docenas: number
-  horario: string
-  catalogo_media_id: string
-  catalogo_media: { id: string; codigo: string }
-}
-
 interface LoteRemallado {
   id: string
   docenas_asignadas: number
@@ -47,7 +39,6 @@ interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: s
 const LIMITE_DOCENAS = 75
 
 export default function RemalladoMonitorPage() {
-  const [minidepositos, setMinidepositos] = useState<MiniDeposito[]>([])
   const [lotes, setLotes] = useState<LoteRemallado[]>([])
   const [remalladoras, setRemalladoras] = useState<Remalladora[]>([])
   const [maquinasRem, setMaquinasRem] = useState<MaquinaRem[]>([])
@@ -65,8 +56,7 @@ export default function RemalladoMonitorPage() {
     catalogo_media_id: '',
     docenas_asignadas: '75',
     horario: 'dia',
-    duracion_horas: '8',
-    minideposito_id: null as string | null
+    duracion_horas: '8'
   })
 
   // Modales
@@ -84,10 +74,7 @@ export default function RemalladoMonitorPage() {
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    const [mini, lot, rem, maq, cat] = await Promise.all([
-      supabase.from('minidepositos')
-        .select('id, total_docenas, horario, catalogo_media_id, catalogo_media:catalogo_medias(id, codigo)')
-        .order('total_docenas', { ascending: false }),
+    const [lot, rem, maq, cat] = await Promise.all([
       supabase.from('lotes_remallado')
         .select(`id, docenas_asignadas, docenas_pendientes, estado, catalogo_media_id, remalladora_id, maquina_remalladora_id,
           catalogo_media:catalogo_medias(id, codigo),
@@ -99,9 +86,6 @@ export default function RemalladoMonitorPage() {
       supabase.from('catalogo_medias').select('id, codigo, modelo, publico').eq('estado', 'activo').order('codigo'),
     ])
 
-    if (mini.error) {
-      toast.error(`Error cargando minidepósitos: ${mini.error.message}`)
-    }
     if (lot.error) {
       toast.error(`Error cargando lotes: ${lot.error.message}`)
     }
@@ -115,7 +99,6 @@ export default function RemalladoMonitorPage() {
       toast.error(`Error cargando catálogo: ${cat.error.message}`)
     }
 
-    setMinidepositos((mini.data ?? []) as unknown as MiniDeposito[])
     setLotes((lot.data ?? []) as unknown as LoteRemallado[])
     setRemalladoras((rem.data ?? []) as Remalladora[])
     setMaquinasRem((maq.data ?? []) as MaquinaRem[])
@@ -174,20 +157,11 @@ export default function RemalladoMonitorPage() {
   const countDisponibles = maquinasRem.filter(m => m.estado === 'activa' && !maquinasLoteMap.has(m.id)).length
   const countMantenimiento = maquinasRem.filter(m => m.estado === 'mantenimiento').length
 
-  // Pre-llenar formulario de asignación al hacer clic en Minidepósito
-  const prellenarDesdeMinideposito = (mini: MiniDeposito) => {
-    setCargaForm(prev => ({
-      ...prev,
-      catalogo_media_id: mini.catalogo_media?.id || mini.catalogo_media_id,
-      docenas_asignadas: Math.max(mini.total_docenas, LIMITE_DOCENAS).toString(),
-      minideposito_id: mini.id
-    }))
-    toast.info(`Cargando especificaciones de minidepósito ${mini.catalogo_media?.codigo}`)
-  }
+  // Eliminado prellenarDesdeMinideposito
 
   // ── EJECUTAR ASIGNACIÓN DE TURNO EN REMALLADO ─────────────────────────────
   const ejecutarAsignacionRemallado = async () => {
-    const { maquina_id, remalladora_id, catalogo_media_id, docenas_asignadas, minideposito_id } = cargaForm
+    const { maquina_id, remalladora_id, catalogo_media_id, docenas_asignadas } = cargaForm
 
     if (!maquina_id) { toast.error('Selecciona una máquina remalladora'); return }
     if (!remalladora_id) { toast.error('Selecciona una operadora remalladora'); return }
@@ -207,7 +181,6 @@ export default function RemalladoMonitorPage() {
 
     // 1. Crear el lote de remallado
     const { error: loteErr } = await supabase.from('lotes_remallado').insert({
-      minideposito_id: minideposito_id || null,
       catalogo_media_id: catalogo_media_id,
       remalladora_id: remalladora_id,
       maquina_remalladora_id: maquina_id,
@@ -218,27 +191,7 @@ export default function RemalladoMonitorPage() {
 
     if (loteErr) { toast.error('Error al iniciar lote de remallado'); return }
 
-    // 2. Si vino de un minidepósito, restar sus docenas en lugar de borrar entero
-    if (minideposito_id) {
-      const { data: mini } = await supabase.from('minidepositos')
-        .select('total_docenas')
-        .eq('id', minideposito_id)
-        .single()
-
-      if (mini) {
-        const nuevoTotal = Math.max(0, Number(mini.total_docenas) - numDocenas)
-        if (nuevoTotal <= 0) {
-          await supabase.from('minidepositos').delete().eq('id', minideposito_id)
-        } else {
-          await supabase.from('minidepositos').update({
-            total_docenas: nuevoTotal,
-            updated_at: new Date().toISOString()
-          }).eq('id', minideposito_id)
-        }
-      }
-    }
-
-    // 3. Marcar máquina y operadora como ocupadas
+    // 2. Marcar máquina y operadora como ocupadas
     await supabase.from('usuarios').update({ estado: 'ocupada' }).eq('id', remalladora_id)
     await supabase.from('maquinas').update({ estado: 'ocupada' }).eq('id', maquina_id)
 
@@ -249,8 +202,7 @@ export default function RemalladoMonitorPage() {
       catalogo_media_id: '',
       docenas_asignadas: '75',
       horario: 'dia',
-      duracion_horas: '8',
-      minideposito_id: null
+      duracion_horas: '8'
     })
     cargarDatos()
   }
@@ -400,60 +352,7 @@ export default function RemalladoMonitorPage() {
         </div>
       </div>
 
-      {/* ── MINIDEPÓSITOS DE PRODUCCIÓN (RESUMEN ACUMULADO) ───────────────────── */}
-      <div>
-        <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Minidepósitos Acumulados (Entrada de Tejido)</h2>
-        {minidepositos.filter(m => m.total_docenas > 0).length === 0 ? (
-          <div className="glass rounded-2xl p-4 text-center text-xs text-slate-500">
-            No hay docenas acumuladas en minidepósitos actualmente
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {minidepositos.filter(m => m.total_docenas > 0).map(mini => {
-              const listo = mini.total_docenas >= LIMITE_DOCENAS
-              const porcentaje = Math.min((mini.total_docenas / LIMITE_DOCENAS) * 100, 100)
-
-              return (
-                <div
-                  key={mini.id}
-                  onClick={() => prellenarDesdeMinideposito(mini)}
-                  className={`glass rounded-2xl p-4 border transition-all cursor-pointer ${
-                    listo ? 'border-orange-500/40 bg-orange-500/[0.03] shadow-md shadow-orange-500/10' : 'border-white/[0.06] hover:border-white/20'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs font-mono font-bold text-white">{mini.catalogo_media?.codigo}</p>
-                      <span className={`badge mt-1 text-[10px] ${mini.horario === 'dia' ? 'badge-warning' : 'badge-info'}`}>
-                        {mini.horario === 'dia' ? '☀ Día' : '🌙 Noche'}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className={`text-xl font-bold font-mono ${listo ? 'text-orange-400' : 'text-white'}`}>
-                        {mini.total_docenas}
-                      </span>
-                      <span className="text-slate-500 text-[10px]"> / {LIMITE_DOCENAS} doc.</span>
-                    </div>
-                  </div>
-
-                  <div className="progress-bar mt-3 h-1.5">
-                    <div
-                      className="progress-fill"
-                      style={{
-                        width: `${porcentaje}%`,
-                        background: listo ? 'linear-gradient(90deg, #f97316, #ef4444)' : 'linear-gradient(90deg, #7c3aed, #3b82f6)'
-                      }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-2 text-right">
-                    {listo ? '✅ Listo para remallar (Haz clic)' : `Faltan ${LIMITE_DOCENAS - mini.total_docenas} docenas`}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
+      {/* ── SECCIÓN DE MINIDEPÓSITOS ELIMINADA ── */}
 
       {/* ── FILTROS Y BÚSQUEDA ──────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">

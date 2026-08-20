@@ -378,28 +378,6 @@ export default function ProduccionTejidoPage() {
     const { error: rErr } = await supabase.from('reportes_produccion').insert(items)
     if (rErr) { toast.error('Error al guardar reporte de producción'); return }
 
-    // Actualizar minidepósitos
-    for (const item of items) {
-      const { data: mini } = await supabase.from('minidepositos')
-        .select('id, total_docenas')
-        .eq('catalogo_media_id', item.catalogo_media_id)
-        .eq('horario', turnoSeleccionado.horario)
-        .single()
-
-      if (mini) {
-        await supabase.from('minidepositos').update({
-          total_docenas: Number(mini.total_docenas) + item.docenas_producidas,
-          updated_at: new Date().toISOString()
-        }).eq('id', mini.id)
-      } else {
-        await supabase.from('minidepositos').insert({
-          catalogo_media_id: item.catalogo_media_id,
-          horario: turnoSeleccionado.horario,
-          total_docenas: item.docenas_producidas,
-        })
-      }
-    }
-
     // Liberar turno y máquinas
     await supabase.from('turnos_produccion').update({ estado: 'cerrado' }).eq('id', turnoSeleccionado.id)
     await supabase.from('maquinas').update({ estado: 'activa' }).in('id', mIds)
@@ -409,7 +387,7 @@ export default function ProduccionTejidoPage() {
       await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', turnoSeleccionado.tejedor_id)
     }
 
-    toast.success('🎉 Producción registrada. Minidepósitos actualizados.')
+    toast.success('🎉 Producción registrada correctamente.')
     setShowReporteModal(false)
     cargarDatos()
   }
