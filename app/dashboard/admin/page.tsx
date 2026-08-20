@@ -7,7 +7,7 @@ import {
   LayoutDashboard, TrendingUp, TrendingDown, DollarSign, CreditCard,
   ShoppingCart, Wrench, Users, Package, AlertCircle, Calendar, Loader2
 } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -70,13 +70,18 @@ export default function AdminPage() {
       gastos_mantenimiento: gastosMantenimiento,
     })
     
-    // Ventas de los últimos 6 meses (simulado para demo)
+    // Ventas de los últimos 6 meses (simulado para demo con ganancias)
     const meses = ['Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul']
-    setVentasMes(meses.map((mes, i) => ({
-      mes,
-      ventas: 12000 + Math.random() * 8000,
-      costos: 7000 + Math.random() * 4000,
-    })))
+    setVentasMes(meses.map((mes, i) => {
+      const v = 12000 + Math.random() * 8000
+      const c = 7000 + Math.random() * 4000
+      return {
+        mes,
+        ventas: v,
+        costos: c,
+        ganancia: Math.max(0, v - c)
+      }
+    }))
 
     // Deudas atrasadas
     const { data: cuotasAtrasadas, error: atrErr } = await supabase
@@ -117,11 +122,55 @@ export default function AdminPage() {
 
   useEffect(() => { cargarKPIs() }, [cargarKPIs])
 
+  const gananciaNeta = kpis.ingresos_recaudados - (kpis.costos_produccion + kpis.gastos_mantenimiento)
+  const isPositivo = gananciaNeta >= 0
+
   const kpiCards = [
-    { label: 'Ingresos Recaudados', value: formatearMoneda(kpis.ingresos_recaudados), icon: <DollarSign className="w-5 h-5" />, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', trend: '+12% vs mes anterior' },
-    { label: 'Cuentas por Cobrar', value: formatearMoneda(kpis.cuentas_por_cobrar), icon: <CreditCard className="w-5 h-5" />, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20', trend: `${deudasAtrasadas.length} cuotas vencidas` },
-    { label: 'Costos de Producción', value: formatearMoneda(kpis.costos_produccion), icon: <Package className="w-5 h-5" />, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', trend: 'Este mes' },
-    { label: 'Gastos de Mantenimiento', value: formatearMoneda(kpis.gastos_mantenimiento), icon: <Wrench className="w-5 h-5" />, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20', trend: 'Este mes' },
+    { 
+      label: 'Ganancia Neta (Mes)', 
+      value: formatearMoneda(gananciaNeta), 
+      icon: <TrendingUp className="w-5 h-5" />, 
+      color: isPositivo ? 'text-emerald-400' : 'text-rose-400', 
+      bg: isPositivo ? 'bg-emerald-500/10' : 'bg-rose-500/10', 
+      border: isPositivo ? 'border-emerald-500/25' : 'border-rose-500/25', 
+      trend: isPositivo ? 'Balance Positivo' : 'Déficit del Mes' 
+    },
+    { 
+      label: 'Ingresos Recaudados', 
+      value: formatearMoneda(kpis.ingresos_recaudados), 
+      icon: <DollarSign className="w-5 h-5" />, 
+      color: 'text-violet-400', 
+      bg: 'bg-violet-500/10', 
+      border: 'border-violet-500/20', 
+      trend: '+12% vs mes anterior' 
+    },
+    { 
+      label: 'Cuentas por Cobrar', 
+      value: formatearMoneda(kpis.cuentas_por_cobrar), 
+      icon: <CreditCard className="w-5 h-5" />, 
+      color: 'text-amber-400', 
+      bg: 'bg-amber-500/10', 
+      border: 'border-amber-500/20', 
+      trend: `${deudasAtrasadas.length} cuotas vencidas` 
+    },
+    { 
+      label: 'Costos de Producción', 
+      value: formatearMoneda(kpis.costos_produccion), 
+      icon: <Package className="w-5 h-5" />, 
+      color: 'text-sky-400', 
+      bg: 'bg-sky-500/10', 
+      border: 'border-sky-500/20', 
+      trend: 'Fábrica (Tejido)' 
+    },
+    { 
+      label: 'Gastos Mantenimiento', 
+      value: formatearMoneda(kpis.gastos_mantenimiento), 
+      icon: <Wrench className="w-5 h-5" />, 
+      color: 'text-red-400', 
+      bg: 'bg-red-500/10', 
+      border: 'border-red-500/20', 
+      trend: 'Máquinas y Averías' 
+    },
   ]
 
   return (
@@ -140,17 +189,17 @@ export default function AdminPage() {
         <div className="flex justify-center py-12"><Loader2 className="w-7 h-7 animate-spin text-violet-400" /></div>
       ) : (
         <>
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-            {kpiCards.map(kpi => (
-              <div key={kpi.label} className={`glass rounded-2xl p-5 border ${kpi.border}`}>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            {kpiCards.map((kpi, idx) => (
+              <div key={kpi.label} className={`glass rounded-2xl p-5 border transition-all ${kpi.border} ${idx === 0 ? 'col-span-2 lg:col-span-1 shadow-lg shadow-emerald-500/[0.02]' : ''}`}>
                 <div className="flex items-start justify-between mb-4">
-                  <p className="text-slate-400 text-xs font-medium uppercase tracking-wider leading-tight">{kpi.label}</p>
+                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider leading-tight">{kpi.label}</p>
                   <div className={`p-2 rounded-xl ${kpi.bg}`}>
                     <span className={kpi.color}>{kpi.icon}</span>
                   </div>
                 </div>
-                <p className={`text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
-                <p className="text-slate-600 text-xs mt-1">{kpi.trend}</p>
+                <p className={`text-2xl font-black ${kpi.color}`}>{kpi.value}</p>
+                <p className="text-slate-500 text-[10px] font-semibold mt-1.5">{kpi.trend}</p>
               </div>
             ))}
           </div>
@@ -158,10 +207,10 @@ export default function AdminPage() {
           {/* Gráfico de Ingresos vs Costos */}
           <div className="glass rounded-2xl p-6">
             <h2 className="text-sm font-semibold text-slate-300 mb-6 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-violet-400" /> Ingresos vs. Costos — Últimos 6 Meses
+              <TrendingUp className="w-4 h-4 text-violet-400" /> Rendimiento Financiero — Últimos 6 Meses
             </h2>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={ventasMes} barGap={4}>
+            <ResponsiveContainer width="100%" height={260}>
+              <ComposedChart data={ventasMes} barGap={4}>
                 <XAxis dataKey="mes" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `S/${(v/1000).toFixed(0)}k`} />
                 <Tooltip
@@ -174,11 +223,13 @@ export default function AdminPage() {
                 <Bar dataKey="costos" name="Costos" radius={[6, 6, 0, 0]}>
                   {ventasMes.map((_, i) => <Cell key={i} fill="#ef4444" opacity={0.65} />)}
                 </Bar>
-              </BarChart>
+                <Line type="monotone" dataKey="ganancia" name="Ganancia Neta" stroke="#10b981" strokeWidth={3} activeDot={{ r: 8 }} dot={{ stroke: '#10b981', strokeWidth: 2, r: 4, fill: '#0f172a' }} />
+              </ComposedChart>
             </ResponsiveContainer>
-            <div className="flex items-center gap-6 mt-3 justify-center">
+            <div className="flex items-center gap-6 mt-4 justify-center">
               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-violet-500" /><span className="text-slate-400 text-xs">Ingresos</span></div>
               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-red-500 opacity-70" /><span className="text-slate-400 text-xs">Costos</span></div>
+              <div className="flex items-center gap-2"><div className="w-4 h-0.5 bg-emerald-500" /><span className="text-slate-400 text-xs">Ganancia Neta</span></div>
             </div>
           </div>
 
