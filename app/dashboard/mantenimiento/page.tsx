@@ -27,6 +27,7 @@ export default function MantenimientoPage() {
   const [averiaSeleccionada, setAveriaSeleccionada] = useState<Averia | null>(null)
   const [averiaForm, setAveriaForm] = useState({ maquina_id: '', descripcion: '' })
   const [reparacionForm, setReparacionForm] = useState({ descripcion_tecnico: '', costo_repuestos: '', costo_mano_obra: '' })
+  const [procesando, setProcesando] = useState(false)
   const supabase = createClient()
 
   const cargarDatos = useCallback(async () => {
@@ -54,6 +55,7 @@ export default function MantenimientoPage() {
 
   const reportarAveria = async () => {
     if (!averiaForm.maquina_id || !averiaForm.descripcion) { toast.error('Selecciona la máquina y describe el problema'); return }
+    if (procesando) return
 
     const maq = maquinas.find(m => m.id === averiaForm.maquina_id)
     if (maq) {
@@ -62,8 +64,19 @@ export default function MantenimientoPage() {
         toast.error(`Error en máquina: ${v.error}`)
         return
       }
+
+      // Parche: Evitar doble reporte activo para la misma máquina
+      const yaTieneActivo = averias.some(a => 
+        a.maquina?.codigo === maq.codigo && 
+        (a.estado === 'pendiente' || a.estado === 'en_reparacion')
+      )
+      if (yaTieneActivo) {
+        toast.error(`La máquina ${maq.codigo} ya tiene un reporte de avería activo.`)
+        return
+      }
     }
 
+    setProcesando(true)
     // 1. Insertar reporte de avería
     const { data: nuevaAveria, error: avErr } = await supabase.from('averias_maquinas').insert({
       maquina_id: averiaForm.maquina_id,
@@ -74,6 +87,7 @@ export default function MantenimientoPage() {
 
     if (avErr) {
       toast.error(`Error al reportar la avería: ${avErr.message}`)
+      setProcesando(false)
       return
     }
 
@@ -104,10 +118,12 @@ export default function MantenimientoPage() {
     toast.error(`Avería reportada — Máquina marcada como MALOGRADA`, { icon: '⚠️' })
     setShowAveriaModal(false)
     setAveriaForm({ maquina_id: '', descripcion: '' })
+    setProcesando(false)
     cargarDatos()
   }
 
   const iniciarReparacion = async (averia: Averia) => {
+    if (procesando) return
     const maq = maquinas.find(m => m.codigo === averia.maquina?.codigo)
     if (!maq) { toast.error('Máquina no encontrada'); return }
 
@@ -117,15 +133,18 @@ export default function MantenimientoPage() {
       return
     }
 
+    setProcesando(true)
     await supabase.from('maquinas').update({ estado: 'mantenimiento' }).eq('id', maq.id)
     await supabase.from('averias_maquinas').update({ estado: 'en_reparacion' }).eq('id', averia.id)
 
     toast.info('🔧 Reparación iniciada. Máquina en estado MANTENIMIENTO.')
+    setProcesando(false)
     cargarDatos()
   }
 
   const registrarReparacion = async () => {
     if (!averiaSeleccionada || !reparacionForm.descripcion_tecnico) { toast.error('Completa el diagnóstico técnico'); return }
+    if (procesando) return
 
     const maq = maquinas.find(m => m.codigo === averiaSeleccionada.maquina?.codigo)
     if (!maq) { toast.error('Máquina no encontrada'); return }
@@ -136,6 +155,7 @@ export default function MantenimientoPage() {
       return
     }
 
+    setProcesando(true)
     await supabase.from('reparaciones').insert({
       averia_id: averiaSeleccionada.id,
       tecnico_id: null,
@@ -149,11 +169,24 @@ export default function MantenimientoPage() {
 
     toast.success('Reparación registrada — Máquina habilitada (Activa)')
     setShowRepararModal(false)
+    setProcesando(false)
     cargarDatos()
   }
 
 
-  const averiasPendientes = averias.filter(a => a.estado === 'pendiente' || a.estado === 'en_reparacion')
+  // Parche: Filtrar averías pendientes duplicadas para evitar mostrarlas doble en la interfaz
+  const averiasPendientes = (() => {
+    const vistos = new Set<string>()
+    return averias.filter(a => {
+      if (a.estado === 'pendiente' || a.estado === 'en_reparacion') {
+        const key = a.maquina?.codigo || a.id
+        if (vistos.has(key)) return false
+        vistos.add(key)
+        return true
+      }
+      return false
+    })
+  })()
   const averiasResueltas = averias.filter(a => a.estado === 'resuelto')
 
   // Ranking de máquinas con más gastos
@@ -255,16 +288,18 @@ export default function MantenimientoPage() {
                       {isEnReparacion ? (
                         <button
                           onClick={() => { setAveriaSeleccionada(a); setShowRepararModal(true) }}
+                          disabled={procesando}
                           className="btn-primary text-sm py-2 ml-4 bg-cyan-600 hover:bg-cyan-500 border-none shadow-lg shadow-cyan-600/20 text-white"
                         >
-                          <CheckCircle className="w-3.5 h-3.5" /> Registrar Reparación
+                          {procesando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} Registrar Reparación
                         </button>
                       ) : (
                         <button
                           onClick={() => iniciarReparacion(a)}
+                          disabled={procesando}
                           className="btn-primary text-sm py-2 ml-4 bg-amber-600 hover:bg-amber-500 border-none shadow-lg shadow-amber-600/20 text-white"
                         >
-                          <Wrench className="w-3.5 h-3.5" /> Iniciar Reparación
+                          {procesando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wrench className="w-3.5 h-3.5" />} Iniciar Reparación
                         </button>
                       )}
                     </div>
@@ -351,8 +386,10 @@ export default function MantenimientoPage() {
               </div>
             </div>
             <div className="flex gap-3 mt-8">
-              <button onClick={() => setShowAveriaModal(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
-              <button onClick={reportarAveria} className="btn-danger flex-1 justify-center"><AlertTriangle className="w-4 h-4" /> Reportar Avería</button>
+              <button onClick={() => setShowAveriaModal(false)} disabled={procesando} className="btn-secondary flex-1 justify-center">Cancelar</button>
+              <button onClick={reportarAveria} disabled={procesando} className="btn-danger flex-1 justify-center">
+                {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} Reportar Avería
+              </button>
             </div>
           </div>
         </div>
@@ -398,8 +435,10 @@ export default function MantenimientoPage() {
             )}
 
             <div className="flex gap-3 mt-8">
-              <button onClick={() => setShowRepararModal(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
-              <button onClick={registrarReparacion} className="btn-primary flex-1 justify-center"><CheckCircle className="w-4 h-4" /> Marcar como Resuelto</button>
+              <button onClick={() => setShowRepararModal(false)} disabled={procesando} className="btn-secondary flex-1 justify-center">Cancelar</button>
+              <button onClick={registrarReparacion} disabled={procesando} className="btn-primary flex-1 justify-center">
+                {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Marcar como Resuelto
+              </button>
             </div>
           </div>
         </div>
