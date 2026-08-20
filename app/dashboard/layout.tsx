@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Sidebar from '@/components/layout/Sidebar'
 import { cookies } from 'next/headers'
+import StockNotification from '@/components/layout/StockNotification'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -44,7 +45,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
         Tablet  (md–lg): icon rail (w-16) → ml-16
         Desktop (≥ lg):  full sidebar (w-60) → ml-60
       */}
-      <main className="flex-1 min-h-screen overflow-x-hidden pt-16 md:pt-0 md:ml-16 lg:ml-60">
+      <main className="flex-1 min-h-screen overflow-x-hidden pt-16 md:pt-0 md:ml-16 lg:ml-60 relative">
+        {/* Floating Stock Notification for Desktop */}
+        <div className="fixed top-4 right-6 z-40 hidden md:block">
+          <StockNotification userRol={userRol} />
+        </div>
+        
         <div className="p-4 sm:p-6 max-w-7xl mx-auto">
           {children}
         </div>

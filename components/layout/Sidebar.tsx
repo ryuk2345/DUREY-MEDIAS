@@ -12,6 +12,7 @@ import {
   BarChart3, LogOut, ChevronRight, Cpu, Users, Menu, X,
   ClipboardList, Database
 } from 'lucide-react'
+import StockNotification from './StockNotification'
 
 const MODULO_CONFIG: Record<string, { label: string; icon: React.ReactNode; href: string; color: string }> = {
   admin:        { label: 'Dashboard',    icon: <LayoutDashboard className="w-5 h-5" />, href: '/dashboard/admin',         color: 'text-violet-400' },
@@ -171,13 +172,16 @@ export default function Sidebar({ userRol, userName }: SidebarProps) {
           </div>
           <p className="font-bold text-white text-base leading-none">DUREY</p>
         </div>
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="p-2 rounded-xl hover:bg-white/10 text-slate-300 transition-colors"
-          aria-label="Abrir menú"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <StockNotification userRol={userRol} />
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="p-2 rounded-xl hover:bg-white/10 text-slate-300 transition-colors"
+            aria-label="Abrir menú"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* ── MOBILE DRAWER OVERLAY ──────────────────────────────────────────────── */}
