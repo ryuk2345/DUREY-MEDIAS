@@ -14,7 +14,13 @@ interface Averia {
   id: string; descripcion_operador: string; estado: string; fecha_reporte: string
   maquina: { codigo: string; tipo: string }
   reportado_por: { nombre: string }
-  reparaciones: { id: string; costo_total: number }[]
+  reparaciones: { 
+    id: string
+    costo_total: number
+    descripcion_tecnico: string
+    costo_repuestos: number
+    costo_mano_obra: number
+  }[]
 }
 
 export default function MantenimientoPage() {
@@ -38,7 +44,7 @@ export default function MantenimientoPage() {
         id, descripcion_operador, estado, fecha_reporte,
         maquina:maquinas(codigo, tipo),
         reportado_por:usuarios(nombre),
-        reparaciones(id, costo_total)
+        reparaciones(id, costo_total, descripcion_tecnico, costo_repuestos, costo_mano_obra)
       `).order('fecha_reporte', { ascending: false }),
     ])
 
@@ -311,25 +317,101 @@ export default function MantenimientoPage() {
           )}
 
           {activeTab === 'timeline' && (
-            <div className="space-y-3">
-              {averias.map((a, idx) => (
-                <div key={a.id} className="flex gap-4">
-                  <div className="flex flex-col items-center">
-                    <div className={`w-3 h-3 rounded-full mt-1 flex-shrink-0 ${a.estado === 'resuelto' ? 'bg-emerald-400' : 'bg-red-400 animate-pulse-ring'}`} />
-                    {idx < averias.length - 1 && <div className="w-0.5 bg-white/[0.06] flex-1 mt-1" />}
-                  </div>
-                  <div className="glass rounded-xl p-4 flex-1 mb-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <code className="text-sm text-amber-300 font-mono">{a.maquina?.codigo}</code>
-                      <span className={`badge text-[10px] ${a.estado === 'resuelto' ? 'badge-success' : 'badge-danger'}`}>
-                        {a.estado === 'resuelto' ? 'Resuelto' : 'Pendiente'}
-                      </span>
+            <div className="space-y-6">
+              {(() => {
+                // Agrupar averías por cada máquina
+                const maquinasTimeline = maquinas.map(m => {
+                  const historial = averias.filter(a => a.maquina?.codigo === m.codigo)
+                  return {
+                    codigo: m.codigo,
+                    tipo: m.tipo,
+                    estadoActual: m.estado,
+                    historial
+                  }
+                }).sort((a, b) => a.codigo.localeCompare(b.codigo))
+
+                return maquinasTimeline.map(mt => {
+                  return (
+                    <div key={mt.codigo} className="glass rounded-2xl p-5 border border-white/[0.06] space-y-4">
+                      {/* Cabecera de la Máquina */}
+                      <div className="flex items-center justify-between pb-3 border-b border-white/[0.04]">
+                        <div className="flex items-center gap-2.5">
+                          <code className="text-base text-amber-300 font-mono font-bold bg-amber-500/10 px-2.5 py-0.5 rounded-lg border border-amber-500/20">
+                            {mt.codigo}
+                          </code>
+                          <span className="text-slate-400 text-xs capitalize font-medium">{mt.tipo}</span>
+                        </div>
+                        {/* Badge de estado actual de la máquina */}
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          mt.estadoActual === 'activa' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : mt.estadoActual === 'ocupada' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          : mt.estadoActual === 'malograda' ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse'
+                          : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
+                        }`}>
+                          ● {mt.estadoActual.toUpperCase()}
+                        </span>
+                      </div>
+
+                      {/* Historial de la Máquina */}
+                      {mt.historial.length === 0 ? (
+                        <p className="text-xs text-slate-500 italic py-2 flex items-center gap-1.5 px-1">
+                          ✓ Sin fallas o reparaciones registradas en el período.
+                        </p>
+                      ) : (
+                        <div className="relative pl-4 border-l border-white/[0.06] space-y-4 ml-2">
+                          {mt.historial.map((a) => {
+                            const rep = a.reparaciones?.[0]
+                            return (
+                              <div key={a.id} className="relative space-y-2">
+                                {/* Punto del Timeline */}
+                                <div className={`absolute -left-[22px] top-1.5 w-2.5 h-2.5 rounded-full ${
+                                  a.estado === 'resuelto' ? 'bg-emerald-500' : 'bg-red-500 animate-pulse'
+                                }`} />
+
+                                <div className="p-3.5 rounded-xl bg-white/[0.01] border border-white/[0.04] text-xs space-y-2.5">
+                                  {/* Info básica del reporte */}
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-slate-400">
+                                      Fecha: <strong className="text-slate-300">{formatearFecha(a.fecha_reporte)}</strong>
+                                    </span>
+                                    <span className={`badge ${a.estado === 'resuelto' ? 'badge-success' : 'badge-danger'}`}>
+                                      {a.estado === 'resuelto' ? 'Resuelto' : a.estado === 'en_reparacion' ? 'En Reparación' : 'Pendiente'}
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                                    {/* Reporte de operador */}
+                                    <div>
+                                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Reporte Operario</p>
+                                      <p className="text-slate-300 font-medium">{a.descripcion_operador}</p>
+                                    </div>
+
+                                    {/* Diagnóstico técnico y costos */}
+                                    {a.estado === 'resuelto' && rep ? (
+                                      <div className="border-t md:border-t-0 md:border-l border-white/[0.06] md:pl-4 space-y-1.5">
+                                        <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">🔧 Solución Técnica</p>
+                                        <p className="text-slate-300 font-medium">{rep.descripcion_tecnico}</p>
+                                        <div className="text-[10px] text-slate-500 flex justify-between pt-1 border-t border-white/[0.04]">
+                                          <span>Repuestos: {formatearMoneda(rep.costo_repuestos)} · Mano de Obra: {formatearMoneda(rep.costo_mano_obra)}</span>
+                                          <span className="font-bold text-emerald-400">Total: {formatearMoneda(rep.costo_total)}</span>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="md:pl-4 flex items-center text-slate-500 italic text-[11px]">
+                                        Pendiente de reparación técnica
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-slate-300 text-sm">{a.descripcion_operador}</p>
-                    <p className="text-slate-600 text-xs mt-1">{formatearFecha(a.fecha_reporte)} · {a.reportado_por?.nombre}</p>
-                  </div>
-                </div>
-              ))}
+                  )
+                })
+              })()}
             </div>
           )}
 
