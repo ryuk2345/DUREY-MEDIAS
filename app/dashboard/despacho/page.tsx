@@ -56,6 +56,8 @@ export default function DespachoPage() {
 
   const [ventas, setVentas] = useState<Venta[]>([])
   const [catalogo, setCatalogo] = useState<CatalogoMedia[]>([])
+  // Stock disponible por catalogo_media_id
+  const [stockPorMedia, setStockPorMedia] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [procesando, setProcesando] = useState(false)
 
@@ -77,7 +79,7 @@ export default function DespachoPage() {
   // ── CARGA DATOS ────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    const [venRes, catRes] = await Promise.all([
+    const [venRes, catRes, paqRes] = await Promise.all([
       supabase.from('ventas').select(`
         id, codigo_venta, estado, fecha, total_soles,
         cliente:clientes(nombre, numero_documento),
@@ -86,7 +88,8 @@ export default function DespachoPage() {
           catalogo_media:catalogo_medias(id, codigo, sku, modelo, publico, diseno_color)
         )
       `).in('estado', ['pendiente', 'despachado', 'en_transito']).order('created_at', { ascending: false }),
-      supabase.from('catalogo_medias').select('id, codigo, sku, modelo, publico, diseno_color, talla')
+      supabase.from('catalogo_medias').select('id, codigo, sku, modelo, publico, diseno_color, talla'),
+      supabase.from('paquetes').select('catalogo_media_id, docenas').in('estado', ['almacenado', 'pendiente_almacenar']),
     ])
 
     if (venRes.error) toast.error(`Error al cargar ventas: ${venRes.error.message}`)
@@ -94,6 +97,14 @@ export default function DespachoPage() {
 
     setVentas((venRes.data ?? []) as unknown as Venta[])
     setCatalogo((catRes.data ?? []) as CatalogoMedia[])
+
+    // Calcular stock por media
+    const stockMap: Record<string, number> = {}
+    for (const p of paqRes.data ?? []) {
+      if (!p.catalogo_media_id) continue
+      stockMap[p.catalogo_media_id] = (stockMap[p.catalogo_media_id] ?? 0) + Number(p.docenas ?? 0)
+    }
+    setStockPorMedia(stockMap)
     setLoading(false)
   }, [])
 
@@ -200,6 +211,8 @@ export default function DespachoPage() {
   const totalRequerido = lineas.reduce((s, l) => s + l.docenas_requeridas, 0)
   const totalEscaneado = lineas.reduce((s, l) => s + l.docenas_escaneadas, 0)
   const listoParaDespachar = lineas.length > 0 && lineas.every(l => l.docenas_escaneadas >= l.docenas_requeridas)
+  // Verifica si hay stock suficiente en almacén para despachar
+  const hayStockInsuficiente = lineas.some(l => (stockPorMedia[l.catalogo_media_id] ?? 0) < l.docenas_requeridas)
 
   // ── DESPACHAR: descontar del almacén y crear guía ─────────────────────
   const despacharVenta = async () => {
@@ -386,10 +399,14 @@ export default function DespachoPage() {
                   {ventaSeleccionada.estado === 'pendiente' ? (
                     <button
                       onClick={() => setShowDespachoModal(true)}
-                      disabled={!listoParaDespachar}
-                      className={`btn-primary text-sm ${!listoParaDespachar ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      disabled={!listoParaDespachar || hayStockInsuficiente}
+                      title={hayStockInsuficiente ? 'Stock insuficiente en almacén para completar este pedido' : ''}
+                      className={`btn-primary text-sm ${
+                        (!listoParaDespachar || hayStockInsuficiente) ? 'opacity-40 cursor-not-allowed' : ''
+                      }`}
                     >
-                      <FileText className="w-4 h-4" /> Despachar Pedido
+                      <FileText className="w-4 h-4" />
+                      {hayStockInsuficiente ? '⛔ Sin Stock' : 'Despachar Pedido'}
                     </button>
                   ) : (
                     <button

@@ -55,6 +55,8 @@ export default function VentasPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [vendedoras, setVendedoras] = useState<Vendedora[]>([])
   const [catalogo, setCatalogo] = useState<MediaItem[]>([])
+  // Stock disponible en almacén por catalogo_media_id → docenas totales en paquetes 'almacenado'
+  const [stockPorMedia, setStockPorMedia] = useState<Record<string, number>>({})
   const [ventas, setVentas] = useState<Venta[]>([])
   const [deudas, setDeudas] = useState<Deuda[]>([])
   const [caja, setCaja] = useState<CajaDiaria | null>(null)
@@ -122,7 +124,7 @@ export default function VentasPage() {
   const cargarDatos = useCallback(async () => {
     setLoading(true)
     const hoy = new Date().toISOString().split('T')[0]
-    const [cli, vend, cat, ven, deu, caj] = await Promise.all([
+    const [cli, vend, cat, ven, deu, caj, paq] = await Promise.all([
       supabase.from('clientes').select('*').order('nombre'),
       supabase.from('usuarios').select('id, nombre').eq('rol', 'vendedora').eq('activo', true).order('nombre'),
       supabase.from('catalogo_medias').select('id, codigo, modelo, publico').eq('estado', 'activo').order('codigo'),
@@ -136,6 +138,8 @@ export default function VentasPage() {
         venta:ventas(id, codigo_venta, total_soles, cliente:clientes(id, nombre, numero_documento, telefono, direccion), asesora:usuarios(id, nombre))
       `).order('fecha_vencimiento'),
       supabase.from('cajas_diarias').select('*').eq('fecha', hoy).single(),
+      // Stock en almacén: paquetes con estado almacenado o pendiente_almacenar
+      supabase.from('paquetes').select('catalogo_media_id, docenas').in('estado', ['almacenado', 'pendiente_almacenar']),
     ])
 
     if (cli.error) toast.error(`Error al cargar clientes: ${cli.error.message}`)
@@ -150,6 +154,14 @@ export default function VentasPage() {
     setVentas((ven.data ?? []) as unknown as Venta[])
     setDeudas((deu.data ?? []) as unknown as Deuda[])
     setCaja(caj.data ?? null)
+
+    // Calcular stock total por tipo de media
+    const stockMap: Record<string, number> = {}
+    for (const p of paq.data ?? []) {
+      if (!p.catalogo_media_id) continue
+      stockMap[p.catalogo_media_id] = (stockMap[p.catalogo_media_id] ?? 0) + Number(p.docenas ?? 0)
+    }
+    setStockPorMedia(stockMap)
 
     if (vend.data && vend.data.length > 0 && !vendedoraSeleccionadaId) {
       setVendedoraSeleccionadaId(vend.data[0].id)
@@ -1252,58 +1264,97 @@ export default function VentasPage() {
                 </button>
               </div>
               <div className="space-y-2.5">
-                {carrito.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-900/40 p-2 rounded-xl border border-white/[0.04]">
-                    <select
-                      value={item.catalogo_media_id}
-                      onChange={e => {
-                        const media = catalogo.find(c => c.id === e.target.value)
-                        const arr = [...carrito]
-                        arr[idx] = { ...arr[idx], catalogo_media_id: e.target.value, codigo: media?.codigo ?? '' }
-                        setCarrito(arr)
-                      }}
-                      className="input-dark col-span-5 text-xs font-mono font-medium"
-                    >
-                      <option value="">Tipo de media...</option>
-                      {catalogo.map(c => <option key={c.id} value={c.id}>{c.codigo}</option>)}
-                    </select>
+                {carrito.map((item, idx) => {
+                  const stockDisp = item.catalogo_media_id ? (stockPorMedia[item.catalogo_media_id] ?? 0) : null
+                  const sinStock = stockDisp !== null && item.docenas > stockDisp
+                  const stockBajo = stockDisp !== null && stockDisp <= 5 && stockDisp > 0
+                  return (
+                    <div key={idx} className={`rounded-xl border p-2 space-y-1.5 ${
+                      sinStock ? 'border-red-500/40 bg-red-500/[0.04]' : 'border-white/[0.04] bg-slate-900/40'
+                    }`}>
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <select
+                          value={item.catalogo_media_id}
+                          onChange={e => {
+                            const media = catalogo.find(c => c.id === e.target.value)
+                            const arr = [...carrito]
+                            arr[idx] = { ...arr[idx], catalogo_media_id: e.target.value, codigo: media?.codigo ?? '' }
+                            setCarrito(arr)
+                          }}
+                          className="input-dark col-span-5 text-xs font-mono font-medium"
+                        >
+                          <option value="">Tipo de media...</option>
+                          {catalogo.map(c => {
+                            const s = stockPorMedia[c.id] ?? 0
+                            return (
+                              <option key={c.id} value={c.id}>
+                                {c.codigo} {s === 0 ? '⛔ SIN STOCK' : s <= 5 ? `⚠️ Stock: ${s} doc.` : ''}
+                              </option>
+                            )
+                          })}
+                        </select>
 
-                    <div className="col-span-3">
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Docenas"
-                        value={item.docenas || ''}
-                        onChange={e => {
-                          const arr = [...carrito]
-                          arr[idx].docenas = parseFloat(e.target.value) || 0
-                          setCarrito(arr)
-                        }}
-                        className="input-dark text-center text-xs py-1 font-bold w-full"
-                      />
+                        <div className="col-span-3">
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="Docenas"
+                            value={item.docenas || ''}
+                            onChange={e => {
+                              const arr = [...carrito]
+                              arr[idx].docenas = parseFloat(e.target.value) || 0
+                              setCarrito(arr)
+                            }}
+                            className={`input-dark text-center text-xs py-1 font-bold w-full ${
+                              sinStock ? 'border-red-500/60 text-red-300' : ''
+                            }`}
+                          />
+                        </div>
+
+                        <div className="col-span-3">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.50"
+                            placeholder="S/ Docena"
+                            value={item.precio_docena || ''}
+                            onChange={e => {
+                              const arr = [...carrito]
+                              arr[idx].precio_docena = parseFloat(e.target.value) || 0
+                              setCarrito(arr)
+                            }}
+                            className="input-dark text-xs py-1 font-mono font-bold w-full"
+                          />
+                        </div>
+
+                        <button onClick={() => setCarrito(carrito.filter((_, i) => i !== idx))} className="col-span-1 p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 flex justify-center">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Indicador de stock */}
+                      {item.catalogo_media_id && stockDisp !== null && (
+                        <div className={`flex items-center gap-1.5 text-[10px] font-semibold px-1 ${
+                          sinStock ? 'text-red-400' : stockBajo ? 'text-amber-400' : 'text-emerald-400'
+                        }`}>
+                          <AlertTriangle className="w-3 h-3" />
+                          {sinStock
+                            ? `⛔ Stock insuficiente — Solo hay ${stockDisp} doc. disponibles (pides ${item.docenas})`
+                            : stockBajo
+                            ? `⚠️ Stock bajo — Disponibles: ${stockDisp} doc. en almacén`
+                            : `✓ Stock OK — ${stockDisp} doc. disponibles`
+                          }
+                        </div>
+                      )}
+                      {item.catalogo_media_id && stockDisp === 0 && (
+                        <div className="flex items-center gap-1.5 text-[10px] font-semibold px-1 text-red-400">
+                          <AlertTriangle className="w-3 h-3" />
+                          ⛔ SIN STOCK — No hay docenas de esta media en almacén
+                        </div>
+                      )}
                     </div>
-
-                    <div className="col-span-3">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.50"
-                        placeholder="S/ Docena"
-                        value={item.precio_docena || ''}
-                        onChange={e => {
-                          const arr = [...carrito]
-                          arr[idx].precio_docena = parseFloat(e.target.value) || 0
-                          setCarrito(arr)
-                        }}
-                        className="input-dark text-xs py-1 font-mono font-bold w-full"
-                      />
-                    </div>
-
-                    <button onClick={() => setCarrito(carrito.filter((_, i) => i !== idx))} className="col-span-1 p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 flex justify-center">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 
