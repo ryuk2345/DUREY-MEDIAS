@@ -70,18 +70,55 @@ export default function AdminPage() {
       gastos_mantenimiento: gastosMantenimiento,
     })
     
-    // Ventas de los últimos 6 meses (simulado para demo con ganancias)
-    const meses = ['Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul']
-    setVentasMes(meses.map((mes, i) => {
-      const v = 12000 + Math.random() * 8000
-      const c = 7000 + Math.random() * 4000
+    // Calcular ingresos y costos reales para los últimos 6 meses dinámicamente
+    const mesesFiltro = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
+      const nombreMes = d.toLocaleString('es-ES', { month: 'short' })
+      const anio = d.getFullYear()
+      const mesNum = d.getMonth() + 1
+      
+      const inicio = `${anio}-${String(mesNum).padStart(2, '0')}-01`
+      const dSiguiente = new Date(anio, mesNum, 1)
+      const finSiguiente = `${dSiguiente.getFullYear()}-${String(dSiguiente.getMonth() + 1).padStart(2, '0')}-01`
+
+      mesesFiltro.push({
+        nombreMes: nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1),
+        inicio,
+        finSiguiente
+      })
+    }
+
+    const promesasMeses = mesesFiltro.map(async (m) => {
+      const [cobRes, prodRes, repRes, compRes, egrRes] = await Promise.all([
+        supabase.from('cobros').select('monto').eq('estado_validacion', 'validado').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
+        supabase.from('reportes_produccion').select('docenas_producidas, catalogo_media:catalogo_medias(costo_produccion_docena)').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
+        supabase.from('reparaciones').select('costo_total').gte('fecha_reparacion', m.inicio).lt('fecha_reparacion', m.finSiguiente),
+        supabase.from('compras_materia_prima').select('costo_total').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
+        supabase.from('egresos_adicionales').select('monto').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
+      ])
+
+      const ingresos = (cobRes.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
+      const costProd = (prodRes.data ?? []).reduce((s, r) => {
+        const c = (r.catalogo_media as any)?.costo_produccion_docena ?? 0
+        return s + Number(r.docenas_producidas ?? 0) * c
+      }, 0)
+      const costManto = (repRes.data ?? []).reduce((s, r) => s + Number(r.costo_total ?? 0), 0)
+      const costMat = (compRes.data ?? []).reduce((s, c) => s + Number(c.costo_total ?? 0), 0)
+      const costEgr = (egrRes.data ?? []).reduce((s, e) => s + Number(e.monto ?? 0), 0)
+
+      const costosTotales = costProd + costManto + costMat + costEgr
+
       return {
-        mes,
-        ventas: v,
-        costos: c,
-        ganancia: Math.max(0, v - c)
+        mes: m.nombreMes,
+        ventas: ingresos,
+        costos: costosTotales,
+        ganancia: ingresos - costosTotales
       }
-    }))
+    })
+
+    const datosMeses = await Promise.all(promesasMeses)
+    setVentasMes(datosMeses)
 
     // Deudas atrasadas
     const { data: cuotasAtrasadas, error: atrErr } = await supabase
@@ -215,7 +252,7 @@ export default function AdminPage() {
                 <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `S/${(v/1000).toFixed(0)}k`} />
                 <Tooltip
                   contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontSize: 13 }}
-                  formatter={(value: number) => [formatearMoneda(value), '']}
+                  formatter={(value: number, name: string) => [formatearMoneda(value), name]}
                 />
                 <Bar dataKey="ventas" name="Ingresos" radius={[6, 6, 0, 0]}>
                   {ventasMes.map((_, i) => <Cell key={i} fill="#8b5cf6" opacity={0.85} />)}
