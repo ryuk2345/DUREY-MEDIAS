@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface KPI {
   ingresos_recaudados: number

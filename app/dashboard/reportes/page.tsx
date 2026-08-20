@@ -114,6 +114,42 @@ export default function ReportesPage() {
           })
           break
         }
+        case 'preparado': {
+          const { data: rows, error } = await supabase
+            .from('paquetes')
+            .select('fecha, codigo_paquete, docenas, estado, preparador:usuarios(nombre), catalogo_media:catalogo_medias(codigo, sku)')
+            .gte('fecha', fechaInicio).lte('fecha', fechaFin)
+          if (error) toast.error(`Error al generar reporte de preparado: ${error.message}`)
+
+          data = (rows ?? []).map(r => ({
+            Fecha: formatearFecha(r.fecha as string),
+            'Código Paquete': r.codigo_paquete,
+            'Tipo Media': r.catalogo_media?.codigo || r.catalogo_media?.sku || 'N/A',
+            Docenas: r.docenas,
+            Estado: r.estado,
+            Preparador: r.preparador?.nombre || 'N/A'
+          }))
+          break
+        }
+        case 'almacen': {
+          const { data: rows, error } = await supabase
+            .from('guias_remision')
+            .select('fecha_despacho, codigo_guia, agencia, estado, fecha_entrega, venta:ventas(codigo_venta, total_soles, cliente:clientes(nombre))')
+            .gte('fecha_despacho', fechaInicio).lte('fecha_despacho', fechaFin)
+          if (error) toast.error(`Error al generar reporte de almacén: ${error.message}`)
+
+          data = (rows ?? []).map(r => ({
+            'Fecha Despacho': formatearFecha(r.fecha_despacho as string),
+            'N° Guía': r.codigo_guia,
+            Agencia: r.agencia,
+            'Cód. Venta': r.venta?.codigo_venta || 'N/A',
+            Cliente: r.venta?.cliente?.nombre || 'N/A',
+            Monto: r.venta?.total_soles ? `S/ ${r.venta.total_soles}` : 'N/A',
+            Estado: r.estado,
+            'Fecha Entrega': r.fecha_entrega ? formatearFecha(r.fecha_entrega) : '—'
+          }))
+          break
+        }
         default:
           data = [{ Nota: `Reporte del módulo ${moduloSeleccionado} — Período: ${fechaInicio} al ${fechaFin}` }]
       }
