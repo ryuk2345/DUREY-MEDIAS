@@ -7,12 +7,12 @@ const ROLE_ROUTES: Record<string, string[]> = {
     '/admin', '/usuarios', '/catalogo', '/maquinas', '/produccion', 
     '/remallado', '/planchado', '/preparado', '/almacen', '/ventas', 
     '/despacho', '/mantenimiento', '/reportes',
-    '/materia-prima', '/planilla-diccionario'
+    '/materia-prima'
   ],
   supervisor: [
     '/usuarios', '/catalogo', '/maquinas', '/produccion', '/remallado', 
     '/planchado', '/preparado', '/almacen', '/despacho', '/reportes',
-    '/materia-prima', '/planilla-diccionario'
+    '/materia-prima'
   ],
   tejedor: ['/produccion', '/mantenimiento'],
   remalladora: ['/remallado', '/mantenimiento'],

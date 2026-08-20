@@ -17,6 +17,7 @@ interface CatalogoMedia {
   diseno_color: string
   talla: string
   costo_produccion_docena: number
+  precio_venta_sugerido: number
   estado: 'activo' | 'inactivo'
 }
 
@@ -46,7 +47,8 @@ export default function CatalogoPage() {
     publico: '',
     diseno_color: '',
     talla: '',
-    costo_produccion_docena: ''
+    costo_produccion_docena: '',
+    precio_venta_sugerido: ''
   })
 
   const codigoPreview = form.codigo.trim() || (form.modelo && form.publico && form.diseno_color && form.talla
@@ -76,7 +78,7 @@ export default function CatalogoPage() {
 
   const abrirNuevo = () => {
     setEditando(null)
-    setForm({ sku: '', codigo: '', modelo: '', publico: '', diseno_color: '', talla: '', costo_produccion_docena: '' })
+    setForm({ sku: '', codigo: '', modelo: '', publico: '', diseno_color: '', talla: '', costo_produccion_docena: '', precio_venta_sugerido: '' })
     setShowModal(true)
   }
 
@@ -89,7 +91,8 @@ export default function CatalogoPage() {
       publico: item.publico,
       diseno_color: item.diseno_color,
       talla: item.talla,
-      costo_produccion_docena: String(item.costo_produccion_docena)
+      costo_produccion_docena: String(item.costo_produccion_docena),
+      precio_venta_sugerido: String(item.precio_venta_sugerido ?? 0)
     })
     setShowModal(true)
   }
@@ -131,6 +134,7 @@ export default function CatalogoPage() {
       diseno_color: form.diseno_color,
       talla: form.talla,
       costo_produccion_docena: parseFloat(form.costo_produccion_docena),
+      precio_venta_sugerido: parseFloat(form.precio_venta_sugerido) || 0,
     }
 
     if (editando) {
@@ -267,21 +271,22 @@ export default function CatalogoPage() {
                   <th>Público</th>
                   <th>Diseño / Color</th>
                   <th>Talla</th>
-                  <th>Costo / Docena</th>
+                  <th>Costo Docena</th>
+                  <th>Venta Docena</th>
+                  <th>Ganancia / Margen</th>
                   <th>Estado</th>
                   <th className="text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {catalogoFiltrado.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-12 text-slate-500">No se encontraron productos en el catálogo</td></tr>
+                  <tr><td colSpan={11} className="text-center py-12 text-slate-500">No se encontraron productos en el catálogo</td></tr>
                 ) : catalogoFiltrado.map(item => {
-                  const skuVal = item.sku || generarSkuMedia(item.modelo, item.publico, item.diseno_color, item.talla)
                   return (
                     <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
                       <td>
                         <code className="text-emerald-300 font-mono text-xs bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 font-bold flex items-center gap-1.5 w-fit">
-                          <Barcode className="w-3.5 h-3.5 text-emerald-400" /> {skuVal}
+                          <Barcode className="w-3.5 h-3.5 text-emerald-400" /> {item.sku || generarSkuMedia(item.modelo, item.publico, item.diseno_color, item.talla)}
                         </code>
                       </td>
                       <td><code className="text-cyan-300 font-mono text-xs font-semibold">{item.codigo}</code></td>
@@ -289,7 +294,21 @@ export default function CatalogoPage() {
                       <td className="text-slate-300 text-xs">{item.publico}</td>
                       <td className="text-slate-300 text-xs capitalize">{item.diseno_color}</td>
                       <td><span className="badge bg-slate-800 text-slate-200 border-slate-700 font-mono font-bold text-xs">{item.talla}</span></td>
-                      <td className="font-bold text-emerald-400 font-mono text-xs">{formatearMoneda(item.costo_produccion_docena)}</td>
+                      <td className="font-bold text-red-400 font-mono text-xs">{formatearMoneda(item.costo_produccion_docena)}</td>
+                      <td className="font-bold text-emerald-400 font-mono text-xs">{formatearMoneda(item.precio_venta_sugerido ?? 0)}</td>
+                      <td>
+                        {(() => {
+                          const costo = Number(item.costo_produccion_docena) || 0
+                          const venta = Number(item.precio_venta_sugerido) || 0
+                          const ganancia = Math.max(0, venta - costo)
+                          const margen = venta > 0 ? Math.round((ganancia / venta) * 100) : 0
+                          return (
+                            <span className={`text-xs font-semibold ${ganancia > 0 ? 'text-pink-400' : 'text-slate-500'}`}>
+                              {formatearMoneda(ganancia)} ({margen}%)
+                            </span>
+                          )
+                        })()}
+                      </td>
                       <td>
                         <span className={`badge ${item.estado === 'activo' ? 'badge-success' : 'badge-neutral'}`}>
                           {item.estado === 'activo' ? '• Activo' : '• Inactivo'}
@@ -400,10 +419,39 @@ export default function CatalogoPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Costo de Producción por Docena (S/) *</label>
-                <input type="number" step="0.5" placeholder="14.50" value={form.costo_produccion_docena} onChange={e => setForm({ ...form, costo_produccion_docena: e.target.value })} className="input-dark font-mono font-bold w-full" />
+               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Costo de Producción por Docena (S/) *</label>
+                  <input type="number" step="0.5" placeholder="10.00" value={form.costo_produccion_docena} onChange={e => setForm({ ...form, costo_produccion_docena: e.target.value })} className="input-dark font-mono font-bold w-full" />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Precio Venta por Docena (S/) *</label>
+                  <input type="number" step="0.5" placeholder="15.00" value={form.precio_venta_sugerido} onChange={e => setForm({ ...form, precio_venta_sugerido: e.target.value })} className="input-dark font-mono font-bold w-full text-emerald-400" />
+                </div>
               </div>
+
+              {(() => {
+                const costo = parseFloat(form.costo_produccion_docena) || 0
+                const venta = parseFloat(form.precio_venta_sugerido) || 0
+                const ganancia = Math.max(0, venta - costo)
+                const margen = venta > 0 ? Math.round((ganancia / venta) * 100) : 0
+                if (costo > 0 && venta > 0) {
+                  return (
+                    <div className="p-3.5 rounded-2xl bg-pink-500/[0.04] border border-pink-500/20 flex justify-between items-center text-xs">
+                      <div>
+                        <span className="text-slate-400">Ganancia Est. por Docena:</span>
+                        <p className="text-base font-black text-pink-400">{formatearMoneda(ganancia)}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-slate-400">Margen de Utilidad:</span>
+                        <p className="text-base font-black text-cyan-400">{margen}%</p>
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              })()}
 
               {codigoPreview && (
                 <div className="p-3 rounded-2xl bg-slate-900/60 border border-white/[0.06] text-slate-400 font-mono text-[11px] space-y-1">
@@ -449,3 +497,5 @@ export default function CatalogoPage() {
     </div>
   )
 }
+
+
