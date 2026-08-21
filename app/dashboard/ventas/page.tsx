@@ -139,8 +139,14 @@ export default function VentasPage() {
         venta:ventas(id, codigo_venta, total_soles, cliente:clientes(id, nombre, numero_documento, telefono, direccion), asesora:usuarios(id, nombre))
       `).order('fecha_vencimiento'),
       supabase.from('cajas_diarias').select('*').eq('fecha', hoy).single(),
-      // Stock en almacén: paquetes con estado almacenado o pendiente_almacenar
-      supabase.from('paquetes').select('catalogo_media_id, docenas').in('estado', ['almacenado', 'pendiente_almacenar']),
+      // Stock en almacén: paquetes con estado almacenado o pendiente_almacenar (usando vista en prod)
+      (() => {
+        const urlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+        const isMock = !urlEnv || urlEnv.includes('tu-proyecto') || urlEnv.includes('placeholder') || !urlEnv.includes('.supabase.co')
+        return isMock
+          ? supabase.from('paquetes').select('catalogo_media_id, docenas').in('estado', ['almacenado', 'pendiente_almacenar'])
+          : supabase.from('vista_stock_medias').select('catalogo_media_id, stock_docenas')
+      })()
     ])
 
     if (cli.error) toast.error(`Error al cargar clientes: ${cli.error.message}`)
@@ -156,11 +162,21 @@ export default function VentasPage() {
     setDeudas((deu.data ?? []) as unknown as Deuda[])
     setCaja(caj.data ?? null)
 
+    const urlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+    const isMock = !urlEnv || urlEnv.includes('tu-proyecto') || urlEnv.includes('placeholder') || !urlEnv.includes('.supabase.co')
+
     // Calcular stock total por tipo de media
     const stockMap: Record<string, number> = {}
-    for (const p of paq.data ?? []) {
-      if (!p.catalogo_media_id) continue
-      stockMap[p.catalogo_media_id] = (stockMap[p.catalogo_media_id] ?? 0) + Number(p.docenas ?? 0)
+    if (isMock) {
+      for (const p of paq.data ?? []) {
+        if (!p.catalogo_media_id) continue
+        stockMap[p.catalogo_media_id] = (stockMap[p.catalogo_media_id] ?? 0) + Number(p.docenas ?? 0)
+      }
+    } else {
+      for (const row of paq.data ?? []) {
+        if (!row.catalogo_media_id) continue
+        stockMap[row.catalogo_media_id] = Number(row.stock_docenas ?? 0)
+      }
     }
     setStockPorMedia(stockMap)
 

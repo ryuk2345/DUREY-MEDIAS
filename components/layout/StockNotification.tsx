@@ -43,21 +43,44 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
         .select('id, material, color, stock_kg')
         .lte('stock_kg', 10.000)
 
-      // 2. Productos terminados (catálogo medias)
-      const [catRes, paqRes] = await Promise.all([
-        supabase.from('catalogo_medias').select('id, codigo, modelo, publico').eq('estado', 'activo'),
-        supabase.from('paquetes').select('catalogo_media_id, docenas').in('estado', ['almacenado', 'pendiente_almacenar'])
-      ])
+      // 2. Productos terminados (catálogo medias y stock consolidado)
+      const urlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+      const isMock = !urlEnv || urlEnv.includes('tu-proyecto') || urlEnv.includes('placeholder') || !urlEnv.includes('.supabase.co')
+
+      const { data: catData } = await supabase
+        .from('catalogo_medias')
+        .select('id, codigo, modelo, publico')
+        .eq('estado', 'activo')
 
       const stockMap: Record<string, number> = {}
-      paqRes.data?.forEach(p => {
-        if (p.catalogo_media_id) {
-          stockMap[p.catalogo_media_id] = (stockMap[p.catalogo_media_id] ?? 0) + Number(p.docenas ?? 0)
-        }
-      })
+
+      if (isMock) {
+        // Fallback local: Sumar en memoria
+        const { data: paqData } = await supabase
+          .from('paquetes')
+          .select('catalogo_media_id, docenas')
+          .in('estado', ['almacenado', 'pendiente_almacenar'])
+
+        paqData?.forEach(p => {
+          if (p.catalogo_media_id) {
+            stockMap[p.catalogo_media_id] = (stockMap[p.catalogo_media_id] ?? 0) + Number(p.docenas ?? 0)
+          }
+        })
+      } else {
+        // En producción: Consumir la vista SQL agregada
+        const { data: viewData } = await supabase
+          .from('vista_stock_medias')
+          .select('catalogo_media_id, stock_docenas')
+
+        viewData?.forEach(row => {
+          if (row.catalogo_media_id) {
+            stockMap[row.catalogo_media_id] = Number(row.stock_docenas ?? 0)
+          }
+        })
+      }
 
       const lowMedias: LowStockProduct[] = []
-      catRes.data?.forEach(m => {
+      catData?.forEach(m => {
         const stock = stockMap[m.id] ?? 0
         if (stock <= 5) {
           lowMedias.push({

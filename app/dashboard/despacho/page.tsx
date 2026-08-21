@@ -122,7 +122,14 @@ export default function DespachoPage() {
       `).order('fecha_despacho', { ascending: false }),
 
       supabase.from('catalogo_medias').select('id, codigo, sku, modelo, publico, diseno_color, talla'),
-      supabase.from('paquetes').select('catalogo_media_id, docenas').in('estado', ['almacenado', 'pendiente_almacenar']),
+      
+      (() => {
+        const urlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+        const isMock = !urlEnv || urlEnv.includes('tu-proyecto') || urlEnv.includes('placeholder') || !urlEnv.includes('.supabase.co')
+        return isMock
+          ? supabase.from('paquetes').select('catalogo_media_id, docenas').in('estado', ['almacenado', 'pendiente_almacenar'])
+          : supabase.from('vista_stock_medias').select('catalogo_media_id, stock_docenas')
+      })()
     ])
 
     if (venRes.error) toast.error(`Error al cargar ventas: ${venRes.error.message}`)
@@ -132,10 +139,20 @@ export default function DespachoPage() {
     setGuias((guiRes.data ?? []) as unknown as GuiaRemision[])
     setCatalogo((catRes.data ?? []) as CatalogoMedia[])
 
+    const urlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+    const isMock = !urlEnv || urlEnv.includes('tu-proyecto') || urlEnv.includes('placeholder') || !urlEnv.includes('.supabase.co')
+
     const stockMap: Record<string, number> = {}
-    for (const p of paqRes.data ?? []) {
-      if (!p.catalogo_media_id) continue
-      stockMap[p.catalogo_media_id] = (stockMap[p.catalogo_media_id] ?? 0) + Number(p.docenas ?? 0)
+    if (isMock) {
+      for (const p of paqRes.data ?? []) {
+        if (!p.catalogo_media_id) continue
+        stockMap[p.catalogo_media_id] = (stockMap[p.catalogo_media_id] ?? 0) + Number(p.docenas ?? 0)
+      }
+    } else {
+      for (const row of paqRes.data ?? []) {
+        if (!row.catalogo_media_id) continue
+        stockMap[row.catalogo_media_id] = Number(row.stock_docenas ?? 0)
+      }
     }
     setStockPorMedia(stockMap)
     setLoading(false)
