@@ -4,7 +4,7 @@ export interface CuotaCronograma {
   numero: number
   fecha_vencimiento: string
   monto: number
-  estado: 'pendiente' | 'pagado' | 'vencido'
+  estado: 'pendiente' | 'pagada' | 'vencida'
 }
 
 export function calcularSaldoFinanciado(totalVenta: number, adelantoContado: number): number {
