@@ -8,7 +8,7 @@ import {
   Loader2, X, Search, Check, RefreshCw, Barcode, Box, Layers, Zap, MapPin, ArrowRight, Plus, PackagePlus
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { validarTransicionEstadoPaquete } from '@/lib/domain/packaging'
+import { validarTransicionEstadoPaquete, convertirDocenasAPares } from '@/lib/domain/packaging'
 
 
 interface Ubicacion { id: string; nombre: string; tipo: string }
@@ -187,12 +187,12 @@ export default function AlmacenPage() {
           salon_destino_id: paqMatch.ubicacion?.id || ubicaciones[0]?.id || '',
           salon_destino_nombre: paqMatch.ubicacion?.nombre || 'Salón A',
           total_docenas: paqMatch.docenas,
-          total_pares: paqMatch.total_pares || paqMatch.docenas * 12,
+          total_pares: paqMatch.total_pares || convertirDocenasAPares(paqMatch.docenas),
           items: paqMatch.detalles_contenido || [{
             sku: paqMatch.catalogo_media?.sku || 'SKU-VARIADO',
             codigo: paqMatch.catalogo_media?.codigo || 'Medias Variadas',
             docenas: paqMatch.docenas,
-            pares: paqMatch.total_pares || paqMatch.docenas * 12
+            pares: paqMatch.total_pares || convertirDocenasAPares(paqMatch.docenas)
           }],
           paqueteId: paqMatch.id
         }
@@ -284,7 +284,7 @@ export default function AlmacenPage() {
 
     setGuardandoIngreso(true)
     const docenas = Number(formIngreso.docenas)
-    const pares = docenas * 12
+    const pares = convertirDocenasAPares(docenas)
     const codigoIngreso = `ING-${Date.now().toString().slice(-6)}`
     const salon = ubicaciones.find(u => u.id === formIngreso.salon_id)
 
@@ -336,7 +336,7 @@ export default function AlmacenPage() {
       const paquetesSalon = paquetes.filter(p => p.ubicacion?.id === ub.id && p.estado === 'almacenado')
       const countSacos = paquetesSalon.length
       const totalDocenas = paquetesSalon.reduce((sum, p) => sum + p.docenas, 0)
-      const totalPares = paquetesSalon.reduce((sum, p) => sum + (p.total_pares || p.docenas * 12), 0)
+      const totalPares = paquetesSalon.reduce((sum, p) => sum + (p.total_pares || convertirDocenasAPares(p.docenas)), 0)
 
       // Desglose de medias por SKU en este salón
       const skuMap: Record<string, { sku: string; codigo: string; docenas: number; pares: number }> = {}
@@ -348,7 +348,7 @@ export default function AlmacenPage() {
               skuMap[key] = { sku: key, codigo: item.codigo || key, docenas: 0, pares: 0 }
             }
             skuMap[key].docenas += item.docenas || 0
-            skuMap[key].pares += item.pares || (item.docenas * 12) || 0
+            skuMap[key].pares += item.pares || convertirDocenasAPares(item.docenas) || 0
           })
         } else {
           const key = p.catalogo_media?.sku || p.catalogo_media?.codigo || 'SKU-MEDIAS'
@@ -356,7 +356,7 @@ export default function AlmacenPage() {
             skuMap[key] = { sku: key, codigo: p.catalogo_media?.codigo || key, docenas: 0, pares: 0 }
           }
           skuMap[key].docenas += p.docenas || 0
-          skuMap[key].pares += p.total_pares || (p.docenas * 12) || 0
+          skuMap[key].pares += p.total_pares || convertirDocenasAPares(p.docenas) || 0
         }
       })
 
@@ -690,7 +690,7 @@ export default function AlmacenPage() {
                     )}
                   </td>
                   <td className="font-bold text-white font-mono">{p.docenas} doc.</td>
-                  <td className="font-black text-emerald-400 font-mono">{p.total_pares || p.docenas * 12} pares</td>
+                  <td className="font-black text-emerald-400 font-mono">{p.total_pares || convertirDocenasAPares(p.docenas)} pares</td>
                   <td>
                     <span className={`badge ${p.estado === 'almacenado' ? 'badge-success' : 'badge-warning'}`}>
                       {p.estado === 'almacenado' ? 'Almacenado en Salón' : 'Pendiente de Almacenar'}
@@ -950,7 +950,7 @@ export default function AlmacenPage() {
                       />
                       {formIngreso.docenas && Number(formIngreso.docenas) > 0 && (
                         <p className="text-center text-xs text-slate-400 font-mono">
-                          = <strong className="text-emerald-400">{Number(formIngreso.docenas) * 12} pares</strong>
+                          = <strong className="text-emerald-400">{convertirDocenasAPares(Number(formIngreso.docenas))} pares</strong>
                         </p>
                       )}
                     </div>

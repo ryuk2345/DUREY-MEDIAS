@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { generarCodigoPaquete, getSemanaAnio, getDiaSemana } from '@/lib/utils'
+import { convertirDocenasAPares } from '@/lib/domain/packaging'
 import QRCode from 'qrcode'
 
 interface Preparador { id: string; nombre: string }
@@ -221,7 +222,7 @@ export default function PreparadoPage() {
     if (!mediaObj) mediaObj = catalogo[0]
 
     const skuMedia = mediaObj.sku || `SKU-${mediaObj.codigo.toUpperCase()}`
-    const totalPares = Math.round(docenasIngresadas * 12)
+    const totalPares = Math.round(convertirDocenasAPares(docenasIngresadas))
 
     // Código de Saco Maestro (B-1005 / PKG-2005)
     const { count } = await supabase.from('paquetes').select('*', { count: 'exact', head: true })
@@ -375,7 +376,7 @@ export default function PreparadoPage() {
       salon_destino: p.ubicacion?.nombre || 'Salón A',
       preparador: p.preparador?.nombre || 'Lucia Preparadora',
       docenas: p.docenas,
-      pares: p.total_pares || p.docenas * 12
+      pares: p.total_pares || convertirDocenasAPares(p.docenas)
     })
     const url = await QRCode.toDataURL(payload, { width: 300, margin: 2 })
     setQrDataURL(url)
@@ -486,7 +487,7 @@ export default function PreparadoPage() {
             if (!mediaAsignadaObj) mediaAsignadaObj = catalogo[0]
 
             const docenasNum = parseFloat(inputVals.empacadas || '0')
-            const paresCalculados = Math.round(docenasNum * 12)
+            const paresCalculados = Math.round(convertirDocenasAPares(docenasNum))
 
             return (
               <div key={prep.id} className="glass rounded-3xl p-5 border border-white/[0.08] flex flex-col justify-between space-y-4 shadow-xl">
@@ -610,7 +611,7 @@ export default function PreparadoPage() {
                   <td className="font-mono text-xs text-slate-200">{p.catalogo_media?.sku || p.catalogo_media?.codigo || 'SKU-VARIOS'}</td>
                   <td className="text-white text-xs font-semibold">{p.preparador?.nombre || 'Lucia Preparadora'}</td>
                   <td className="font-bold text-white font-mono">{p.docenas} doc.</td>
-                  <td className="font-black text-emerald-400 font-mono">{p.total_pares || p.docenas * 12} pares</td>
+                  <td className="font-black text-emerald-400 font-mono">{p.total_pares || convertirDocenasAPares(p.docenas)} pares</td>
                   <td><span className="badge badge-info font-bold">📍 {p.ubicacion?.nombre || 'Salón A'}</span></td>
                   <td>
                     <span className={`badge ${p.estado === 'almacenado' ? 'badge-success' : 'badge-warning'}`}>
@@ -735,7 +736,7 @@ export default function PreparadoPage() {
             </div>
 
             <p className="text-xs font-mono text-emerald-400 font-bold mb-6">
-              {paqueteQR.docenas} Docenas ({paqueteQR.total_pares || paqueteQR.docenas * 12} Pares Totales)
+              {paqueteQR.docenas} Docenas ({paqueteQR.total_pares || convertirDocenasAPares(paqueteQR.docenas)} Pares Totales)
             </p>
 
             <button onClick={() => setShowQRModal(false)} className="btn-primary w-full justify-center py-2 text-xs bg-emerald-600 border-none font-bold">

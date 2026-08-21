@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha, generarCodigoVenta } from '@/lib/utils'
+import { generarCronogramaCuotas } from '@/lib/domain/finance'
 
 interface Cliente {
   id: string
@@ -193,32 +194,20 @@ export default function VentasPage() {
     }
 
     const nCuotas = parseInt(numeroCuotas) || 2
-    const montoPorCuota = Math.round((saldoFinanciado / nCuotas) * 100) / 100
-
     let diasIntervalo = 15
     if (frecuenciaPago === 'semanal') diasIntervalo = 7
     if (frecuenciaPago === 'quincenal') diasIntervalo = 15
     if (frecuenciaPago === 'mensual') diasIntervalo = 30
 
-    const hoy = new Date()
-    const arrayCuotas: CuotaCronogramaItem[] = []
+    // Llamada centralizada a la lógica de dominio
+    const cronograma = generarCronogramaCuotas(saldoFinanciado, nCuotas, diasIntervalo)
 
-    for (let i = 0; i < nCuotas; i++) {
-      const fechaCuota = new Date(hoy)
-      fechaCuota.setDate(fechaCuota.getDate() + diasIntervalo * (i + 1))
-      const fechaExactaStr = fechaCuota.toISOString().split('T')[0]
-
-      const esUltima = i === nCuotas - 1
-      const montoAjustado = esUltima
-        ? Math.round((saldoFinanciado - montoPorCuota * (nCuotas - 1)) * 100) / 100
-        : montoPorCuota
-
-      arrayCuotas.push({
-        numero_cuota: i + 1,
-        fecha_vencimiento: fechaExactaStr,
-        monto: montoAjustado
-      })
-    }
+    // Mapear al formato esperado por el estado local de la UI
+    const arrayCuotas: CuotaCronogramaItem[] = cronograma.map(c => ({
+      numero_cuota: c.numero,
+      fecha_vencimiento: c.fecha_vencimiento,
+      monto: c.monto
+    }))
 
     setCronogramaCuotas(arrayCuotas)
   }, [saldoFinanciado, numeroCuotas, frecuenciaPago, tipoPago])
