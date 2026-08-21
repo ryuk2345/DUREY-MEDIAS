@@ -109,6 +109,9 @@ export default function UsuariosPage() {
   }
 
   // ── GUARDAR USUARIO (CREAR O ACTUALIZAR) ──────────────────────────────────
+  const urlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const isMock = !urlEnv || urlEnv.includes('tu-proyecto') || urlEnv.includes('placeholder') || !urlEnv.includes('.supabase.co')
+
   const guardarUsuario = async () => {
     setErrorEnvio(null)
     if (!form.nombre.trim() || !form.email.trim() || !form.rol) {
@@ -131,19 +134,56 @@ export default function UsuariosPage() {
       }
       toast.success('✅ Usuario actualizado exitosamente')
     } else {
-      const { error } = await supabase.from('usuarios').insert({
-        nombre: form.nombre.trim(),
-        email: form.email.trim(),
-        rol: form.rol,
-        activo: form.activo
-      })
+      // CREAR NUEVO USUARIO
+      if (isMock) {
+        // En desarrollo local (modo mock)
+        const { error } = await supabase.from('usuarios').insert({
+          nombre: form.nombre.trim(),
+          email: form.email.trim(),
+          rol: form.rol,
+          activo: form.activo
+        })
 
-      if (error) {
-        setErrorEnvio(error.message || JSON.stringify(error))
-        toast.error('Error al crear el usuario')
-        return
+        if (error) {
+          setErrorEnvio(error.message || JSON.stringify(error))
+          toast.error('Error al crear el usuario (Modo Mock)')
+          return
+        }
+        toast.success('🎉 Usuario creado exitosamente en modo mock')
+      } else {
+        // En producción (realiza llamada a API con Supabase Auth y rollback en DB)
+        if (!form.password.trim()) {
+          toast.error('Ingresa una contraseña temporal para registrar al usuario en Supabase Auth')
+          return
+        }
+
+        try {
+          const res = await fetch('/api/usuarios', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nombre: form.nombre.trim(),
+              email: form.email.trim(),
+              rol: form.rol,
+              password: form.password,
+              activo: form.activo
+            })
+          })
+
+          const data = await res.json()
+          if (!res.ok || data.error) {
+            setErrorEnvio(data.error || 'Error al registrar el usuario en el servidor')
+            toast.error(data.error || 'Error al registrar el usuario')
+            return
+          }
+
+          toast.success('🎉 Usuario registrado correctamente en Auth y base de datos SQL.')
+        } catch (e: any) {
+          setErrorEnvio(e.message || 'Error de conexión con el servidor')
+          toast.error('Error de conexión con el servidor de autenticación')
+          return
+        }
       }
-      toast.success('🎉 Usuario creado exitosamente')
     }
 
     setShowModal(false)
@@ -423,13 +463,16 @@ export default function UsuariosPage() {
 
               {!editUser && (
                 <div>
-                  <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Contraseña (Opcional en Demo)</label>
+                  <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">
+                    {isMock ? 'Contraseña (Opcional en Mock)' : 'Contraseña Temporal (Obligatoria)'}
+                  </label>
                   <input
                     type="password"
                     placeholder="••••••••"
                     value={form.password}
                     onChange={e => setForm({ ...form, password: e.target.value })}
-                    className="input-dark text-xs w-full"
+                    className="input-dark text-xs w-full font-mono"
+                    required={!isMock}
                   />
                 </div>
               )}
