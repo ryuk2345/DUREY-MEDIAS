@@ -74,23 +74,19 @@ export default function RemalladoMonitorPage() {
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    const [lot, rem, maq, cat] = await Promise.all([
+    const [lot, maq, cat] = await Promise.all([
       supabase.from('lotes_remallado')
         .select(`id, docenas_asignadas, docenas_pendientes, estado, catalogo_media_id, remalladora_id, maquina_remalladora_id,
           catalogo_media:catalogo_medias(id, codigo),
           remalladora:usuarios(id, nombre),
           maquina_remalladora:maquinas(id, codigo)
         `).eq('estado', 'en_proceso'),
-      supabase.from('usuarios').select('id, nombre, estado').eq('rol', 'remalladora').eq('activo', true),
       supabase.from('maquinas').select('id, codigo, marca_id, tipo, estado, marca:marcas_maquinas(id, nombre)').eq('tipo', 'remalladora').order('codigo'),
       supabase.from('catalogo_medias').select('id, codigo, modelo, publico').eq('estado', 'activo').order('codigo'),
     ])
 
     if (lot.error) {
       toast.error(`Error cargando lotes: ${lot.error.message}`)
-    }
-    if (rem.error) {
-      toast.error(`Error cargando remalladoras: ${rem.error.message}`)
     }
     if (maq.error) {
       toast.error(`Error cargando máquinas: ${maq.error.message}`)
@@ -99,8 +95,33 @@ export default function RemalladoMonitorPage() {
       toast.error(`Error cargando catálogo: ${cat.error.message}`)
     }
 
+    const hoy = new Date().toISOString().split('T')[0]
+    const { data: asigData, error: asigErr } = await supabase
+      .from('asignaciones_turno')
+      .select('operador_id, operador:usuarios(id, nombre, estado)')
+      .eq('area', 'enlace')
+      .eq('fecha', hoy)
+
+    let remalladorasList = []
+    if (asigErr) {
+      toast.error(`Error cargando asignaciones de turno: ${asigErr.message}`)
+    } else if (asigData && asigData.length > 0) {
+      remalladorasList = asigData.map((a: any) => a.operador).filter(Boolean)
+    } else {
+      const { data: usersData, error: usersErr } = await supabase
+        .from('usuarios')
+        .select('id, nombre, estado')
+        .in('rol', ['operador', 'remalladora'])
+        .eq('activo', true)
+      if (usersErr) {
+        toast.error(`Error cargando operarios: ${usersErr.message}`)
+      } else if (usersData) {
+        remalladorasList = usersData
+      }
+    }
+
     setLotes((lot.data ?? []) as unknown as LoteRemallado[])
-    setRemalladoras((rem.data ?? []) as Remalladora[])
+    setRemalladoras(remalladorasList)
     setMaquinasRem((maq.data ?? []) as MaquinaRem[])
     setCatalogo((cat.data ?? []) as CatalogoMedia[])
     setLoading(false)

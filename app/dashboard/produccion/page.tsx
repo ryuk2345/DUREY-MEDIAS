@@ -69,13 +69,12 @@ export default function ProduccionTejidoPage() {
   // ── CARGAR DATOS EN TIEMPO REAL / MOCK ────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    const [mar, maq, tj, cat, tur] = await Promise.all([
+    const [mar, maq, cat, tur] = await Promise.all([
       supabase.from('marcas_maquinas').select('id, nombre').order('nombre'),
       supabase.from('maquinas').select(`
         id, codigo, marca_id, tipo, estado, caracteristicas,
         marca:marcas_maquinas(id, nombre)
       `).eq('tipo', 'tejedora').order('codigo'),
-      supabase.from('usuarios').select('id, nombre').eq('rol', 'tejedor').eq('activo', true),
       supabase.from('catalogo_medias').select('id, codigo, modelo, publico, talla').eq('estado', 'activo').order('codigo'),
       supabase.from('turnos_produccion').select(`
         id, fecha, horario, duracion_horas, estado, tejedor_id,
@@ -90,9 +89,6 @@ export default function ProduccionTejidoPage() {
     if (maq.error) {
       toast.error(`Error cargando máquinas: ${maq.error.message}`)
     }
-    if (tj.error) {
-      toast.error(`Error cargando tejedores: ${tj.error.message}`)
-    }
     if (cat.error) {
       toast.error(`Error cargando catálogo: ${cat.error.message}`)
     }
@@ -100,13 +96,38 @@ export default function ProduccionTejidoPage() {
       toast.error(`Error cargando turnos: ${tur.error.message}`)
     }
 
+    const hoy = new Date().toISOString().split('T')[0]
+    const { data: asigData, error: asigErr } = await supabase
+      .from('asignaciones_turno')
+      .select('operador_id, operador:usuarios(id, nombre)')
+      .eq('area', 'tejido')
+      .eq('fecha', hoy)
+
+    let tejedoresList = []
+    if (asigErr) {
+      toast.error(`Error cargando asignaciones de turno: ${asigErr.message}`)
+    } else if (asigData && asigData.length > 0) {
+      tejedoresList = asigData.map((a: any) => a.operador).filter(Boolean)
+    } else {
+      const { data: usersData, error: usersErr } = await supabase
+        .from('usuarios')
+        .select('id, nombre')
+        .in('rol', ['operador', 'tejedor'])
+        .eq('activo', true)
+      if (usersErr) {
+        toast.error(`Error cargando operarios: ${usersErr.message}`)
+      } else if (usersData) {
+        tejedoresList = usersData
+      }
+    }
+
     setMarcas(mar.data ?? [])
     setMaquinas((maq.data ?? []) as Maquina[])
-    setTejedores(tj.data ?? [])
+    setTejedores(tejedoresList)
     setCatalogo(cat.data ?? [])
     setTurnos((tur.data ?? []) as Turno[])
     setLoading(false)
-  }, [])
+  }, [supabase])
 
 
   useEffect(() => { cargarDatos() }, [cargarDatos])

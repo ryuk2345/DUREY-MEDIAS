@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { ROLES_LABELS } from '@/lib/utils'
 import {
   Users, UserPlus, Search, Filter, ShieldCheck, UserCheck,
-  CheckCircle2, X, Edit2, UserX, Loader2, Sparkles, Mail, Lock, Shield
+  CheckCircle2, X, Edit2, UserX, Loader2, Sparkles, Mail, Lock, Shield,
+  Calendar, RotateCcw, Award, Clock
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -16,18 +17,22 @@ interface Usuario {
   email: string
   rol: string
   activo: boolean
-  estado?: string // 'disponible', 'ocupada', 'en_turno'
+  estado?: string
   created_at?: string
+}
+
+interface Asignacion {
+  id?: string
+  operador_id: string
+  area: 'tejido' | 'enlace' | 'volteado' | 'planchado' | 'preparado' | 'almacen'
+  fecha: string
+  turno: 'dia' | 'noche'
 }
 
 const ROLES_LISTA = [
   { id: 'admin', label: 'Administrador General', color: 'bg-violet-500/20 text-violet-300 border-violet-500/30' },
   { id: 'supervisor', label: 'Supervisor de Producción', color: 'bg-sky-500/20 text-sky-300 border-sky-500/30' },
-  { id: 'tejedor', label: 'Tejedor', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
-  { id: 'remalladora', label: 'Remalladora', color: 'bg-orange-500/20 text-orange-300 border-orange-500/30' },
-  { id: 'planchador', label: 'Planchador', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
-  { id: 'preparador', label: 'Preparador', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-  { id: 'almacenero', label: 'Almacenero y Despacho', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
+  { id: 'operador', label: 'Operador Multifuncional', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
   { id: 'vendedora', label: 'Asesora de Ventas', color: 'bg-pink-500/20 text-pink-300 border-pink-500/30' },
   { id: 'tecnico', label: 'Técnico de Mantenimiento', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
 ]
@@ -37,24 +42,33 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedRolFilter, setSelectedRolFilter] = useState('todos')
-  const [activeTab, setActiveTab] = useState<'usuarios' | 'permisos'>('usuarios')
+  const [activeTab, setActiveTab] = useState<'usuarios' | 'turnos' | 'permisos'>('usuarios')
+
+  // Estados de Asignación de Turnos
+  const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
+  const [fechaTurno, setFechaTurno] = useState(new Date().toISOString().split('T')[0])
+  const [loadingTurnos, setLoadingTurnos] = useState(false)
 
   // Modales
   const [showModal, setShowModal] = useState(false)
   const [editUser, setEditUser] = useState<Usuario | null>(null)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
 
-
   // Formulario
   const [form, setForm] = useState({
     nombre: '',
     email: '',
-    rol: 'tejedor',
+    rol: 'operador',
     password: '',
     activo: true
   })
 
   const supabase = createClient()
+  const isMock = typeof window !== 'undefined' && (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL.includes('tu-proyecto') ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')
+  )
 
   // ── CARGAR USUARIOS ───────────────────────────────────────────────────────
   const cargarUsuarios = useCallback(async () => {
@@ -68,11 +82,33 @@ export default function UsuariosPage() {
       setUsuarios(data as Usuario[])
     }
     setLoading(false)
-  }, [])
+  }, [supabase])
 
-  useEffect(() => { cargarUsuarios() }, [cargarUsuarios])
+  // ── CARGAR ASIGNACIONES DE TURNO ──────────────────────────────────────────
+  const cargarAsignaciones = useCallback(async () => {
+    setLoadingTurnos(true)
+    const { data, error } = await supabase
+      .from('asignaciones_turno')
+      .select('id, operador_id, area, fecha, turno')
+      .eq('fecha', fechaTurno)
 
-  // ── FILTRADO ─────────────────────────────────────────────────────────────
+    if (!error && data) {
+      setAsignaciones(data as Asignacion[])
+    }
+    setLoadingTurnos(false)
+  }, [fechaTurno, supabase])
+
+  useEffect(() => {
+    cargarUsuarios()
+  }, [cargarUsuarios])
+
+  useEffect(() => {
+    if (activeTab === 'turnos') {
+      cargarAsignaciones()
+    }
+  }, [activeTab, cargarAsignaciones])
+
+  // ── FILTRADO DE USUARIOS ───────────────────────────────────────────────────
   const usuariosFiltrados = useMemo(() => {
     return usuarios.filter(u => {
       if (selectedRolFilter !== 'todos' && u.rol !== selectedRolFilter) return false
@@ -87,56 +123,55 @@ export default function UsuariosPage() {
     })
   }, [usuarios, selectedRolFilter, searchQuery])
 
-  // ── ABRIR MODAL CREAR / EDITAR ───────────────────────────────────────────
+  // Operadores activos para asignación de turnos
+  const operadoresDisponibles = useMemo(() => {
+    return usuarios.filter(u => u.rol === 'operador' && u.activo)
+  }, [usuarios])
+
+  // ── ACCIÓN: CREAR / EDITAR USUARIO ────────────────────────────────────────
   const abrirCrearModal = () => {
     setEditUser(null)
     setErrorEnvio(null)
-    setForm({ nombre: '', email: '', rol: 'tejedor', password: '', activo: true })
+    setForm({ nombre: '', email: '', rol: 'operador', password: '', activo: true })
     setShowModal(true)
   }
 
   const abrirEditarModal = (u: Usuario) => {
     setEditUser(u)
     setErrorEnvio(null)
-    setForm({
-      nombre: u.nombre,
-      email: u.email,
-      rol: u.rol,
-      password: '',
-      activo: u.activo
-    })
+    setForm({ nombre: u.nombre, email: u.email, rol: u.rol, password: '', activo: u.activo })
     setShowModal(true)
   }
 
-  // ── GUARDAR USUARIO (CREAR O ACTUALIZAR) ──────────────────────────────────
-  const urlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-  const isMock = !urlEnv || urlEnv.includes('tu-proyecto') || urlEnv.includes('placeholder') || !urlEnv.includes('.supabase.co')
-
   const guardarUsuario = async () => {
-    setErrorEnvio(null)
-    if (!form.nombre.trim() || !form.email.trim() || !form.rol) {
-      toast.error('Completa el nombre, email y rol del usuario')
+    if (!form.nombre.trim() || !form.email.trim()) {
+      toast.error('Nombre y Correo son obligatorios')
       return
     }
 
+    setErrorEnvio(null)
+
     if (editUser) {
-      const { error } = await supabase.from('usuarios').update({
-        nombre: form.nombre.trim(),
-        email: form.email.trim(),
-        rol: form.rol,
-        activo: form.activo
-      }).eq('id', editUser.id)
+      // EDITAR
+      const { error } = await supabase.from('usuarios')
+        .update({
+          nombre: form.nombre.trim(),
+          email: form.email.trim(),
+          rol: form.rol,
+          activo: form.activo
+        })
+        .eq('id', editUser.id)
 
       if (error) {
-        setErrorEnvio(error.message || JSON.stringify(error))
+        setErrorEnvio(error.message)
         toast.error('Error al actualizar el usuario')
         return
       }
-      toast.success('✅ Usuario actualizado exitosamente')
+      toast.success('🎉 Cambios guardados exitosamente')
     } else {
-      // CREAR NUEVO USUARIO
+      // CREAR
       if (isMock) {
-        // En desarrollo local (modo mock)
+        // En modo local simulation
         const { error } = await supabase.from('usuarios').insert({
           nombre: form.nombre.trim(),
           email: form.email.trim(),
@@ -145,15 +180,15 @@ export default function UsuariosPage() {
         })
 
         if (error) {
-          setErrorEnvio(error.message || JSON.stringify(error))
+          setErrorEnvio(error.message)
           toast.error('Error al crear el usuario (Modo Mock)')
           return
         }
         toast.success('🎉 Usuario creado exitosamente en modo mock')
       } else {
-        // En producción (realiza llamada a API con Supabase Auth y rollback en DB)
+        // En producción
         if (!form.password.trim()) {
-          toast.error('Ingresa una contraseña temporal para registrar al usuario en Supabase Auth')
+          toast.error('Ingresa una contraseña temporal para registrar al usuario')
           return
         }
 
@@ -190,7 +225,7 @@ export default function UsuariosPage() {
     cargarUsuarios()
   }
 
-
+  // Activar/Desactivar
   const toggleActivo = async (u: Usuario) => {
     const nuevoEstado = !u.activo
     const { error } = await supabase.from('usuarios')
@@ -205,26 +240,69 @@ export default function UsuariosPage() {
     cargarUsuarios()
   }
 
+  // ── GUARDAR ASIGNACIÓN DE TURNO ──────────────────────────────────────────
+  const handleGuardarAsignacion = async (operadorId: string, area: string, turno: string) => {
+    if (!area) {
+      // Eliminar asignación si selecciona vacío (Sin Asignar)
+      const asigExistente = asignaciones.find(a => a.operador_id === operadorId)
+      if (asigExistente?.id) {
+        const { error } = await supabase
+          .from('asignaciones_turno')
+          .delete()
+          .eq('id', asigExistente.id)
+
+        if (error) {
+          toast.error(`Error al eliminar asignación: ${error.message}`)
+          return
+        }
+        toast.success('Asignación de turno removida')
+      } else {
+        toast.info('No había asignación previa')
+      }
+      cargarAsignaciones()
+      return
+    }
+
+    const payload = {
+      operador_id: operadorId,
+      area: area as any,
+      fecha: fechaTurno,
+      turno: turno as any
+    }
+
+    const { error } = await supabase
+      .from('asignaciones_turno')
+      .upsert(payload, { onConflict: 'operador_id, fecha, turno' })
+
+    if (error) {
+      toast.error(`Error al guardar asignación de turno: ${error.message}`)
+      return
+    }
+
+    toast.success('🎉 Asignación de turno guardada exitosamente')
+    cargarAsignaciones()
+  }
+
   const getRolStyle = (rol: string) => {
     const item = ROLES_LISTA.find(r => r.id === rol)
     return item ? item.color : 'bg-slate-500/20 text-slate-300 border-slate-500/30'
   }
 
   return (
-    <div className="space-y-6 animate-fadeInUp pb-12">
+    <div className="space-y-6 animate-fadeInUp pb-12 text-xs">
       {/* ── HEADER ──────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass p-6 rounded-3xl border border-white/[0.08]">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 glass p-6 rounded-3xl border border-white/[0.08]">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-white tracking-tight">Gestión de Usuarios y Accesos (RBAC)</h1>
-            <p className="text-slate-400 text-xs font-medium">Administración de usuarios, roles del sistema y matriz de permisos por área</p>
+            <h1 className="text-2xl font-black text-white tracking-tight uppercase">Gestión de Personal y Accesos</h1>
+            <p className="text-slate-400 text-xs font-medium">Administración de usuarios, asignación dinámica de turnos y matriz de permisos por rol</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex bg-slate-900/80 p-1 rounded-2xl border border-white/[0.08]">
             <button
               onClick={() => setActiveTab('usuarios')}
@@ -233,6 +311,14 @@ export default function UsuariosPage() {
               }`}
             >
               Usuarios Registrados
+            </button>
+            <button
+              onClick={() => setActiveTab('turnos')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'turnos' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Calendario de Turnos
             </button>
             <button
               onClick={() => setActiveTab('permisos')}
@@ -250,11 +336,11 @@ export default function UsuariosPage() {
         </div>
       </div>
 
-      {activeTab === 'usuarios' ? (
+      {/* ── CONTENIDO TABS ───────────────────────────────────────────────────── */}
+      {activeTab === 'usuarios' && (
         <>
           {/* ── BÚSQUEDA Y FILTROS POR ROL ──────────────────────────────────────── */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            {/* Buscador */}
             <div className="relative w-full md:w-80">
               <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
               <input
@@ -266,7 +352,6 @@ export default function UsuariosPage() {
               />
             </div>
 
-            {/* Filtro por Rol */}
             <div className="flex items-center gap-2 bg-slate-900/60 p-1 rounded-2xl border border-white/[0.06] text-xs w-full md:w-auto">
               <Filter className="w-3.5 h-3.5 text-slate-400 ml-3" />
               <span className="text-slate-400 font-semibold pr-1">Rol:</span>
@@ -295,21 +380,21 @@ export default function UsuariosPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="table-dark">
+                <table className="table-dark w-full text-left">
                   <thead>
                     <tr>
-                      <th>Trabajador / Nombre</th>
-                      <th>Email</th>
-                      <th>Rol Asignado</th>
-                      <th>Estado Operativo</th>
-                      <th>Activo</th>
-                      <th className="text-right">Acciones</th>
+                      <th className="p-4">Trabajador / Nombre</th>
+                      <th className="p-4">Email</th>
+                      <th className="p-4">Rol Asignado</th>
+                      <th className="p-4">Estado Operativo</th>
+                      <th className="p-4">Activo</th>
+                      <th className="p-4 text-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {usuariosFiltrados.map(u => (
-                      <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="font-bold text-white flex items-center gap-3 py-4">
+                      <tr key={u.id} className="hover:bg-white/[0.02] transition-colors border-b border-white/[0.06] last:border-0">
+                        <td className="font-bold text-white flex items-center gap-3 p-4">
                           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white text-xs font-bold shadow-md shadow-indigo-500/20">
                             {u.nombre.charAt(0).toUpperCase()}
                           </div>
@@ -317,13 +402,13 @@ export default function UsuariosPage() {
                             <p className="text-sm">{u.nombre}</p>
                           </div>
                         </td>
-                        <td className="text-slate-400 text-xs font-mono">{u.email}</td>
-                        <td>
+                        <td className="text-slate-400 text-xs font-mono p-4">{u.email}</td>
+                        <td className="p-4">
                           <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1 rounded-full border ${getRolStyle(u.rol)}`}>
                             {ROLES_LABELS[u.rol] || u.rol}
                           </span>
                         </td>
-                        <td>
+                        <td className="p-4">
                           <span className={`badge ${
                             u.estado === 'ocupada' || u.estado === 'en_turno'
                               ? 'badge-warning'
@@ -332,7 +417,7 @@ export default function UsuariosPage() {
                             {u.estado === 'ocupada' || u.estado === 'en_turno' ? '🔴 En Turno' : '🟢 Disponible'}
                           </span>
                         </td>
-                        <td>
+                        <td className="p-4">
                           <button
                             onClick={() => toggleActivo(u)}
                             className={`badge cursor-pointer hover:opacity-80 transition-opacity ${u.activo ? 'badge-info' : 'badge-neutral'}`}
@@ -340,7 +425,7 @@ export default function UsuariosPage() {
                             {u.activo ? '✓ Activo' : '✕ Inactivo'}
                           </button>
                         </td>
-                        <td className="text-right">
+                        <td className="p-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => abrirEditarModal(u)}
@@ -366,8 +451,109 @@ export default function UsuariosPage() {
             )}
           </div>
         </>
-      ) : (
-        /* ── VISTA DE MATRIZ DE PERMISOS POR ROL ───────────────────────────────── */
+      )}
+
+      {/* ── TAB: CALENDARIO DE TURNOS (ASIGNACIÓN DINÁMICA) ────────────────── */}
+      {activeTab === 'turnos' && (
+        <div className="glass p-6 rounded-3xl border border-white/[0.08] space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-indigo-400" />
+              <h2 className="text-base font-bold text-white uppercase tracking-wider">
+                Asignación Diaria de Operarios por Área
+              </h2>
+            </div>
+
+            {/* Selector de Fecha */}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Fecha de Turno:</span>
+              <input
+                type="date"
+                value={fechaTurno}
+                onChange={e => setFechaTurno(e.target.value)}
+                className="input-dark font-mono font-bold text-xs"
+              />
+            </div>
+          </div>
+
+          {loadingTurnos ? (
+            <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-indigo-400" /></div>
+          ) : operadoresDisponibles.length === 0 ? (
+            <p className="text-slate-500 text-center py-10 font-medium">No hay operarios marcados como Activos con el rol de &quot;Operador Multifuncional&quot; en el sistema.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="table-dark w-full text-left">
+                <thead>
+                  <tr className="text-slate-400 uppercase font-bold text-[10px]">
+                    <th className="p-4">Operario</th>
+                    <th className="p-4">Área de Trabajo Asignada (Hoy)</th>
+                    <th className="p-4">Turno</th>
+                    <th className="p-4 text-right">Trazabilidad de Registro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {operadoresDisponibles.map(op => {
+                    const asig = asignaciones.find(a => a.operador_id === op.id)
+
+                    return (
+                      <tr key={op.id} className="hover:bg-white/[0.02] border-b border-white/[0.06] last:border-0">
+                        <td className="p-4 flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                            {op.nombre.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <span className="font-bold text-white text-sm block">{op.nombre}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">{op.email}</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <select
+                            value={asig?.area || ''}
+                            onChange={e => handleGuardarAsignacion(op.id, e.target.value, asig?.turno || 'dia')}
+                            className="input-dark text-xs py-1.5 px-3 max-w-[200px] font-bold"
+                          >
+                            <option value="">✕ Sin Asignar (Libre)</option>
+                            <option value="tejido">Tejido (Circulares)</option>
+                            <option value="enlace">Enlace (Remallado)</option>
+                            <option value="volteado">Volteado (Turning)</option>
+                            <option value="planchado">Planchado (Hormado)</option>
+                            <option value="preparado">Preparado (Empaque)</option>
+                            <option value="almacen">Almacén (Despacho)</option>
+                          </select>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-slate-500" />
+                            <select
+                              value={asig?.turno || 'dia'}
+                              onChange={e => handleGuardarAsignacion(op.id, asig?.area || 'tejido', e.target.value)}
+                              className="input-dark text-xs py-1 px-3 font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                              disabled={!asig?.area}
+                            >
+                              <option value="dia">Día (Mañana)</option>
+                              <option value="noche">Noche (Velada)</option>
+                            </select>
+                          </div>
+                        </td>
+                        <td className="p-4 text-right">
+                          {asig?.area ? (
+                            <span className="badge badge-success">✓ Programado</span>
+                          ) : (
+                            <span className="badge badge-neutral">✕ No Asignado</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB: MATRIZ DE PERMISOS ─────────────────────────────────────────── */}
+      {activeTab === 'permisos' && (
         <div className="glass p-6 rounded-3xl border border-white/[0.08] space-y-6">
           <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
             <div className="flex items-center gap-2">
@@ -381,12 +567,10 @@ export default function UsuariosPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {[
-              { id: 'admin', nombre: 'Administrador General', modulos: ['Dashboard', 'Personal / Accesos', 'Catálogo', 'Máquinas', 'Tejido', 'Remallado', 'Planchado', 'Preparado', 'Almacén', 'Ventas', 'Despacho', 'Mantenimiento', 'Reportes'], color: 'border-violet-500/40 text-violet-300' },
-              { id: 'vendedora', nombre: 'Asesora de Ventas', modulos: ['Ventas y Cobranzas', 'Catálogo de Medias', 'Despacho a Agencias', 'Reportes de Cartera'], color: 'border-pink-500/40 text-pink-300' },
-              { id: 'almacenero', nombre: 'Almacenero y Despacho', modulos: ['Almacén y Salones', 'Recepción Pistola QR', 'Despacho a Agencias', 'Preparado'], color: 'border-cyan-500/40 text-cyan-300' },
-              { id: 'tejedor', nombre: 'Tejedor Operario', modulos: ['Módulo de Tejido', 'Monitor de Máquinas', 'Mantenimiento / Averías'], color: 'border-purple-500/40 text-purple-300' },
-              { id: 'planchador', nombre: 'Planchador', modulos: ['Módulo de Planchado', 'Matriz Semanal de Hormado'], color: 'border-red-500/40 text-red-300' },
-              { id: 'preparador', nombre: 'Preparador / Embolsador', modulos: ['Preparado por SKU', 'Creación de Sacos QR', 'Almacén de Salones'], color: 'border-emerald-500/40 text-emerald-300' },
+              { id: 'admin', nombre: 'Administrador General', modulos: ['Dashboard', 'Personal / Accesos / Turnos', 'Catálogo de Medias', 'Máquinas de Planta', 'Tejido', 'Remallado', 'Volteado', 'Planchado', 'Preparado', 'Almacén', 'Ventas', 'Despacho', 'Mantenimiento', 'Reportes Financieros'], color: 'border-violet-500/40 text-violet-300' },
+              { id: 'supervisor', nombre: 'Supervisor de Planta', modulos: ['Calendario de Turnos', 'Asignación de Máquinas', 'Control de Tejido', 'Remallado y Volteo', 'Reporte de Mermas', 'Planchado', 'Almacén', 'Materia Prima'], color: 'border-sky-500/40 text-sky-300' },
+              { id: 'operador', nombre: 'Operador Multifuncional', modulos: ['Módulo del Área Asignada hoy (Tejido, Remallado, Volteado, Planchado, Preparado o Almacén)', 'Registro de Mermas/Averías en Turno activo'], color: 'border-indigo-500/40 text-indigo-300' },
+              { id: 'vendedora', nombre: 'Asesora de Ventas', modulos: ['Ventas y Cobranzas', 'Catálogo de Medias', 'Despacho a Agencias', 'Reportes de Ventas'], color: 'border-pink-500/40 text-pink-300' },
               { id: 'tecnico', nombre: 'Técnico de Mantenimiento', modulos: ['Mantenimiento de Máquinas', 'Machinery Monitor', 'Catálogo de Repuestos'], color: 'border-amber-500/40 text-amber-300' },
             ].map(r => (
               <div key={r.id} className={`p-5 rounded-2xl bg-slate-900/60 border ${r.color} space-y-3`}>

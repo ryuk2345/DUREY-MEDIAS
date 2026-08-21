@@ -86,8 +86,7 @@ export default function VolteadoPage() {
   const cargarDatos = useCallback(async () => {
     setLoading(true)
     try {
-      const [uRes, sRes, lRes, rRes] = await Promise.all([
-        supabase.from('usuarios').select('id, nombre').in('rol', ['volteador', 'supervisor', 'admin']).eq('activo', true),
+      const [sRes, lRes, rRes] = await Promise.all([
         supabase.from('stock_listo_voltear').select('id, docenas, catalogo_media:catalogo_medias(id, sku, codigo, talla, publico)').gt('docenas', 0),
         supabase.from('lotes_volteado').select(`
           id, volteador_id, catalogo_media_id, docenas_asignadas, docenas_pendientes, estado, created_at,
@@ -101,7 +100,32 @@ export default function VolteadoPage() {
         `).order('created_at', { ascending: false }).limit(20)
       ])
 
-      if (uRes.data) setVolteadores(uRes.data)
+      const hoy = new Date().toISOString().split('T')[0]
+      const { data: asigData, error: asigErr } = await supabase
+        .from('asignaciones_turno')
+        .select('operador_id, operador:usuarios(id, nombre)')
+        .eq('area', 'volteado')
+        .eq('fecha', hoy)
+
+      let volteadoresList = []
+      if (asigErr) {
+        toast.error(`Error cargando asignaciones de turno: ${asigErr.message}`)
+      } else if (asigData && asigData.length > 0) {
+        volteadoresList = asigData.map((a: any) => a.operador).filter(Boolean)
+      } else {
+        const { data: usersData, error: usersErr } = await supabase
+          .from('usuarios')
+          .select('id, nombre')
+          .in('rol', ['operador', 'volteador'])
+          .eq('activo', true)
+        if (usersErr) {
+          toast.error(`Error cargando operarios: ${usersErr.message}`)
+        } else if (usersData) {
+          volteadoresList = usersData
+        }
+      }
+
+      setVolteadores(volteadoresList)
       if (sRes.data) setStockListo(sRes.data as unknown as StockVoltear[])
       if (lRes.data) setLotes(lRes.data as unknown as LoteVolteado[])
       if (rRes.data) setReportes(rRes.data as unknown as ReporteVolteado[])

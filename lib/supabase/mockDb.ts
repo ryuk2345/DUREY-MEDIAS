@@ -6,20 +6,20 @@ const SEMILLAS = {
   usuarios: [
     { id: '1', nombre: 'Admin General', email: 'admin@durey.com', rol: 'admin', activo: true, estado: 'disponible' },
     { id: '2', nombre: 'Supervisor Durey', email: 'supervisor@durey.com', rol: 'supervisor', activo: true, estado: 'disponible' },
-    { id: '3', nombre: 'Carlos Tejedor', email: 'tejedor@durey.com', rol: 'tejedor', activo: true, estado: 'disponible' },
-    { id: '4', nombre: 'Ana Remalladora', email: 'remalladora@durey.com', rol: 'remalladora', activo: true, estado: 'disponible' },
-    { id: '4b', nombre: 'Eva Remalladora', email: 'eva@durey.com', rol: 'remalladora', activo: true, estado: 'disponible' },
-    { id: '5', nombre: 'Mario Planchador', email: 'planchador@durey.com', rol: 'planchador', activo: true, estado: 'disponible' },
-    { id: '5b', nombre: 'Carlos Planchador', email: 'carlos_planch@durey.com', rol: 'planchador', activo: true, estado: 'disponible' },
-    { id: '6', nombre: 'Lucia Preparadora', email: 'preparador@durey.com', rol: 'preparador', activo: true, estado: 'disponible' },
-    { id: '6b', nombre: 'Carlos Preparador', email: 'carlos_prep@durey.com', rol: 'preparador', activo: true, estado: 'disponible' },
-    { id: '7', nombre: 'Juan Almacenero', email: 'almacenero@durey.com', rol: 'almacenero', activo: true, estado: 'disponible' },
+    { id: '3', nombre: 'Carlos Tejedor', email: 'tejedor@durey.com', rol: 'operador', activo: true, estado: 'disponible' },
+    { id: '4', nombre: 'Ana Remalladora', email: 'remalladora@durey.com', rol: 'operador', activo: true, estado: 'disponible' },
+    { id: '4b', nombre: 'Eva Remalladora', email: 'eva@durey.com', rol: 'operador', activo: true, estado: 'disponible' },
+    { id: '5', nombre: 'Mario Planchador', email: 'planchador@durey.com', rol: 'operador', activo: true, estado: 'disponible' },
+    { id: '5b', nombre: 'Carlos Planchador', email: 'carlos_planch@durey.com', rol: 'operador', activo: true, estado: 'disponible' },
+    { id: '6', nombre: 'Lucia Preparadora', email: 'preparador@durey.com', rol: 'operador', activo: true, estado: 'disponible' },
+    { id: '6b', nombre: 'Carlos Preparador', email: 'carlos_prep@durey.com', rol: 'operador', activo: true, estado: 'disponible' },
+    { id: '7', nombre: 'Juan Almacenero', email: 'almacenero@durey.com', rol: 'operador', activo: true, estado: 'disponible' },
     { id: '8', nombre: 'Sofia Vendedora', email: 'vendedora@durey.com', rol: 'vendedora', activo: true, estado: 'disponible' },
     { id: '8b', nombre: 'Elena Vendedora', email: 'elena_vend@durey.com', rol: 'vendedora', activo: true, estado: 'disponible' },
     { id: '9', nombre: 'Pedro Técnico (Planta)', email: 'tecnico@durey.com', rol: 'tecnico', activo: true, estado: 'disponible', especialidad: 'Mantenimiento General de Planta', telefono: '+51 912 345 678', tipo: 'interno' },
     { id: '10', nombre: 'Carlos Mendoza', email: 'carlos_mendoza@siemens.com', rol: 'tecnico', activo: true, estado: 'disponible', especialidad: 'Especialista Motores Siemens', telefono: '+54 11 4930-XXXX', tipo: 'externo' },
     { id: '11', nombre: 'Jorge Ramírez', email: 'jramirez@automation.com', rol: 'tecnico', activo: true, estado: 'en_reparacion', especialidad: 'Sensores y Sistemas Neumáticos', telefono: '+51 955 443 322', tipo: 'externo' },
-    { id: '12', nombre: 'Tomas Volteador', email: 'volteador@durey.com', rol: 'volteador', activo: true, estado: 'disponible' }
+    { id: '12', nombre: 'Tomas Volteador', email: 'volteador@durey.com', rol: 'operador', activo: true, estado: 'disponible' }
   ],
   marcas_maquinas: [
     { id: 'm1', nombre: 'Angies' },
@@ -65,6 +65,18 @@ const SEMILLAS = {
   ],
   lotes_volteado: [],
   reportes_volteado: [],
+  // Asignaciones de turno
+  asignaciones_turno: [
+    { id: 'asig1', operador_id: '3', area: 'tejido', fecha: new Date().toISOString().split('T')[0], turno: 'dia' },
+    { id: 'asig2', operador_id: '4', area: 'enlace', fecha: new Date().toISOString().split('T')[0], turno: 'dia' },
+    { id: 'asig3', operador_id: '4b', area: 'enlace', fecha: new Date().toISOString().split('T')[0], turno: 'noche' },
+    { id: 'asig4', operador_id: '12', area: 'volteado', fecha: new Date().toISOString().split('T')[0], turno: 'dia' },
+    { id: 'asig5', operador_id: '5', area: 'planchado', fecha: new Date().toISOString().split('T')[0], turno: 'dia' },
+    { id: 'asig6', operador_id: '5b', area: 'planchado', fecha: new Date().toISOString().split('T')[0], turno: 'noche' },
+    { id: 'asig7', operador_id: '6', area: 'preparado', fecha: new Date().toISOString().split('T')[0], turno: 'dia' },
+    { id: 'asig8', operador_id: '6b', area: 'preparado', fecha: new Date().toISOString().split('T')[0], turno: 'noche' },
+    { id: 'asig9', operador_id: '7', area: 'almacen', fecha: new Date().toISOString().split('T')[0], turno: 'dia' }
+  ],
   // Cronograma semana 32 (semana actual). Todos los días de lunes a viernes para 2 planchadores
   cronograma_planchado: [
     { id: 'cr1', semana: 32, anio: 2026, planchador_id: '5b', dia_semana: 'lunes', criterio: 'talla', valor_criterio: '10-13' },
@@ -442,6 +454,11 @@ class MockQueryBuilder {
             ...rv,
             volteador: db.usuarios.find((u: any) => u.id === rv.volteador_id) || { nombre: 'Tomas Volteador' },
             catalogo_media: db.catalogo_medias.find((c: any) => c.id === rv.catalogo_media_id) || { id: 'c1', codigo: 'c1', talla: 'única', publico: 'Niño' }
+          }));
+        } else if (self.tableName === 'asignaciones_turno') {
+          result = result.map(a => ({
+            ...a,
+            operador: db.usuarios.find((u: any) => u.id === a.operador_id) || { nombre: 'Operador' }
           }));
         } else if (self.tableName === 'minidepositos') {
           result = result.map(m => ({

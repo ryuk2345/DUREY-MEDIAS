@@ -103,8 +103,7 @@ export default function PreparadoPage() {
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    const [prep, st, pq, ub, cr, cat] = await Promise.all([
-      supabase.from('usuarios').select('id, nombre').eq('rol', 'preparador').eq('activo', true).order('nombre'),
+    const [st, pq, ub, cr, cat] = await Promise.all([
       supabase.from('stock_listo_planchar').select('id, docenas, catalogo_media_id, catalogo_media:catalogo_medias(id, sku, codigo, talla, publico)').gt('docenas', 0),
       supabase.from('paquetes').select('id, codigo_paquete, docenas, total_pares, detalles_contenido, estado, preparador:usuarios(nombre), catalogo_media:catalogo_medias(sku, codigo), ubicacion:ubicaciones(nombre)').order('created_at', { ascending: false }).limit(30),
       supabase.from('ubicaciones').select('id, nombre, tipo').eq('activo', true),
@@ -112,21 +111,46 @@ export default function PreparadoPage() {
       supabase.from('catalogo_medias').select('id, sku, codigo, talla, publico').eq('estado', 'activo').order('codigo'),
     ])
 
-    if (prep.error) toast.error(`Error al cargar preparadores: ${prep.error.message}`)
     if (st.error) toast.error(`Error al cargar stock listo para planchar: ${st.error.message}`)
     if (pq.error) toast.error(`Error al cargar sacos maestros: ${pq.error.message}`)
     if (ub.error) toast.error(`Error al cargar ubicaciones: ${ub.error.message}`)
     if (cr.error) toast.error(`Error al cargar cronograma de empaque: ${cr.error.message}`)
     if (cat.error) toast.error(`Error al cargar catálogo de medias: ${cat.error.message}`)
 
-    setPreparadores(prep.data ?? [])
+    const hoy = new Date().toISOString().split('T')[0]
+    const { data: asigData, error: asigErr } = await supabase
+      .from('asignaciones_turno')
+      .select('operador_id, operador:usuarios(id, nombre)')
+      .eq('area', 'preparado')
+      .eq('fecha', hoy)
+
+    let preparadoresList = []
+    if (asigErr) {
+      toast.error(`Error al cargar asignaciones de turno: ${asigErr.message}`)
+    } else if (asigData && asigData.length > 0) {
+      preparadoresList = asigData.map((a: any) => a.operador).filter(Boolean)
+    } else {
+      const { data: usersData, error: usersErr } = await supabase
+        .from('usuarios')
+        .select('id, nombre')
+        .in('rol', ['operador', 'preparador'])
+        .eq('activo', true)
+        .order('nombre')
+      if (usersErr) {
+        toast.error(`Error al cargar operarios: ${usersErr.message}`)
+      } else if (usersData) {
+        preparadoresList = usersData
+      }
+    }
+
+    setPreparadores(preparadoresList)
     setStock((st.data ?? []) as StockEmpacar[])
     setPaquetes((pq.data ?? []) as Paquete[])
     setUbicaciones(ub.data ?? [])
     setCronograma((cr.data ?? []) as Cronograma[])
     setCatalogo((cat.data ?? []) as CatalogoMedia[])
     setLoading(false)
-  }, [semanaSeleccionada, anioSeleccionado])
+  }, [semanaSeleccionada, anioSeleccionado, supabase])
 
 
   useEffect(() => { cargarDatos() }, [cargarDatos])

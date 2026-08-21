@@ -80,8 +80,7 @@ export default function PlanchadoPage() {
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    const [pl, st, cr, cat] = await Promise.all([
-      supabase.from('usuarios').select('id, nombre').eq('rol', 'planchador').eq('activo', true).order('nombre'),
+    const [st, cr, cat] = await Promise.all([
       supabase.from('stock_listo_planchar')
         .select('id, docenas, catalogo_media_id, catalogo_media:catalogo_medias(id, codigo, talla, publico)')
         .gt('docenas', 0),
@@ -91,17 +90,42 @@ export default function PlanchadoPage() {
       supabase.from('catalogo_medias').select('id, codigo, talla, publico').eq('estado', 'activo').order('codigo'),
     ])
 
-    if (pl.error) toast.error(`Error al cargar planchadores: ${pl.error.message}`)
     if (st.error) toast.error(`Error al cargar stock listo para planchar: ${st.error.message}`)
     if (cr.error) toast.error(`Error al cargar cronograma: ${cr.error.message}`)
     if (cat.error) toast.error(`Error al cargar catálogo de medias: ${cat.error.message}`)
 
-    setPlanchadores(pl.data ?? [])
+    const hoy = new Date().toISOString().split('T')[0]
+    const { data: asigData, error: asigErr } = await supabase
+      .from('asignaciones_turno')
+      .select('operador_id, operador:usuarios(id, nombre)')
+      .eq('area', 'planchado')
+      .eq('fecha', hoy)
+
+    let planchadoresList = []
+    if (asigErr) {
+      toast.error(`Error al cargar asignaciones de turno: ${asigErr.message}`)
+    } else if (asigData && asigData.length > 0) {
+      planchadoresList = asigData.map((a: any) => a.operador).filter(Boolean)
+    } else {
+      const { data: usersData, error: usersErr } = await supabase
+        .from('usuarios')
+        .select('id, nombre')
+        .in('rol', ['operador', 'planchador'])
+        .eq('activo', true)
+        .order('nombre')
+      if (usersErr) {
+        toast.error(`Error al cargar operarios: ${usersErr.message}`)
+      } else if (usersData) {
+        planchadoresList = usersData
+      }
+    }
+
+    setPlanchadores(planchadoresList)
     setStock((st.data ?? []) as StockPlanchar[])
     setCronograma((cr.data ?? []) as Cronograma[])
     setCatalogo((cat.data ?? []) as CatalogoMedia[])
     setLoading(false)
-  }, [semanaSeleccionada, anioSeleccionado])
+  }, [semanaSeleccionada, anioSeleccionado, supabase])
 
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
