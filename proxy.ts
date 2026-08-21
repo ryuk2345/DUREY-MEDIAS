@@ -45,15 +45,41 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const demoRole = request.cookies.get('durey_demo_role')?.value
-  const hasDemo = !!demoRole
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
 
   let user = null
-  if (!hasDemo) {
+  let role = 'vendedora'
+
+  if (isMock) {
+    const mockSession = request.cookies.get('durey_mock_session')?.value
+    if (mockSession) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(mockSession))
+        user = { id: parsed.id, email: parsed.email }
+        role = parsed.rol
+      } catch (e) {
+        user = null
+      }
+    }
+  } else {
     const { data } = await supabase.auth.getUser()
     user = data.user
-  } else {
-    user = { id: 'demo-uuid', email: `${demoRole}@durey.com` }
+
+    if (user) {
+      // Validar que el usuario tenga un perfil activo en la base de datos SQL
+      const { data: perfil } = await supabase
+        .from('usuarios')
+        .select('rol, activo')
+        .eq('auth_id', user.id)
+        .single()
+
+      if (perfil && perfil.activo) {
+        role = perfil.rol
+      } else {
+        user = null // Forzar redirección al login si el usuario no tiene perfil o está inactivo
+      }
+    }
   }
 
   const pathname = request.nextUrl.pathname
@@ -70,7 +96,6 @@ export async function proxy(request: NextRequest) {
 
   // 3. Control de acceso estricto por rol en las subrutas del dashboard
   if (user && pathname.startsWith('/dashboard') && pathname !== '/dashboard') {
-    const role = demoRole || 'vendedora'
     const allowedRoutes = ROLE_ROUTES[role] || []
 
     // Obtener la subruta (ejemplo: /dashboard/ventas/crear -> /ventas)

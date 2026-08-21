@@ -1,20 +1,19 @@
-// @ts-nocheck
 'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shirt, Lock, Mail, Eye, EyeOff, ShieldCheck, Sparkles, ArrowRight, CheckCircle2, UserCheck, Key, Shield } from 'lucide-react'
+import { Shirt, Lock, Mail, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 
-const ACUENTAS_RAPIDAS = [
-  { rol: 'admin', nombre: 'Administrador General', email: 'admin@durey.com', pass: 'durey2026', icon: '👑', desc: 'Acceso total a todos los módulos y parámetros' },
-  { rol: 'vendedora', nombre: 'Sofia Vendedora', email: 'vendedora@durey.com', pass: 'durey2026', icon: '🛍️', desc: 'Ventas, comprobantes, cuotas y cronograma' },
-  { rol: 'almacenero', nombre: 'Juan Almacenero', email: 'almacenero@durey.com', pass: 'durey2026', icon: '📦', desc: 'Pistola escáner, salones y despacho a agencias' },
-  { rol: 'tejedor', nombre: 'Tejedor Operario', email: 'tejedor@durey.com', pass: 'durey2026', icon: '⚙️', desc: 'Producción primaria y reporte de averías' },
-  { rol: 'planchador', nombre: 'Carlos Planchador', email: 'planchador@durey.com', pass: 'durey2026', icon: '♨️', desc: 'Control de planchado y matriz semanal' },
-  { rol: 'preparador', nombre: 'Lucia Preparadora', email: 'preparador@durey.com', pass: 'durey2026', icon: '🏷️', desc: 'Embolsado por SKU y Sacos Maestros QR' },
-  { rol: 'tecnico', nombre: 'Pedro Técnico', email: 'tecnico@durey.com', pass: 'durey2026', icon: '👨‍🔧', desc: 'Atención de averías y repuestos de máquinas' }
+const ACUENTAS_RAPIDAS_MOCK = [
+  { rol: 'admin', nombre: 'Administrador General', email: 'admin@durey.com', pass: 'durey2026' },
+  { rol: 'vendedora', nombre: 'Sofia Vendedora', email: 'vendedora@durey.com', pass: 'durey2026' },
+  { rol: 'almacenero', nombre: 'Juan Almacenero', email: 'almacenero@durey.com', pass: 'durey2026' },
+  { rol: 'tejedor', nombre: 'Tejedor Operario', email: 'tejedor@durey.com', pass: 'durey2026' },
+  { rol: 'planchador', nombre: 'Carlos Planchador', email: 'planchador@durey.com', pass: 'durey2026' },
+  { rol: 'preparador', nombre: 'Lucia Preparadora', email: 'preparador@durey.com', pass: 'durey2026' },
+  { rol: 'tecnico', nombre: 'Pedro Técnico', email: 'tecnico@durey.com', pass: 'durey2026' }
 ]
 
 export default function LoginPage() {
@@ -22,12 +21,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [rolSeleccionadoDemo, setRolSeleccionadoDemo] = useState<string | null>(null)
 
   const router = useRouter()
   const supabase = createClient()
 
-  // ── INICIAR SESIÓN CON CREDENCIALES ───────────────────────────────────────
   // ── INICIAR SESIÓN CON CREDENCIALES ───────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,69 +43,58 @@ export default function LoginPage() {
     let loginExitoso = false
 
     if (isMock) {
-      // MODO MOCK/DEMO LOCAL
-      const acc = ACUENTAS_RAPIDAS.find(a => a.email.toLowerCase() === email.trim().toLowerCase())
-      targetRole = acc ? acc.rol : 'admin'
-      targetName = acc ? acc.nombre : email.split('@')[0]
-      loginExitoso = true
+      // MODO MOCK/DEMO LOCAL (Requiere escribir credenciales válidas)
+      const acc = ACUENTAS_RAPIDAS_MOCK.find(a => a.email.toLowerCase() === email.trim().toLowerCase())
+      if (acc && password === acc.pass) {
+        targetRole = acc.rol
+        targetName = acc.nombre
+        loginExitoso = true
+      } else {
+        toast.error('Credenciales mock incorrectas. Tip: usa email@durey.com con contraseña durey2026')
+        setLoading(false)
+        return
+      }
     } else {
-      // MODO PRODUCCIÓN REAL
+      // MODO PRODUCCIÓN REAL (Supabase Auth estricto)
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password: password.trim()
         })
 
-        if (!error && data?.user) {
-          const { data: perfil } = await supabase
+        if (error) {
+          toast.error(`Error de autenticación: ${error.message}`)
+          setLoading(false)
+          return
+        }
+
+        if (data?.user) {
+          // Obtener el perfil SQL y verificar que esté activo
+          const { data: perfil, error: dbError } = await supabase
             .from('usuarios')
             .select('nombre, rol, activo')
-            .eq('email', email.trim())
+            .eq('auth_id', data.user.id)
             .single()
 
-          if (perfil) {
-            if (!perfil.activo) {
-              toast.error('Este usuario está desactivado en el sistema')
-              setLoading(false)
-              return
-            }
-            targetRole = perfil.rol || 'vendedora'
-            targetName = perfil.nombre || targetName
-            loginExitoso = true
-          } else {
-            toast.error('El usuario no tiene un perfil configurado')
+          if (dbError || !perfil) {
+            toast.error('Tu cuenta no tiene un perfil configurado en la base de datos SQL.')
             setLoading(false)
             return
           }
+
+          if (!perfil.activo) {
+            toast.error('Esta cuenta ha sido desactivada por el Administrador.')
+            setLoading(false)
+            return
+          }
+
+          targetRole = perfil.rol || 'vendedora'
+          targetName = perfil.nombre || email.split('@')[0]
+          loginExitoso = true
         } else {
-          // Fallback para usuarios creados localmente en base de datos sin Auth de Supabase (uso de testing/demo)
-          const { data: perfil } = await supabase
-            .from('usuarios')
-            .select('nombre, rol, activo')
-            .eq('email', email.trim())
-            .single()
-
-          if (perfil) {
-            if (!perfil.activo) {
-              toast.error('Este usuario está desactivado')
-              setLoading(false)
-              return
-            }
-            // Aceptar contraseña por defecto para cuentas creadas desde la app
-            if (password === 'durey2026' || password === '123456') {
-              targetRole = perfil.rol || 'vendedora'
-              targetName = perfil.nombre || targetName
-              loginExitoso = true
-            } else {
-              toast.error('Contraseña incorrecta para este usuario')
-              setLoading(false)
-              return
-            }
-          } else {
-            toast.error('Usuario o contraseña incorrectos')
-            setLoading(false)
-            return
-          }
+          toast.error('No se pudo verificar la sesión del usuario')
+          setLoading(false)
+          return
         }
       } catch (err) {
         toast.error('Error al conectar con el servidor de autenticación')
@@ -118,9 +104,16 @@ export default function LoginPage() {
     }
 
     if (loginExitoso) {
-      document.cookie = `durey_demo_role=${targetRole}; path=/; max-age=86400`
-      document.cookie = `durey_demo_name=${encodeURIComponent(targetName)}; path=/; max-age=86400`
-      document.cookie = `durey_demo_email=${encodeURIComponent(email.trim())}; path=/; max-age=86400`
+      if (isMock) {
+        // En mock, guardamos la sesión simulada cifrada en cookie para el middleware
+        const sessionPayload = encodeURIComponent(JSON.stringify({
+          id: 'mock-uuid',
+          email: email.trim(),
+          rol: targetRole,
+          nombre: targetName
+        }))
+        document.cookie = `durey_mock_session=${sessionPayload}; path=/; max-age=86400`
+      }
 
       toast.success(`Bienvenido a DUREY, ${targetName}`, { icon: '👋' })
 
@@ -137,55 +130,30 @@ export default function LoginPage() {
     }
   }
 
-
-  // ── INICIO DE SESIÓN RÁPIDO CON 1 CLIC ───────────────────────────────────
-  const loginRapido = (acc: typeof ACUENTAS_RAPIDAS[0]) => {
-    setEmail(acc.email)
-    setPassword(acc.pass)
-    setRolSeleccionadoDemo(acc.rol)
-
-    document.cookie = `durey_demo_role=${acc.rol}; path=/; max-age=86400`
-    document.cookie = `durey_demo_name=${encodeURIComponent(acc.nombre)}; path=/; max-age=86400`
-    document.cookie = `durey_demo_email=${encodeURIComponent(acc.email)}; path=/; max-age=86400`
-
-    toast.success(`Acceso de prueba iniciado como ${acc.nombre} (${acc.rol.toUpperCase()})`, { icon: acc.icon })
-
-    let redirectPath = '/dashboard/admin'
-    if (acc.rol === 'vendedora') redirectPath = '/dashboard/ventas'
-    else if (acc.rol === 'almacenero') redirectPath = '/dashboard/almacen'
-    else if (acc.rol === 'preparador') redirectPath = '/dashboard/preparado'
-    else if (acc.rol === 'planchador') redirectPath = '/dashboard/planchado'
-    else if (acc.rol === 'tecnico') redirectPath = '/dashboard/mantenimiento'
-    else if (acc.rol === 'tejedor') redirectPath = '/dashboard/produccion'
-
-    router.push(redirectPath)
-  }
-
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-4 relative overflow-hidden font-sans">
       {/* Círculos decorativos resplandecientes de fondo */}
       <div className="absolute top-10 left-10 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center z-10">
-
-        {/* COLUMNA IZQUIERDA: TARJETA DE LOGIN CON FORMULARIO */}
-        <div className="lg:col-span-6 glass rounded-3xl p-8 border border-white/10 shadow-2xl space-y-6 animate-fadeInUp">
+      <div className="w-full max-w-md z-10">
+        {/* TARJETA DE LOGIN CON FORMULARIO */}
+        <div className="glass rounded-3xl p-8 border border-white/10 shadow-2xl space-y-6 animate-fadeInUp">
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 shadow-lg shadow-blue-500/30 text-white">
               <Shirt className="w-6 h-6" />
             </div>
             <div>
               <h1 className="font-black text-2xl text-white tracking-tight flex items-center gap-2">
-                DUREY <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-lg border border-blue-500/20">FÁBRICA DE MEDIAS</span>
+                DUREY <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-lg border border-blue-500/20">FÁBRICA</span>
               </h1>
-              <p className="text-xs text-slate-400 font-medium">Sistema Integral de Gestión y Control Logístico</p>
+              <p className="text-xs text-slate-400 font-medium">Gestión y Control Logístico de Medias</p>
             </div>
           </div>
 
           <div className="space-y-1">
             <h2 className="text-lg font-bold text-white tracking-tight">Iniciar Sesión</h2>
-            <p className="text-xs text-slate-400">Ingresa tus credenciales de acceso para entrar al sistema</p>
+            <p className="text-xs text-slate-400">Ingresa tus credenciales para acceder al sistema</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -199,10 +167,10 @@ export default function LoginPage() {
                 <input
                   type="email"
                   required
-                  placeholder="ej. vendedora@durey.com"
+                  placeholder="ejemplo@durey.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="input-dark pl-10 py-3 text-xs w-full font-semibold text-white border-white/10 focus:border-blue-500"
+                  className="input-dark pl-10 py-3.5 text-xs w-full font-semibold text-white border-white/10 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -225,7 +193,7 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="input-dark pl-10 pr-10 py-3 text-xs w-full font-semibold text-white border-white/10 focus:border-blue-500"
+                  className="input-dark pl-10 pr-10 py-3.5 text-xs w-full font-semibold text-white border-white/10 focus:border-blue-500"
                 />
                 <button
                   type="button"
@@ -256,47 +224,9 @@ export default function LoginPage() {
           </form>
 
           <div className="pt-4 border-t border-white/[0.06] text-center">
-            <span className="text-[10px] text-slate-500 font-mono">DUREY HOSIERY v3.5 · Sistema Protegido con Control de Acceso por Roles (RBAC)</span>
+            <span className="text-[10px] text-slate-500 font-mono">DUREY HOSIERY v3.5 · Control de Acceso Protegido por Roles (RBAC)</span>
           </div>
         </div>
-
-        {/* COLUMNA DERECHA: ACCESO RÁPIDO POR ROL PARA PRUEBAS E INSPECCIÓN */}
-        <div className="lg:col-span-6 space-y-4">
-          <div className="glass p-6 rounded-3xl border border-white/10 shadow-2xl space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-white/[0.08]">
-              <ShieldCheck className="w-5 h-5 text-blue-400" />
-              <div>
-                <h3 className="font-bold text-white text-sm">Acceso Rápido por Rol</h3>
-                <p className="text-[11px] text-slate-400">Selecciona un usuario de prueba para ingresar directamente al módulo de su área</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {ACUENTAS_RAPIDAS.map(acc => (
-                <button
-                  key={acc.rol}
-                  type="button"
-                  onClick={() => loginRapido(acc)}
-                  className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between ${
-                    rolSeleccionadoDemo === acc.rol
-                      ? 'border-blue-500 bg-blue-500/20 text-white'
-                      : 'border-white/[0.06] bg-slate-900/50 hover:bg-slate-900 hover:border-white/20 text-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-lg">{acc.icon}</span>
-                    <div>
-                      <p className="font-bold text-xs text-white leading-tight">{acc.nombre}</p>
-                      <p className="text-[10px] text-slate-400 font-mono uppercase font-semibold">{acc.rol}</p>
-                    </div>
-                  </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
   )

@@ -581,9 +581,14 @@ export function createMockClient() {
           return null;
         };
 
-        const demoRole = getCookie('durey_demo_role');
-        if (demoRole) {
-          return { data: { user: { id: 'demo-uuid', email: `${demoRole}@durey.com` } }, error: null };
+        const mockSession = getCookie('durey_mock_session');
+        if (mockSession) {
+          try {
+            const parsed = JSON.parse(decodeURIComponent(mockSession));
+            return { data: { user: { id: parsed.id || 'demo-uuid', email: parsed.email } }, error: null };
+          } catch (e) {
+            // fallback
+          }
         }
         return { data: { user: null }, error: new Error('Sin sesión') };
       },

@@ -64,6 +64,7 @@ export default function Sidebar({ userRol, userName }: SidebarProps) {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
+    document.cookie = 'durey_mock_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     document.cookie = 'durey_demo_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     document.cookie = 'durey_demo_name=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     toast.success('Sesión cerrada correctamente')

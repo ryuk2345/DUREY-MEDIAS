@@ -8,34 +8,45 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const supabase = await createClient()
   
   const cookieStore = await cookies()
-  const demoRole = cookieStore.get('durey_demo_role')?.value
-  const demoName = cookieStore.get('durey_demo_name')?.value
-
-  let user = null
-  if (!demoRole) {
-    const { data } = await supabase.auth.getUser()
-    user = data.user
-  }
-
-  if (!user && !demoRole) redirect('/login')
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
 
   let userName = 'Usuario'
   let userRol = 'vendedora'
+  let isAuthenticated = false
 
-  if (demoRole) {
-    userName = demoName || 'Usuario Demo'
-    userRol = demoRole
-  } else if (user) {
-    // Obtener el perfil del usuario con su rol
-    const { data: perfil } = await supabase
-      .from('usuarios')
-      .select('nombre, rol')
-      .eq('auth_id', user.id)
-      .single()
+  if (isMock) {
+    const mockSession = cookieStore.get('durey_mock_session')?.value
+    if (mockSession) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(mockSession))
+        userName = parsed.nombre || 'Usuario Mock'
+        userRol = parsed.rol || 'vendedora'
+        isAuthenticated = true
+      } catch (e) {
+        isAuthenticated = false
+      }
+    }
+  } else {
+    const { data } = await supabase.auth.getUser()
+    const user = data.user
 
-    userName = perfil?.nombre ?? user.email ?? 'Usuario'
-    userRol = perfil?.rol ?? 'vendedora'
+    if (user) {
+      const { data: perfil } = await supabase
+        .from('usuarios')
+        .select('nombre, rol, activo')
+        .eq('auth_id', user.id)
+        .single()
+
+      if (perfil && perfil.activo) {
+        userName = perfil.nombre || 'Usuario'
+        userRol = perfil.rol || 'vendedora'
+        isAuthenticated = true
+      }
+    }
   }
+
+  if (!isAuthenticated) redirect('/login')
 
   return (
     <div className="flex min-h-screen">
