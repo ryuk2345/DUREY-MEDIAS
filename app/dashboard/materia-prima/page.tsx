@@ -586,7 +586,8 @@ export default function MateriaPrimaPage() {
               estado: 'pendiente'
             })
           }
-          await supabase.from('cuotas_compras').insert(cuotasToInsert)
+          const { error: cuotasErr } = await supabase.from('cuotas_compras').insert(cuotasToInsert)
+          if (cuotasErr) throw cuotasErr
         }
       } else {
         const list = JSON.parse(localStorage.getItem('durey_compras') || '[]')
@@ -670,20 +671,24 @@ export default function MateriaPrimaPage() {
           const hilo = stockHilos.find(h => h.id === selectedCompra.materia_prima_id)
           const nuevoStock = Number(hilo?.stock_kg || 0) + Number(selectedCompra.cantidad_kg)
 
-          await supabase.from('materia_prima').update({ stock_kg: nuevoStock }).eq('id', selectedCompra.materia_prima_id)
-          await supabase.from('movimientos_materia_prima').insert({
+          const { error: stockErr } = await supabase.from('materia_prima').update({ stock_kg: nuevoStock }).eq('id', selectedCompra.materia_prima_id)
+          if (stockErr) throw stockErr
+
+          const { error: movErr } = await supabase.from('movimientos_materia_prima').insert({
             materia_prima_id: selectedCompra.materia_prima_id,
             tipo: 'ingreso_compra',
             cantidad_kg: selectedCompra.cantidad_kg,
             referencia_id: selectedCompra.id
           })
+          if (movErr) throw movErr
         } else {
-          await supabase.from('movimientos_materia_prima').insert({
+          const { error: devErr } = await supabase.from('movimientos_materia_prima').insert({
             materia_prima_id: selectedCompra.materia_prima_id,
             tipo: 'devolucion',
             cantidad_kg: selectedCompra.cantidad_kg,
             referencia_id: selectedCompra.id
           })
+          if (devErr) throw devErr
         }
       } else {
         // Fallback local

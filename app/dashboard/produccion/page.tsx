@@ -301,13 +301,30 @@ export default function ProduccionTejidoPage() {
     for (const yKey of Object.keys(yarnRequirements)) {
       const req = yarnRequirements[yKey]
       const newStock = req.stock - req.needed
-      await supabase.from('materia_prima').update({ stock_kg: newStock }).eq('id', yKey)
-      await supabase.from('movimientos_materia_prima').insert({
-        materia_prima_id: yKey,
-        tipo: 'consumo_produccion',
-        cantidad_kg: req.needed,
-        referencia_id: nuevoTurno.id
-      })
+      
+      const { error: stockErr } = await supabase
+        .from('materia_prima')
+        .update({ stock_kg: newStock })
+        .eq('id', yKey)
+      
+      if (stockErr) {
+        toast.error(`Error al descontar stock de materia prima: ${stockErr.message}`)
+        return
+      }
+
+      const { error: movErr } = await supabase
+        .from('movimientos_materia_prima')
+        .insert({
+          materia_prima_id: yKey,
+          tipo: 'consumo_produccion',
+          cantidad_kg: req.needed,
+          referencia_id: nuevoTurno.id
+        })
+
+      if (movErr) {
+        toast.error(`Error al registrar movimiento de consumo: ${movErr.message}`)
+        return
+      }
     }
 
 
@@ -318,13 +335,25 @@ export default function ProduccionTejidoPage() {
       catalogo_media_id: maquinas_seleccionadas[id]
     }))
 
-    await supabase.from('turno_maquinas').insert(asignaciones)
+    const { error: asigErr } = await supabase.from('turno_maquinas').insert(asignaciones)
+    if (asigErr) {
+      toast.error(`Error al registrar asignaciones de máquinas: ${asigErr.message}`)
+      return
+    }
 
     // 3. Marcar las máquinas de esa marca como ocupadas
-    await supabase.from('maquinas').update({ estado: 'ocupada' }).in('id', maquinaIds)
+    const { error: maqErr } = await supabase.from('maquinas').update({ estado: 'ocupada' }).in('id', maquinaIds)
+    if (maqErr) {
+      toast.error(`Error al actualizar estado de las máquinas: ${maqErr.message}`)
+      return
+    }
 
     // 4. Marcar al tejedor como ocupado
-    await supabase.from('usuarios').update({ estado: 'ocupada' }).eq('id', tejedor_id)
+    const { error: tejErr } = await supabase.from('usuarios').update({ estado: 'ocupada' }).eq('id', tejedor_id)
+    if (tejErr) {
+      toast.error(`Error al actualizar estado de operario tejedor: ${tejErr.message}`)
+      return
+    }
 
     toast.success(`✅ Lote cargado. ${maquinaIds.length} máquinas en marcha para el turno.`)
     setCargaForm({

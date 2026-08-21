@@ -1,4 +1,4 @@
-// @ts-nocheck
+  // @ts-nocheck
 'use client'
 
 // Maquinas Page - Control Center with ConfirmDialog
@@ -205,28 +205,50 @@ export default function MaquinasPage() {
     }
 
     // Actualizar estado de máquina a 'malograda'
-    await supabase.from('maquinas').update({
+    const { error: errorMaq } = await supabase.from('maquinas').update({
       estado: 'malograda',
       detalle_estado: `FALLA ${reporteForm.tipo_averia}`
     }).eq('id', reporteForm.maquina_id)
 
+    if (errorMaq) {
+      toast.error(`Error al actualizar estado de máquina: ${errorMaq.message}`)
+      setEnviandoReporte(false)
+      return
+    }
+
     // Buscar y cerrar turnos activos para esta máquina (para evitar registros de producción inválidos)
-    const { data: turnoMaq } = await supabase.from('turno_maquinas')
+    const { data: turnoMaq, error: errorTurnoMaq } = await supabase.from('turno_maquinas')
       .select('id, turno_id, turnos_produccion(id, tejedor_id, estado)')
       .eq('maquina_id', reporteForm.maquina_id)
       .eq('turnos_produccion.estado', 'activo')
       .maybeSingle()
+
+    if (errorTurnoMaq) {
+      toast.error(`Error al buscar turnos activos: ${errorTurnoMaq.message}`)
+      setEnviandoReporte(false)
+      return
+    }
 
     if (turnoMaq && turnoMaq.turnos_produccion) {
       const turnoId = turnoMaq.turno_id
       const tejedorId = turnoMaq.turnos_produccion.tejedor_id
 
       // Cerrar el turno de tejido
-      await supabase.from('turnos_produccion').update({ estado: 'cerrado' }).eq('id', turnoId)
+      const { error: errorTurno } = await supabase.from('turnos_produccion').update({ estado: 'cerrado' }).eq('id', turnoId)
+      if (errorTurno) {
+        toast.error(`Error al cerrar turno de tejido: ${errorTurno.message}`)
+        setEnviandoReporte(false)
+        return
+      }
       
       // Liberar al tejedor
       if (tejedorId) {
-        await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', tejedorId)
+        const { error: errorTejedor } = await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', tejedorId)
+        if (errorTejedor) {
+          toast.error(`Error al liberar tejedor: ${errorTejedor.message}`)
+          setEnviandoReporte(false)
+          return
+        }
       }
       toast.warning('⚠️ Turno activo de la máquina cerrado de forma automática. Operador liberado.')
     }
