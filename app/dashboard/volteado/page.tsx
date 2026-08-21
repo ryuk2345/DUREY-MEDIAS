@@ -4,8 +4,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
-  RotateCcw, Sparkles, Loader2, Play, CheckCircle2, User, 
-  Plus, X, Calendar, FileText, Barchart, Eye, Info, AlertTriangle, ShieldCheck
+  RotateCcw, Sparkles, Loader2, CheckCircle2, User, 
+  Plus, X, Calendar, FileText, Search, Warehouse, ArrowRight, AlertTriangle
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearFecha } from '@/lib/utils'
@@ -18,7 +18,7 @@ interface LoteVolteado {
   catalogo_media_id: string
   docenas_asignadas: number
   docenas_pendientes: number
-  estado: 'pendiente' | 'en_proceso' | 'completado'
+  estado: 'en_proceso' | 'completado'
   created_at: string
   volteador?: { nombre: string }
   catalogo_media?: { id: string; sku?: string; codigo: string; talla: string; publico: string }
@@ -43,6 +43,8 @@ export default function VolteadoPage() {
   const [stockListo, setStockListo] = useState<StockVoltear[]>([])
   const [lotes, setLotes] = useState<LoteVolteado[]>([])
   const [reportes, setReportes] = useState<ReporteVolteado[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedEstadoFilter, setSelectedEstadoFilter] = useState('todos')
 
   // Modales y formularios
   const [showAsignarModal, setShowAsignarModal] = useState(false)
@@ -117,17 +119,43 @@ export default function VolteadoPage() {
 
   const esSupervisor = userRol === 'admin' || userRol === 'supervisor'
 
-  // Filtrar lotes por operario si no es supervisor
+  // Filtrar lotes por búsqueda, rol y filtro de estado
   const lotesFiltrados = useMemo(() => {
-    if (esSupervisor) return lotes
-    // Buscar id del operario logueado en la tabla de usuarios
-    const profileId = volteadores.find(v => v.id === asignarForm.volteador_id)?.id || userId
-    return lotes.filter(l => l.volteador_id === profileId || l.volteador_id === userId)
-  }, [lotes, esSupervisor, volteadores, asignarForm.volteador_id, userId])
+    let result = lotes
+
+    // Filtro por rol (si no es supervisor, solo ve los suyos)
+    if (!esSupervisor) {
+      const profileId = volteadores.find(v => v.id === asignarForm.volteador_id)?.id || userId
+      result = result.filter(l => l.volteador_id === profileId || l.volteador_id === userId)
+    }
+
+    // Filtro por estado
+    if (selectedEstadoFilter === 'en_proceso') {
+      result = result.filter(l => l.estado === 'en_proceso')
+    } else if (selectedEstadoFilter === 'completado') {
+      result = result.filter(l => l.estado === 'completado')
+    }
+
+    // Filtro por barra de búsqueda
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter(l => 
+        (l.volteador?.nombre || '').toLowerCase().includes(q) ||
+        (l.catalogo_media?.sku || '').toLowerCase().includes(q) ||
+        (l.catalogo_media?.modelo || '').toLowerCase().includes(q)
+      )
+    }
+
+    return result
+  }, [lotes, esSupervisor, volteadores, asignarForm.volteador_id, userId, selectedEstadoFilter, searchQuery])
+
+  // Contadores para badges
+  const countEnProceso = useMemo(() => lotes.filter(l => l.estado === 'en_proceso').length, [lotes])
+  const countCompletados = useMemo(() => lotes.filter(l => l.estado === 'completado').length, [lotes])
 
   // Métricas generales
   const metricas = useMemo(() => {
-    const pendientes = lotes.reduce((sum, l) => l.estado !== 'completado' ? sum + Number(l.docenas_pendientes) : sum, 0)
+    const pendientes = lotes.reduce((sum, l) => l.estado === 'en_proceso' ? sum + Number(l.docenas_pendientes) : sum, 0)
     const volteadasHoy = reportes
       .filter(r => r.fecha === new Date().toISOString().split('T')[0])
       .reduce((sum, r) => sum + Number(r.docenas_volteadas), 0)
@@ -156,13 +184,13 @@ export default function VolteadoPage() {
 
     setSaving(true)
 
-    // 1. Crear el lote de volteado
+    // 1. Crear el lote de volteado (estado por defecto: 'en_proceso' como en lotes_remallado)
     const { data: nuevoLote, error: insertErr } = await supabase.from('lotes_volteado').insert({
       volteador_id,
       catalogo_media_id,
       docenas_asignadas: docenasNum,
       docenas_pendientes: docenasNum,
-      estado: 'pendiente'
+      estado: 'en_proceso'
     }).select().single()
 
     if (insertErr) {
@@ -183,25 +211,10 @@ export default function VolteadoPage() {
       return
     }
 
-    toast.success('🎉 Lote de Volteado asignado exitosamente al operario.')
+    toast.success('🎉 Lote asignado e iniciado en proceso de volteado.')
     setShowAsignarModal(false)
     setAsignarForm(f => ({ ...f, catalogo_media_id: '', docenas: '' }))
     setSaving(false)
-    cargarDatos()
-  }
-
-  // ── ACCIÓN: INICIAR LOTE (OPERARIO) ────────────────────────────────────────
-  const handleIniciarLote = async (loteId: string) => {
-    const { error } = await supabase.from('lotes_volteado')
-      .update({ estado: 'en_proceso' })
-      .eq('id', loteId)
-
-    if (error) {
-      toast.error(`Error al iniciar lote: ${error.message}`)
-      return
-    }
-
-    toast.success('🚀 Lote en proceso de volteado')
     cargarDatos()
   }
 
@@ -302,140 +315,266 @@ export default function VolteadoPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fadeInUp pb-12">
-      {/* ── HEADER SUPERIOR ─────────────────────────────────────────────────── */}
+    <div className="space-y-6 animate-fadeInUp pb-12 text-xs">
+      {/* ── BARRA SUPERIOR E INFORMACIÓN DEL ÁREA DE VOLTEADO ( Turning ) ────── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 glass p-6 rounded-3xl border border-white/[0.08]">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-            <RotateCcw className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-xl font-black text-white uppercase tracking-wider">Control de Volteado (Turning)</h1>
-            <p className="text-xs text-slate-400">Administra y registra la etapa intermedia de volteo de calcetines y control de mermas.</p>
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="p-2.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+              <RotateCcw className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black text-white tracking-tight">Monitor de Volteado (Turning)</h1>
+              <p className="text-slate-400 text-xs font-medium">Inspección de calcetines, mermas y transición al planchado</p>
+            </div>
           </div>
         </div>
 
-        {esSupervisor && (
-          <button
-            onClick={() => setShowAsignarModal(true)}
-            className="btn-primary flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-indigo-600 border-none font-bold text-xs uppercase tracking-wider"
-          >
-            <Plus className="w-4 h-4" /> Asignar Tarea de Volteo
-          </button>
-        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Badges de Estado */}
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold">
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse" />
+            <span>{countEnProceso} En Volteo</span>
+          </div>
+
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+            <span>{countCompletados} Completados</span>
+          </div>
+
+          {esSupervisor && (
+            <button
+              onClick={() => setShowAsignarModal(true)}
+              className="btn-primary text-xs rounded-2xl py-2 px-5 bg-indigo-600 hover:bg-indigo-500 border-none font-bold tracking-wider"
+            >
+              <Plus className="w-4 h-4" /> Asignar Lote
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── METRICAS GENERALES ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="glass p-5 rounded-3xl border border-white/[0.08] relative overflow-hidden">
-          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block mb-1">Stock por Voltear</span>
+          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block mb-1">Pendiente de Voltear</span>
           <span className="text-2xl font-black text-white font-mono block">
             {stockListo.reduce((sum, s) => sum + Number(s.docenas), 0)} doc.
           </span>
           <span className="text-[10px] text-slate-400 block mt-1">Acumulado en stock listo para voltear</span>
-          <div className="absolute right-4 bottom-4 text-indigo-500/20"><Warehouse className="w-12 h-12" /></div>
         </div>
 
         <div className="glass p-5 rounded-3xl border border-white/[0.08] relative overflow-hidden">
           <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block mb-1">Volteado Hoy</span>
           <span className="text-2xl font-black text-emerald-400 font-mono block">{metricas.volteadasHoy} doc.</span>
           <span className="text-[10px] text-slate-400 block mt-1">Registros del turno actual</span>
-          <div className="absolute right-4 bottom-4 text-emerald-500/20"><CheckCircle2 className="w-12 h-12" /></div>
         </div>
 
         <div className="glass p-5 rounded-3xl border border-white/[0.08] relative overflow-hidden">
           <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block mb-1">Mermas Detectadas</span>
           <span className="text-2xl font-black text-rose-400 font-mono block">{metricas.totalDefectos} pares</span>
           <span className="text-[10px] text-slate-400 block mt-1">Pares defectuosos descartados</span>
-          <div className="absolute right-4 bottom-4 text-rose-500/20"><AlertTriangle className="w-12 h-12" /></div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* ── SECCIÓN DE LOTES ASIGNADOS ─────────────────────────────────────── */}
-        <div className="xl:col-span-2 space-y-4">
-          <div className="glass p-6 rounded-3xl border border-white/[0.08]">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-indigo-400" /> 
-              {esSupervisor ? 'Seguimiento de Lotes Asignados' : 'Mis Lotes Asignados'}
-            </h2>
-
-            {loading ? (
-              <div className="py-10 text-center text-slate-400 flex flex-col items-center gap-2"><Loader2 className="w-6 h-6 animate-spin" /> Cargando lotes...</div>
-            ) : lotesFiltrados.length === 0 ? (
-              <div className="py-10 text-center text-slate-500 text-xs">No tienes lotes de volteado asignados actualmente</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/[0.06] text-slate-400 font-bold uppercase">
-                      <th className="pb-3">Cód. SKU</th>
-                      <th className="pb-3">Detalle</th>
-                      <th className="pb-3">Asignado a</th>
-                      <th className="pb-3">Docenas</th>
-                      <th className="pb-3">Estado</th>
-                      <th className="pb-3 text-right">Acción</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lotesFiltrados.map(l => (
-                      <tr key={l.id} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.01]">
-                        <td className="py-3.5 font-mono text-slate-300 font-bold">{l.catalogo_media?.sku || 'SKU-VARIADO'}</td>
-                        <td className="py-3.5 text-slate-200">
-                          {l.catalogo_media?.modelo} — {l.catalogo_media?.talla} ({l.catalogo_media?.publico})
-                        </td>
-                        <td className="py-3.5 text-slate-300 font-medium">{l.volteador?.nombre || 'Operador'}</td>
-                        <td className="py-3.5 font-mono text-slate-200 font-bold">
-                          {l.docenas_pendientes} / {l.docenas_asignadas} doc.
-                        </td>
-                        <td className="py-3.5">
-                          <span className={`badge ${
-                            l.estado === 'completado' ? 'badge-success' :
-                            l.estado === 'en_proceso' ? 'badge-warning' : 'badge-info'
-                          }`}>
-                            {l.estado === 'completado' ? 'Completado' :
-                             l.estado === 'en_proceso' ? 'En Proceso' : 'Pendiente'}
-                          </span>
-                        </td>
-                        <td className="py-3.5 text-right">
-                          {l.estado === 'pendiente' && (
-                            <button
-                              onClick={() => handleIniciarLote(l.id)}
-                              className="btn-secondary py-1 px-2.5 rounded-lg border-indigo-500/30 text-indigo-300 text-[10px] font-bold flex items-center gap-1.5 ml-auto"
-                            >
-                              <Play className="w-3 h-3" /> Iniciar
-                            </button>
-                          )}
-                          {l.estado === 'en_proceso' && (
-                            <button
-                              onClick={() => { setSelectedLote(l); setShowReportarModal(true) }}
-                              className="btn-primary py-1 px-2.5 rounded-lg bg-emerald-600 text-white border-none text-[10px] font-bold flex items-center gap-1.5 ml-auto"
-                            >
-                              <CheckCircle2 className="w-3 h-3" /> Reportar
-                            </button>
-                          )}
-                          {l.estado === 'completado' && (
-                            <span className="text-slate-500 text-[10px] font-medium italic block mr-2">Terminado</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+      {/* ── FILTROS Y BÚSQUEDA ──────────────────────────────────────────────── ── */}
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="relative w-full md:w-80">
+          <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
+          <input
+            type="text"
+            placeholder="Buscar operario o media..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="input-dark pl-10 text-xs rounded-xl w-full"
+          />
         </div>
 
-        {/* ── PANEL DE STOCK DISPONIBLE (LADO DERECHO) ───────────────────────── */}
+        <div className="flex items-center gap-2 bg-slate-900/60 p-1 rounded-2xl border border-white/[0.06] text-xs">
+          <span className="text-slate-400 font-semibold px-3 py-1">Estado:</span>
+          <select
+            value={selectedEstadoFilter}
+            onChange={e => setSelectedEstadoFilter(e.target.value)}
+            className="bg-transparent text-white font-medium focus:outline-none pr-2 cursor-pointer"
+          >
+            <option value="todos" className="bg-slate-900 text-white">Todos los lotes</option>
+            <option value="en_proceso" className="bg-slate-900 text-white">En Volteo</option>
+            <option value="completado" className="bg-slate-900 text-white">Completados</option>
+          </select>
+        </div>
+      </div>
+
+      {/* ── CONTENIDO EN 2 COLUMNAS (GRID DE CARDS + STOCK) ───────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* ── COLUMNA IZQUIERDA (2 COLS): GRID DE TAREAS DE VOLTEADO ──────────── */}
+        <div className="lg:col-span-2 space-y-4">
+          {loading ? (
+            <div className="flex justify-center items-center py-24 glass rounded-3xl">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+            </div>
+          ) : lotesFiltrados.length === 0 ? (
+            <div className="glass rounded-3xl flex flex-col items-center justify-center py-20 text-slate-500 border border-dashed border-white/10">
+              <RotateCcw className="w-12 h-12 mb-3 opacity-20" />
+              <p className="font-semibold text-sm">No hay lotes de volteado encontrados</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              {lotesFiltrados.map(l => {
+                const isEnMarcha = l.estado === 'en_proceso'
+
+                return (
+                  <div
+                    key={l.id}
+                    className={`glass rounded-2xl p-4 border transition-all duration-300 flex flex-col justify-between ${
+                      isEnMarcha
+                        ? 'border-indigo-500/30 bg-indigo-500/[0.02] shadow-lg shadow-indigo-500/5'
+                        : 'border-white/[0.08] hover:border-indigo-400/40'
+                    }`}
+                  >
+                    <div>
+                      {/* Cabecera Tarjeta */}
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <span className="font-black text-sm text-slate-300 font-mono block">
+                            {l.catalogo_media?.sku || 'SKU-VARIADO'}
+                          </span>
+                          <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 font-semibold">
+                            <User className="w-3.5 h-3.5 text-slate-500" />
+                            {l.volteador?.nombre || 'Operador'}
+                          </p>
+                        </div>
+
+                        <div>
+                          {isEnMarcha ? (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                              EN VOLTEO
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              COMPLETADO
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Info de media en volteado */}
+                      <div className="mt-3 p-2.5 rounded-xl bg-slate-900/60 border border-white/[0.05]">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">
+                          Producto en proceso:
+                        </p>
+                        <p className="text-xs font-mono font-medium text-slate-200 truncate">
+                          {l.catalogo_media?.modelo} • Talla {l.catalogo_media?.talla}
+                        </p>
+                        <p className="text-[10px] text-indigo-300 font-medium mt-1">
+                          Docenas: {l.docenas_asignadas} asignadas / {l.docenas_pendientes} pend.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Botones de Acción */}
+                    <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
+                      {isEnMarcha ? (
+                        <button
+                          onClick={() => { setSelectedLote(l); setShowReportarModal(true) }}
+                          className="btn-primary flex-1 justify-center text-xs py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white border-none shadow-md shadow-indigo-600/20 font-bold"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Cerrar Turno — Registrar
+                        </button>
+                      ) : (
+                        <span className="text-slate-500 text-[10px] font-medium italic block text-center w-full py-1">Lote finalizado con éxito</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── COLUMNA DERECHA (1 COL): PANEL ASIGNACIÓN Y STOCK DISPONIBLE ────── */}
         <div className="space-y-6">
+          {/* PANEL ASIGNACIÓN */}
+          {esSupervisor && (
+            <div className="glass rounded-3xl p-6 border border-indigo-500/20 shadow-xl bg-indigo-500/[0.02]">
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/[0.08]">
+                <Sparkles className="w-5 h-5 text-indigo-400" />
+                <h2 className="text-base font-bold text-white">Asignación de Turno en Volteado</h2>
+              </div>
+
+              <form onSubmit={handleAsignarLote} className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+                    SKU Disponible para Voltear ({stockListo.length})
+                  </label>
+                  <select
+                    value={asignarForm.catalogo_media_id}
+                    onChange={e => setAsignarForm({ ...asignarForm, catalogo_media_id: e.target.value })}
+                    className="input-dark text-xs w-full font-medium"
+                    required
+                  >
+                    <option value="">Seleccionar SKU...</option>
+                    {stockListo.map(s => (
+                      <option key={s.catalogo_media?.id} value={s.catalogo_media?.id}>
+                        {s.catalogo_media?.sku} ({s.docenas} docenas disponibles)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+                    Operario Responsable (Volteador)
+                  </label>
+                  <select
+                    value={asignarForm.volteador_id}
+                    onChange={e => setAsignarForm({ ...asignarForm, volteador_id: e.target.value })}
+                    className="input-dark text-xs w-full font-medium"
+                    required
+                  >
+                    <option value="">Seleccionar operario...</option>
+                    {volteadores.map(v => (
+                      <option key={v.id} value={v.id}>{v.nombre}</option>
+                  ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
+                    Cantidad a Voltear (Docenas)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    placeholder="Ej: 10"
+                    value={asignarForm.docenas}
+                    onChange={e => setAsignarForm({ ...asignarForm, docenas: e.target.value })}
+                    className="input-dark text-xs w-full font-mono font-bold"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="btn-primary w-full justify-center py-2 text-xs bg-indigo-600 hover:bg-indigo-500 border-none font-bold"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Asignar e Iniciar Volteo'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* STOCK DISPONIBLE */}
           <div className="glass p-6 rounded-3xl border border-white/[0.08]">
             <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
               <Warehouse className="w-4 h-4 text-emerald-400" />
               Stock Esperando Volteo
             </h2>
             {stockListo.length === 0 ? (
-              <p className="text-slate-500 text-xs py-4 text-center">No hay medias acumuladas listas para voltear</p>
+              <p className="text-slate-500 text-xs py-4 text-center">No hay medias en stock esperando voltearse</p>
             ) : (
               <div className="space-y-3">
                 {stockListo.map(s => (
@@ -450,103 +589,8 @@ export default function VolteadoPage() {
               </div>
             )}
           </div>
-
-          {/* ÚLTIMOS REPORTES */}
-          <div className="glass p-6 rounded-3xl border border-white/[0.08]">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-indigo-400" />
-              Últimos Reportes de Volteo
-            </h2>
-            <div className="space-y-3 max-h-60 overflow-y-auto text-xs">
-              {reportes.slice(0, 5).map(r => (
-                <div key={r.id} className="pb-3 border-b border-white/[0.04] last:border-0 last:pb-0">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-slate-300 font-medium">{r.volteador?.nombre}</span>
-                    <span className="text-slate-500 text-[10px] font-mono">{formatearFecha(r.fecha)}</span>
-                  </div>
-                  <div className="flex justify-between items-center font-mono">
-                    <span className="text-slate-400">{r.catalogo_media?.sku}</span>
-                    <span className="font-bold text-emerald-300">
-                      {r.docenas_volteadas} doc. {r.pares_defectuosos > 0 && <span className="text-rose-400">({r.pares_defectuosos} m.)</span>}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
-
-      {/* ── MODAL: ASIGNAR LOTE (SUPERVISOR) ─────────────────────────────────── */}
-      {showAsignarModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.08]">
-              <h2 className="text-md font-bold text-white flex items-center gap-2 uppercase tracking-wide">
-                <RotateCcw className="w-5 h-5 text-indigo-400" /> Asignar Tarea de Volteo
-              </h2>
-              <button onClick={() => setShowAsignarModal(false)} className="p-1 rounded-lg hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAsignarLote} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1 uppercase">Media / SKU en Almacén</label>
-                <select
-                  value={asignarForm.catalogo_media_id}
-                  onChange={e => setAsignarForm(f => ({ ...f, catalogo_media_id: e.target.value }))}
-                  className="input-dark w-full font-medium"
-                  required
-                >
-                  <option value="">Seleccionar SKU disponible...</option>
-                  {stockListo.map(s => (
-                    <option key={s.catalogo_media?.id} value={s.catalogo_media?.id}>
-                      {s.catalogo_media?.sku} ({s.docenas} docenas disponibles)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1 uppercase">Operario Responsable</label>
-                <select
-                  value={asignarForm.volteador_id}
-                  onChange={e => setAsignarForm(f => ({ ...f, volteador_id: e.target.value }))}
-                  className="input-dark w-full font-medium"
-                  required
-                >
-                  <option value="">Seleccionar volteador...</option>
-                  {volteadores.map(v => (
-                    <option key={v.id} value={v.id}>{v.nombre}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1 uppercase">Cantidad a Voltear (Docenas)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  placeholder="Ej: 15.5"
-                  value={asignarForm.docenas}
-                  onChange={e => setAsignarForm(f => ({ ...f, docenas: e.target.value }))}
-                  className="input-dark w-full font-mono font-bold"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.08]">
-                <button type="button" onClick={() => setShowAsignarModal(false)} className="btn-secondary px-4 py-2 rounded-xl">Cancelar</button>
-                <button type="submit" disabled={saving} className="btn-primary px-6 py-2 rounded-xl bg-indigo-600 border-none font-bold">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Asignar Lote'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ── MODAL: REPORTAR LOTE (OPERARIO) ─────────────────────────────────── */}
       {showReportarModal && selectedLote && (
@@ -554,7 +598,7 @@ export default function VolteadoPage() {
           <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
             <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.08]">
               <h2 className="text-md font-bold text-white flex items-center gap-2 uppercase tracking-wide">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" /> Reportar Lote
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" /> Registrar Producción y Mermas
               </h2>
               <button onClick={() => setShowReportarModal(false)} className="p-1 rounded-lg hover:bg-white/10 text-slate-400">
                 <X className="w-5 h-5" />
@@ -585,7 +629,6 @@ export default function VolteadoPage() {
               <div>
                 <label className="block text-slate-400 font-semibold mb-1 uppercase flex items-center gap-1.5">
                   Mermas / Defectos Detectados (Cantidad en Pares)
-                  <Info className="w-3.5 h-3.5 text-rose-400" title="Pares con huecos, fallas de costura o tejido descartados" />
                 </label>
                 <input
                   type="number"
@@ -600,7 +643,7 @@ export default function VolteadoPage() {
               <div>
                 <label className="block text-slate-400 font-semibold mb-1 uppercase">Comentarios y Observaciones</label>
                 <textarea
-                  placeholder="Opcional. Ej: Agujas rotas en tejedora original, costura floja de remalle."
+                  placeholder="Opcional. Ej: Hilo flojo en lote original o aguja picada."
                   value={reporteForm.comentarios}
                   onChange={e => setReporteForm(f => ({ ...f, comentarios: e.target.value }))}
                   className="input-dark w-full min-h-[60px]"
@@ -610,7 +653,7 @@ export default function VolteadoPage() {
               <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.08]">
                 <button type="button" onClick={() => setShowReportarModal(false)} className="btn-secondary px-4 py-2 rounded-xl">Cancelar</button>
                 <button type="submit" disabled={saving} className="btn-primary px-6 py-2 rounded-xl bg-emerald-600 border-none font-bold">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Registrar Producción'}
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Registrar'}
                 </button>
               </div>
             </form>

@@ -16,13 +16,14 @@ CREATE TABLE IF NOT EXISTS stock_listo_voltear (
 );
 
 -- 3. Crear tabla de asignación de lotes de volteado
+-- Consistentemente utiliza los estados 'en_proceso' y 'completado' de lotes_remallado
 CREATE TABLE IF NOT EXISTS lotes_volteado (
   id                       UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   volteador_id             UUID REFERENCES usuarios(id) ON DELETE RESTRICT,
   catalogo_media_id        UUID REFERENCES catalogo_medias(id) ON DELETE RESTRICT,
   docenas_asignadas        NUMERIC(10,2) NOT NULL,
   docenas_pendientes       NUMERIC(10,2) NOT NULL,
-  estado                   TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'en_proceso', 'completado')),
+  estado                   TEXT NOT NULL DEFAULT 'en_proceso' CHECK (estado IN ('en_proceso', 'completado')),
   created_at               TIMESTAMPTZ DEFAULT NOW()
 );
 
