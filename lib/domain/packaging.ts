@@ -1,12 +1,11 @@
 // Single Source of Truth: Empaque por SKU y Sacos Maestros
 
-export type EstadoPaquete = 'pendiente_almacenar' | 'almacenado' | 'preparado_envio' | 'en_transito' | 'entregado'
+export type EstadoPaquete = 'pendiente_almacenar' | 'almacenado' | 'preparado_envio' | 'entregado'
 
 const TRANSICIONES_PAQUETE: Record<EstadoPaquete, EstadoPaquete[]> = {
   pendiente_almacenar: ['almacenado', 'preparado_envio'],
-  almacenado: ['preparado_envio', 'en_transito'],
-  preparado_envio: ['en_transito', 'almacenado'],
-  en_transito: ['entregado', 'almacenado'],
+  almacenado: ['preparado_envio'],
+  preparado_envio: ['entregado', 'almacenado'],
   entregado: []
 }
 

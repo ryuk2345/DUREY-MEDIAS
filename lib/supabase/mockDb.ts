@@ -242,6 +242,19 @@ class MockQueryBuilder {
 
   async getTableData(): Promise<any[]> {
     const db = await getMockDb();
+    if (this.tableName === 'vista_stock_medias') {
+      const stockMap: Record<string, number> = {};
+      const packages = db.paquetes || [];
+      packages.forEach((p: any) => {
+        if (p.catalogo_media_id && ['almacenado', 'pendiente_almacenar'].includes(p.estado)) {
+          stockMap[p.catalogo_media_id] = (stockMap[p.catalogo_media_id] ?? 0) + Number(p.docenas ?? 0);
+        }
+      });
+      return Object.entries(stockMap).map(([catalogo_media_id, stock_docenas]) => ({
+        catalogo_media_id,
+        stock_docenas
+      }));
+    }
     return db[this.tableName] || [];
   }
 

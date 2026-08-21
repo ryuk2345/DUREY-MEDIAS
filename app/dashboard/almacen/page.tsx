@@ -999,7 +999,7 @@ export default function AlmacenPage() {
                         <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                           <p className="text-[10px] text-slate-400 uppercase font-bold">Cantidad</p>
                           <p className="text-lg font-black text-white font-mono">{formIngreso.docenas}</p>
-                          <p className="text-[10px] text-emerald-400 font-bold">{Number(formIngreso.docenas)*12} pares</p>
+                          <p className="text-[10px] text-emerald-400 font-bold">{convertirDocenasAPares(Number(formIngreso.docenas))} pares</p>
                         </div>
                         <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
                           <p className="text-[10px] text-slate-400 uppercase font-bold">Salón</p>

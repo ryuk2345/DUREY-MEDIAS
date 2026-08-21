@@ -43,10 +43,6 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
         .select('id, material, color, stock_kg')
         .lte('stock_kg', 10.000)
 
-      // 2. Productos terminados (catálogo medias y stock consolidado)
-      const urlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-      const isMock = !urlEnv || urlEnv.includes('tu-proyecto') || urlEnv.includes('placeholder') || !urlEnv.includes('.supabase.co')
-
       const { data: catData } = await supabase
         .from('catalogo_medias')
         .select('id, codigo, modelo, publico')
@@ -54,30 +50,15 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
 
       const stockMap: Record<string, number> = {}
 
-      if (isMock) {
-        // Fallback local: Sumar en memoria
-        const { data: paqData } = await supabase
-          .from('paquetes')
-          .select('catalogo_media_id, docenas')
-          .in('estado', ['almacenado', 'pendiente_almacenar'])
+      const { data: viewData } = await supabase
+        .from('vista_stock_medias')
+        .select('catalogo_media_id, stock_docenas')
 
-        paqData?.forEach(p => {
-          if (p.catalogo_media_id) {
-            stockMap[p.catalogo_media_id] = (stockMap[p.catalogo_media_id] ?? 0) + Number(p.docenas ?? 0)
-          }
-        })
-      } else {
-        // En producción: Consumir la vista SQL agregada
-        const { data: viewData } = await supabase
-          .from('vista_stock_medias')
-          .select('catalogo_media_id, stock_docenas')
-
-        viewData?.forEach(row => {
-          if (row.catalogo_media_id) {
-            stockMap[row.catalogo_media_id] = Number(row.stock_docenas ?? 0)
-          }
-        })
-      }
+      viewData?.forEach(row => {
+        if (row.catalogo_media_id) {
+          stockMap[row.catalogo_media_id] = Number(row.stock_docenas ?? 0)
+        }
+      })
 
       const lowMedias: LowStockProduct[] = []
       catData?.forEach(m => {
