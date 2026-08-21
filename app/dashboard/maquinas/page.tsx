@@ -328,10 +328,10 @@ export default function MaquinasPage() {
   })
 
   // Obtener máquina representativa de cada estado para las 4 tarjetas superiores
-  const maqOperativa = maquinas.find(m => m.estado === 'activa') || { codigo: 'TX-401', eficiencia: 98, detalle_estado: 'EFICIENCIA: 98%' }
-  const maqMalograda = maquinas.find(m => m.estado === 'malograda') || { codigo: 'RD-105', detalle_estado: 'ROTURA DE AGUJA' }
-  const maqMantenimiento = maquinas.find(m => m.estado === 'mantenimiento') || { codigo: 'BK-220', detalle_estado: 'PREVENTIVO EN CURSO' }
-  const maqStandby = maquinas.find(m => m.estado === 'standby' || m.estado === 'inactiva') || { codigo: 'TX-402', detalle_estado: 'SIN HILO (SET UP)' }
+  const maqOperativa = maquinas.find(m => m.estado === 'activa') || { codigo: 'M01', eficiencia: 98, detalle_estado: 'EFICIENCIA: 98%' }
+  const maqMalograda = maquinas.find(m => m.estado === 'malograda') || { codigo: 'M06', detalle_estado: 'ROTURA DE AGUJA' }
+  const maqMantenimiento = maquinas.find(m => m.estado === 'mantenimiento') || { codigo: 'M03', detalle_estado: 'PREVENTIVO EN CURSO' }
+  const maqStandby = maquinas.find(m => m.estado === 'standby' || m.estado === 'inactiva') || { codigo: 'M02', detalle_estado: 'SIN HILO (SET UP)' }
 
   return (
     <div className="space-y-6 animate-fadeInUp pb-12">
@@ -741,7 +741,7 @@ export default function MaquinasPage() {
             <form onSubmit={guardarMaquina} className="space-y-4 text-xs">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Código de Máquina *</label>
-                <input type="text" placeholder="Ej. TX-401" value={maquinaForm.codigo} onChange={e => setMaquinaForm({ ...maquinaForm, codigo: e.target.value })} className="input-dark w-full font-mono font-bold" />
+                <input type="text" placeholder="Ej. M01" value={maquinaForm.codigo} onChange={e => setMaquinaForm({ ...maquinaForm, codigo: e.target.value })} className="input-dark w-full font-mono font-bold" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

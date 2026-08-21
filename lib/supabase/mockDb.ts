@@ -29,11 +29,12 @@ const SEMILLAS = {
     { id: 'm5', nombre: 'Jacquard BK' }
   ],
   maquinas: [
-    { id: 'maq1', codigo: 'TX-401', tipo: 'tejedora', marca_id: 'm1', anio: 2024, caracteristicas: 'Tejido Circular Fino', estado: 'activa', eficiencia: 98, detalle_estado: 'EFICIENCIA: 98%', marca: { nombre: 'Angies' } },
-    { id: 'maq2', codigo: 'RD-105', tipo: 'remalladora', marca_id: 'm4', anio: 2024, caracteristicas: 'Remallado Automático', estado: 'malograda', eficiencia: 0, detalle_estado: 'ROTURA DE AGUJA', marca: { nombre: 'Rosso Speed' } },
-    { id: 'maq3', codigo: 'BK-220', tipo: 'tejedora', marca_id: 'm5', anio: 2023, caracteristicas: 'Tejido Jacquard', estado: 'mantenimiento', eficiencia: 75, detalle_estado: 'PREVENTIVO EN CURSO', marca: { nombre: 'Jacquard BK' } },
-    { id: 'maq4', codigo: 'TX-402', tipo: 'tejedora', marca_id: 'm2', anio: 2024, caracteristicas: 'Tejido Deportivo', estado: 'standby', eficiencia: 0, detalle_estado: 'SIN HILO (SET UP)', marca: { nombre: 'Chinas Azules' } },
-    { id: 'maq5', codigo: 'R-01', tipo: 'remalladora', marca_id: 'm3', anio: 2024, caracteristicas: 'Remallado rápido', estado: 'activa', eficiencia: 92, detalle_estado: 'OPERATIVA', marca: { nombre: 'Chinas Verdes' } }
+    { id: 'maq1', codigo: 'M01', tipo: 'tejedora', marca_id: 'm1', anio: 2024, caracteristicas: 'Tejido Fino', estado: 'activa', eficiencia: 98, detalle_estado: 'EFICIENCIA: 98%', marca: { nombre: 'Angies' } },
+    { id: 'maq2', codigo: 'M02', tipo: 'tejedora', marca_id: 'm1', anio: 2024, caracteristicas: 'Tejido Grueso', estado: 'activa', eficiencia: 95, detalle_estado: 'EFICIENCIA: 95%', marca: { nombre: 'Angies' } },
+    { id: 'maq3', codigo: 'M03', tipo: 'tejedora', marca_id: 'm2', anio: 2023, caracteristicas: 'Tejido Deportivo', estado: 'activa', eficiencia: 90, detalle_estado: 'EFICIENCIA: 90%', marca: { nombre: 'Chinas Azules' } },
+    { id: 'maq4', codigo: 'M05', tipo: 'remalladora', marca_id: 'm3', anio: 2024, caracteristicas: 'Remallado Rápido', estado: 'ocupada', eficiencia: 92, detalle_estado: 'OPERATIVA', marca: { nombre: 'Chinas Verdes' } },
+    { id: 'maq5', codigo: 'M06', tipo: 'remalladora', marca_id: 'm3', anio: 2024, caracteristicas: 'Remallado Estándar', estado: 'activa', eficiencia: 90, detalle_estado: 'OPERATIVA', marca: { nombre: 'Chinas Verdes' } },
+    { id: 'maq6', codigo: 'M04', tipo: 'tejedora', marca_id: 'm1', anio: 2026, caracteristicas: 'Tejido Grueso', estado: 'activa', eficiencia: 98, detalle_estado: 'OPERATIVA', marca: { nombre: 'Angies' } }
   ],
   ubicaciones: [
     { id: 'u1', nombre: 'Salón A', tipo: 'salon', activo: true },
@@ -151,9 +152,9 @@ const SEMILLAS = {
   cobros: [],
   cajas_diarias: [],
   averias_maquinas: [
-    { id: 'av1', maquina_id: 'maq2', descripcion_operador: 'RD-105: SOBRECALENTAMIENTO MOTOR PRINCIPAL — Se detectó aumento de temperatura superior a 85°C. Paro de emergencia automático activado.', tipo_averia: 'MECÁNICA', estado: 'pendiente', fecha_reporte: '2026-08-11 14:20:00', asignado_a: 'Carlos Mendoza', nivel: 'CRÍTICO' },
-    { id: 'av2', maquina_id: 'maq4', descripcion_operador: 'TX-402: CAMBIO DE CORREA DENTADA — Mantenimiento preventivo programado completado con éxito. Pruebas de tensión superadas.', tipo_averia: 'MECÁNICA', estado: 'resuelto', fecha_reporte: '2026-08-10 09:15:00', asignado_a: 'Pedro Técnico (Planta)', nivel: 'RESUELTO' },
-    { id: 'av3', maquina_id: 'maq3', descripcion_operador: 'BK-220: CALIBRACIÓN DE SENSORES — Ajuste de fotoceldas de empaque por desalineación en cajas de 12 unidades.', tipo_averia: 'ELECTRÓNICA', estado: 'resuelto', fecha_reporte: '2026-08-08 16:40:00', asignado_a: 'Jorge Ramírez', nivel: 'RESUELTO' }
+    { id: 'av1', maquina_id: 'maq2', descripcion_operador: 'M02: SOBRECALENTAMIENTO MOTOR PRINCIPAL — Se detectó aumento de temperatura superior a 85°C. Paro de emergencia automático activado.', tipo_averia: 'MECÁNICA', estado: 'pendiente', fecha_reporte: '2026-08-11 14:20:00', asignado_a: 'Carlos Mendoza', nivel: 'CRÍTICO' },
+    { id: 'av2', maquina_id: 'maq4', descripcion_operador: 'M05: CAMBIO DE CORREA DENTADA — Mantenimiento preventivo programado completado con éxito. Pruebas de tensión superadas.', tipo_averia: 'MECÁNICA', estado: 'resuelto', fecha_reporte: '2026-08-10 09:15:00', asignado_a: 'Pedro Técnico (Planta)', nivel: 'RESUELTO' },
+    { id: 'av3', maquina_id: 'maq3', descripcion_operador: 'M03: CALIBRACIÓN DE SENSORES — Ajuste de fotoceldas de empaque por desalineación en cajas de 12 unidades.', tipo_averia: 'ELECTRÓNICA', estado: 'resuelto', fecha_reporte: '2026-08-08 16:40:00', asignado_a: 'Jorge Ramírez', nivel: 'RESUELTO' }
   ],
   reparaciones: [],
   guias_remision: [],
@@ -362,12 +363,12 @@ class MockQueryBuilder {
             ...l,
             catalogo_media: db.catalogo_medias.find((c: any) => c.id === l.catalogo_media_id) || { codigo: 'c1' },
             remalladora: db.usuarios.find((u: any) => u.id === l.remalladora_id) || { nombre: 'Ana Remalladora' },
-            maquina_remalladora: db.maquinas.find((m: any) => m.id === l.maquina_remalladora_id) || { codigo: 'R-01' }
+            maquina_remalladora: db.maquinas.find((m: any) => m.id === l.maquina_remalladora_id) || { codigo: 'M05' }
           }));
         } else if (self.tableName === 'averias_maquinas') {
           result = result.map(a => ({
             ...a,
-            maquina: db.maquinas.find((m: any) => m.id === a.maquina_id) || { codigo: 'A-01', tipo: 'tejedora' },
+            maquina: db.maquinas.find((m: any) => m.id === a.maquina_id) || { codigo: 'M01', tipo: 'tejedora' },
             reportado_por: db.usuarios.find((u: any) => u.id === a.reportado_por_id) || { nombre: 'Carlos Tejedor' },
             reparaciones: db.reparaciones.filter((r: any) => r.averia_id === a.id)
           }));
@@ -393,7 +394,7 @@ class MockQueryBuilder {
             const tej = db.usuarios.find((u: any) => u.id === t.tejedor_id) || { nombre: 'Carlos Tejedor' };
             return {
               ...r,
-              maquina: db.maquinas.find((m: any) => m.id === r.maquina_id) || { codigo: 'A-01' },
+              maquina: db.maquinas.find((m: any) => m.id === r.maquina_id) || { codigo: 'M01' },
               catalogo_media: db.catalogo_medias.find((c: any) => c.id === r.catalogo_media_id) || { codigo: 'c1' },
               turno: {
                 ...t,
@@ -407,7 +408,7 @@ class MockQueryBuilder {
             tejedor: db.usuarios.find((u: any) => u.id === t.tejedor_id) || { nombre: 'Tejedor Desconocido' },
             turno_maquinas: db.turno_maquinas.filter((tm: any) => tm.turno_id === t.id).map((tm: any) => ({
               ...tm,
-              maquina: db.maquinas.find((m: any) => m.id === tm.maquina_id) || { codigo: 'A-01' },
+              maquina: db.maquinas.find((m: any) => m.id === tm.maquina_id) || { codigo: 'M01' },
               catalogo_media: db.catalogo_medias.find((c: any) => c.id === tm.catalogo_media_id) || { codigo: 'c1' }
             }))
           }));

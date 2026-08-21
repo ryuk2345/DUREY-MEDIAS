@@ -44,7 +44,7 @@ assert(transicionAlmacen.valido, 'Pistola escáner cambia estado de saco maestro
 // Escenario UAT-04: Carlos Tejedor / Pedro Técnico - Avería Crítica
 console.log('\n--- UAT-04: Carlos Tejedor / Pedro Técnico (Avería Crítica) ---')
 const transicionAveria = validarTransicionEstadoMaquina('activa', 'malograda')
-assert(transicionAveria.valido, 'Tejedora TX-401 cambia su estado a FALLA CRÍTICA / MALOGRADA')
+assert(transicionAveria.valido, 'Tejedora M01 cambia su estado a FALLA CRÍTICA / MALOGRADA')
 
 // Escenario UAT-05: Sofia Vendedora - Error Humano Pago Cero
 console.log('\n--- UAT-05: Sofia Vendedora (Error Humano Pago Cero / Sin Foto) ---')

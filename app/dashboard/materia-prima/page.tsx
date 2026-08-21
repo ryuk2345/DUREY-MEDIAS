@@ -1819,7 +1819,7 @@ export default function MateriaPrimaPage() {
                       type="text" 
                       value={adjustRepuestoForm.motivo} 
                       onChange={e => setAdjustRepuestoForm(prev => ({ ...prev, motivo: e.target.value }))}
-                      placeholder="Ej: Reparación aguja máquina A-01" 
+                      placeholder="Ej: Reparación aguja máquina M01" 
                       className="input-dark w-full text-sm py-2.5"
                       required
                     />
