@@ -18,7 +18,8 @@ const SEMILLAS = {
     { id: '8b', nombre: 'Elena Vendedora', email: 'elena_vend@durey.com', rol: 'vendedora', activo: true, estado: 'disponible' },
     { id: '9', nombre: 'Pedro Técnico (Planta)', email: 'tecnico@durey.com', rol: 'tecnico', activo: true, estado: 'disponible', especialidad: 'Mantenimiento General de Planta', telefono: '+51 912 345 678', tipo: 'interno' },
     { id: '10', nombre: 'Carlos Mendoza', email: 'carlos_mendoza@siemens.com', rol: 'tecnico', activo: true, estado: 'disponible', especialidad: 'Especialista Motores Siemens', telefono: '+54 11 4930-XXXX', tipo: 'externo' },
-    { id: '11', nombre: 'Jorge Ramírez', email: 'jramirez@automation.com', rol: 'tecnico', activo: true, estado: 'en_reparacion', especialidad: 'Sensores y Sistemas Neumáticos', telefono: '+51 955 443 322', tipo: 'externo' }
+    { id: '11', nombre: 'Jorge Ramírez', email: 'jramirez@automation.com', rol: 'tecnico', activo: true, estado: 'en_reparacion', especialidad: 'Sensores y Sistemas Neumáticos', telefono: '+51 955 443 322', tipo: 'externo' },
+    { id: '12', nombre: 'Tomas Volteador', email: 'volteador@durey.com', rol: 'volteador', activo: true, estado: 'disponible' }
   ],
   marcas_maquinas: [
     { id: 'm1', nombre: 'Angies' },
@@ -57,6 +58,13 @@ const SEMILLAS = {
   ],
   lotes_remallado: [],
   reportes_remallado: [],
+  // Proceso de Volteado (Turning)
+  stock_listo_voltear: [
+    { id: 'slv1', catalogo_media_id: 'c1', docenas: 45 },
+    { id: 'slv2', catalogo_media_id: 'c2', docenas: 25 },
+  ],
+  lotes_volteado: [],
+  reportes_volteado: [],
   // Cronograma semana 32 (semana actual). Todos los días de lunes a viernes para 2 planchadores
   cronograma_planchado: [
     { id: 'cr1', semana: 32, anio: 2026, planchador_id: '5b', dia_semana: 'lunes', criterio: 'talla', valor_criterio: '10-13' },
@@ -417,6 +425,23 @@ class MockQueryBuilder {
           result = result.map(s => ({
             ...s,
             catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || { id: 'c1', codigo: 'c1', talla: 'única', publico: 'Niño' }
+          }));
+        } else if (self.tableName === 'stock_listo_voltear') {
+          result = result.map(s => ({
+            ...s,
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || { id: 'c1', codigo: 'c1', talla: 'única', publico: 'Niño' }
+          }));
+        } else if (self.tableName === 'lotes_volteado') {
+          result = result.map(lv => ({
+            ...lv,
+            volteador: db.usuarios.find((u: any) => u.id === lv.volteador_id) || { nombre: 'Tomas Volteador' },
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === lv.catalogo_media_id) || { id: 'c1', codigo: 'c1', talla: 'única', publico: 'Niño' }
+          }));
+        } else if (self.tableName === 'reportes_volteado') {
+          result = result.map(rv => ({
+            ...rv,
+            volteador: db.usuarios.find((u: any) => u.id === rv.volteador_id) || { nombre: 'Tomas Volteador' },
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === rv.catalogo_media_id) || { id: 'c1', codigo: 'c1', talla: 'única', publico: 'Niño' }
           }));
         } else if (self.tableName === 'minidepositos') {
           result = result.map(m => ({

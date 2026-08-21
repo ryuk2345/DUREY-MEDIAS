@@ -244,31 +244,39 @@ export default function RemalladoMonitorPage() {
     if (repErr) { toast.error('Error al guardar reporte'); return }
 
     // 2. Marcar lote como completado
-    await supabase.from('lotes_remallado')
+    const { error: updLoteErr } = await supabase.from('lotes_remallado')
       .update({ estado: 'completado', docenas_pendientes: restantes })
       .eq('id', loteSeleccionado.id)
+    if (updLoteErr) { toast.error(`Error al actualizar el lote: ${updLoteErr.message}`); return }
 
-    // 3. Incrementar el stock listo para planchar
+    // 3. Incrementar el stock listo para voltear
     const mediaId = loteSeleccionado.catalogo_media_id
-    const { data: slpExist } = await supabase.from('stock_listo_planchar')
-      .select('id, docenas').eq('catalogo_media_id', mediaId).single()
-    if (slpExist) {
-      await supabase.from('stock_listo_planchar')
-        .update({ docenas: Number(slpExist.docenas) + remalladas }).eq('id', slpExist.id)
+    const { data: slvExist, error: slvFindErr } = await supabase.from('stock_listo_voltear')
+      .select('id, docenas').eq('catalogo_media_id', mediaId).maybeSingle()
+    
+    if (slvFindErr) { toast.error(`Error al consultar stock de volteado: ${slvFindErr.message}`); return }
+
+    if (slvExist) {
+      const { error: slvUpdErr } = await supabase.from('stock_listo_voltear')
+        .update({ docenas: Number(slvExist.docenas) + remalladas }).eq('id', slvExist.id)
+      if (slvUpdErr) { toast.error(`Error al actualizar stock de volteado: ${slvUpdErr.message}`); return }
     } else {
-      await supabase.from('stock_listo_planchar')
+      const { error: slvInsErr } = await supabase.from('stock_listo_voltear')
         .insert({ catalogo_media_id: mediaId, docenas: remalladas })
+      if (slvInsErr) { toast.error(`Error al registrar stock de volteado: ${slvInsErr.message}`); return }
     }
 
     // 4. Liberar remalladora y máquina
     if (loteSeleccionado.remalladora_id) {
-      await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', loteSeleccionado.remalladora_id)
+      const { error: rUserErr } = await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', loteSeleccionado.remalladora_id)
+      if (rUserErr) { toast.error(`Error al liberar remalladora: ${rUserErr.message}`); return }
     }
     if (loteSeleccionado.maquina_remalladora_id) {
-      await supabase.from('maquinas').update({ estado: 'activa' }).eq('id', loteSeleccionado.maquina_remalladora_id)
+      const { error: rMaqErr } = await supabase.from('maquinas').update({ estado: 'activa' }).eq('id', loteSeleccionado.maquina_remalladora_id)
+      if (rMaqErr) { toast.error(`Error al liberar máquina: ${rMaqErr.message}`); return }
     }
 
-    toast.success(`🎉 ${remalladas} doc. remalladas enviadas a Planchado. Máquina liberada.`)
+    toast.success(`🎉 ${remalladas} doc. remalladas enviadas a Volteado. Máquina liberada.`)
     setShowReporteModal(false)
     cargarDatos()
   }
