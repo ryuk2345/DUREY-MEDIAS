@@ -1,5 +1,7 @@
 -- Migración 007: Asignaciones de Turno Dinámicas y Rol de Operador Genérico
 
+BEGIN;
+
 -- 1. Crear la tabla de asignaciones de turno
 CREATE TABLE IF NOT EXISTS asignaciones_turno (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -35,14 +37,17 @@ FROM usuarios
 WHERE rol IN ('tejedor', 'remalladora', 'volteador', 'planchador', 'preparador', 'almacenero')
 ON CONFLICT (operador_id, fecha, turno) DO NOTHING;
 
--- 3. Actualizar la restricción CHECK en usuarios.rol
--- Primero removemos la restricción vieja y creamos la nueva que incluye 'operador' y remueve los antiguos
+-- 3. CRÍTICO: Migrar los perfiles de usuarios al rol genérico ANTES de cambiar el constraint
+-- (PostgreSQL valida los datos existentes al aplicar ADD CONSTRAINT)
+UPDATE usuarios 
+SET rol = 'operador' 
+WHERE rol IN ('tejedor', 'remalladora', 'volteador', 'planchador', 'preparador', 'almacenero');
+
+-- 4. Actualizar la restricción CHECK en usuarios.rol
+-- Ahora es seguro porque todas las filas ya tienen roles válidos
 ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check;
 ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check CHECK (rol IN (
   'admin', 'supervisor', 'operador', 'vendedora', 'tecnico'
 ));
 
--- 4. Migrar los perfiles de usuarios existentes al rol genérico
-UPDATE usuarios 
-SET rol = 'operador' 
-WHERE rol IN ('tejedor', 'remalladora', 'volteador', 'planchador', 'preparador', 'almacenero');
+COMMIT;
