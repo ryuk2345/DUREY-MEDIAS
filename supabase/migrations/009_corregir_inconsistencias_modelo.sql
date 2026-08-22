@@ -112,6 +112,13 @@ ALTER TABLE ventas ADD CONSTRAINT ventas_estado_check
 -- -------------------------------------------------------
 ALTER TABLE cuotas_compras DISABLE ROW LEVEL SECURITY;
 
+-- -------------------------------------------------------
+-- FIX 7: lotes_remallado.minideposito_id — Hacer nullable
+-- El nuevo flujo de Remallado ya no requiere minidepositos,
+-- por lo que la restricción NOT NULL de la base de datos bloqueaba inserciones.
+-- -------------------------------------------------------
+ALTER TABLE lotes_remallado ALTER COLUMN minideposito_id DROP NOT NULL;
+
 COMMIT;
 
 -- =====================================================
