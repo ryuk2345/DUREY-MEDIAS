@@ -410,11 +410,11 @@ export default function UsuariosPage() {
                         </td>
                         <td className="p-4">
                           <span className={`badge ${
-                            u.estado === 'ocupada' || u.estado === 'en_turno'
+                            u.estado === 'ocupada'
                               ? 'badge-warning'
                               : 'badge-success'
                           }`}>
-                            {u.estado === 'ocupada' || u.estado === 'en_turno' ? '🔴 En Turno' : '🟢 Disponible'}
+                            {u.estado === 'ocupada' ? '🔴 En Turno' : '🟢 Disponible'}
                           </span>
                         </td>
                         <td className="p-4">

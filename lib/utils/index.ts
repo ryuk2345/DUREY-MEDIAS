@@ -64,27 +64,35 @@ export function getSemanaAnio(): { semana: number; anio: number } {
 }
 
 export const ROLES_LABELS: Record<string, string> = {
+  // Roles activos (post-migración 007)
   admin: 'Administrador General',
   supervisor: 'Supervisor de Producción',
+  operador: 'Operador de Producción',
+  vendedora: 'Asesora de Ventas',
+  tecnico: 'Técnico de Mantenimiento',
+  // Roles legacy (datos históricos pre-migración)
   tejedor: 'Tejedor',
   remalladora: 'Remalladora',
   volteador: 'Volteador (Turning)',
   planchador: 'Planchador',
   preparador: 'Preparador',
   almacenero: 'Almacenero y Despacho',
-  vendedora: 'Asesora de Ventas',
-  tecnico: 'Técnico de Mantenimiento',
 }
 
 export const MODULOS_POR_ROL: Record<string, string[]> = {
+  // Roles activos
   admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'volteado', 'planchado', 'preparado', 'almacen', 'ventas', 'despacho', 'mantenimiento', 'materia_prima', 'reportes'],
   supervisor: ['usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'volteado', 'planchado', 'preparado', 'almacen', 'despacho', 'materia_prima', 'reportes'],
+  // 'operador' accede a todos los módulos de planta; asignaciones_turno filtra el contexto real
+  operador: ['produccion', 'remallado', 'volteado', 'planchado', 'preparado', 'almacen', 'mantenimiento'],
+  vendedora: ['ventas'],
+  tecnico: ['mantenimiento'],
+  // Legacy — para usuarios que aún no fueron migrados
   tejedor: ['produccion', 'mantenimiento'],
   remalladora: ['remallado', 'mantenimiento'],
   volteador: ['volteado'],
   planchador: ['planchado'],
   preparador: ['preparado'],
   almacenero: ['almacen', 'despacho'],
-  vendedora: ['ventas'],
-  tecnico: ['mantenimiento'],
 }
+

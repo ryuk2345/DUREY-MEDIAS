@@ -46,7 +46,7 @@ interface CuotaCompra {
   compra_id: string
   monto: number
   fecha_vencimiento: string
-  estado: 'pendiente' | 'pagado'
+  estado: 'pendiente' | 'pagada'
   fecha_pago: string | null
   metodo_pago: string | null
   comprobante_url: string | null
@@ -752,7 +752,7 @@ export default function MateriaPrimaPage() {
         const { error } = await supabase
           .from('cuotas_compras')
           .update({
-            estado: 'pagado',
+            estado: 'pagada',
             fecha_pago: fecha,
             metodo_pago: payCuotaForm.metodo_pago,
             comprobante_url: payCuotaForm.comprobante_url || null
@@ -764,7 +764,7 @@ export default function MateriaPrimaPage() {
         const list = JSON.parse(localStorage.getItem('durey_cuotas_compras') || '[]')
         const updated = list.map((q: any) => q.id === selectedCuota.id ? {
           ...q,
-          estado: 'pagado',
+          estado: 'pagada',
           fecha_pago: fecha,
           metodo_pago: payCuotaForm.metodo_pago,
           comprobante_url: payCuotaForm.comprobante_url || null
@@ -802,7 +802,7 @@ export default function MateriaPrimaPage() {
         const pId = comp.proveedor_id
         if (saldos[pId]) {
           saldos[pId].total += Number(q.monto)
-          if (q.estado === 'pagado') {
+          if (q.estado === 'pagada') {
             saldos[pId].pagado += Number(q.monto)
           } else {
             saldos[pId].saldo += Number(q.monto)
@@ -1273,9 +1273,9 @@ export default function MateriaPrimaPage() {
                           <td className="p-4 text-right font-mono font-black text-sm text-white">S/ {Number(cuota.monto).toFixed(2)}</td>
                           <td className="p-4 text-center">
                             <span className={`badge text-[9px] font-bold py-1 px-2.5 ${
-                              cuota.estado === 'pagado' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse'
+                              cuota.estado === 'pagada' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse'
                             }`}>
-                              {cuota.estado === 'pagado' ? 'Pagado' : 'Pendiente'}
+                              {cuota.estado === 'pagada' ? 'Pagada' : 'Pendiente'}
                             </span>
                           </td>
                           <td className="p-4 text-center font-mono text-slate-400">{cuota.fecha_pago || '-'}</td>
