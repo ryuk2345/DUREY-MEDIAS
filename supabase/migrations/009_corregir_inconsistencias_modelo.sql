@@ -111,6 +111,10 @@ ALTER TABLE ventas ADD CONSTRAINT ventas_estado_check
 -- quedado sin esta configuración
 -- -------------------------------------------------------
 ALTER TABLE cuotas_compras DISABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_listo_voltear DISABLE ROW LEVEL SECURITY;
+ALTER TABLE lotes_volteado DISABLE ROW LEVEL SECURITY;
+ALTER TABLE reportes_volteado DISABLE ROW LEVEL SECURITY;
+
 
 -- -------------------------------------------------------
 -- FIX 7: lotes_remallado.minideposito_id — Hacer nullable

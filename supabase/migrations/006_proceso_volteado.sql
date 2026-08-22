@@ -45,3 +45,9 @@ CREATE INDEX IF NOT EXISTS idx_stock_listo_voltear_media ON stock_listo_voltear(
 CREATE INDEX IF NOT EXISTS idx_lotes_volteado_operario ON lotes_volteado(volteador_id);
 CREATE INDEX IF NOT EXISTS idx_lotes_volteado_estado ON lotes_volteado(estado);
 CREATE INDEX IF NOT EXISTS idx_reportes_volteado_lote ON reportes_volteado(lote_volteado_id);
+
+-- Desactivar RLS para consistencia con el diseño del proyecto
+ALTER TABLE stock_listo_voltear DISABLE ROW LEVEL SECURITY;
+ALTER TABLE lotes_volteado DISABLE ROW LEVEL SECURITY;
+ALTER TABLE reportes_volteado DISABLE ROW LEVEL SECURITY;
+
