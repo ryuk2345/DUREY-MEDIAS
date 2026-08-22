@@ -24,28 +24,35 @@ INSERT INTO asignaciones_turno (operador_id, area, fecha, turno)
 SELECT 
   id as operador_id,
   CASE 
-    WHEN rol = 'tejedor' THEN 'tejido'
+    WHEN rol = 'tejedor'     THEN 'tejido'
     WHEN rol = 'remalladora' THEN 'enlace'
-    WHEN rol = 'volteador' THEN 'volteado'
-    WHEN rol = 'planchador' THEN 'planchado'
-    WHEN rol = 'preparador' THEN 'preparado'
-    WHEN rol = 'almacenero' THEN 'almacen'
+    WHEN rol = 'volteador'   THEN 'volteado'
+    WHEN rol = 'planchador'  THEN 'planchado'
+    WHEN rol = 'preparador'  THEN 'preparado'
+    WHEN rol = 'almacenero'  THEN 'almacen'
+    WHEN rol = 'operador'    THEN 'tejido'  -- usuarios ya migrados → default tejido
   END as area,
   CURRENT_DATE as fecha,
   'dia' as turno
 FROM usuarios
-WHERE rol IN ('tejedor', 'remalladora', 'volteador', 'planchador', 'preparador', 'almacenero')
-ON CONFLICT (operador_id, fecha, turno) DO NOTHING;
+WHERE rol IN ('tejedor', 'remalladora', 'volteador', 'planchador', 'preparador', 'almacenero', 'operador')
+  AND NOT EXISTS (  -- no duplicar si ya tienen asignación hoy
+    SELECT 1 FROM asignaciones_turno a
+    WHERE a.operador_id = usuarios.id
+      AND a.fecha = CURRENT_DATE
+      AND a.turno = 'dia'
+  );
 
--- 3. CRÍTICO: Migrar los perfiles de usuarios al rol genérico ANTES de cambiar el constraint
--- (PostgreSQL valida los datos existentes al aplicar ADD CONSTRAINT)
-UPDATE usuarios 
-SET rol = 'operador' 
+-- 3. PRIMERO: Eliminar el constraint viejo (006 no incluía 'operador')
+--    Sin este paso el UPDATE de abajo falla con violación de constraint
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check;
+
+-- 4. SEGUNDO: Migrar perfiles al rol genérico (ahora sin constraint que lo bloquee)
+UPDATE usuarios
+SET rol = 'operador'
 WHERE rol IN ('tejedor', 'remalladora', 'volteador', 'planchador', 'preparador', 'almacenero');
 
--- 4. Actualizar la restricción CHECK en usuarios.rol
--- Ahora es seguro porque todas las filas ya tienen roles válidos
-ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check;
+-- 5. TERCERO: Agregar el nuevo constraint (datos ya actualizados, seguro)
 ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check CHECK (rol IN (
   'admin', 'supervisor', 'operador', 'vendedora', 'tecnico'
 ));
