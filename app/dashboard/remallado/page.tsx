@@ -268,8 +268,7 @@ export default function RemalladoMonitorPage() {
       return
     }
 
-
-    toast.success(`🎉 ${remalladas} doc. remalladas enviadas a Volteado. Máquina liberada.`)
+    toast.success(`🎉 ${remalladas} doc. remalladas enviadas a Planchado. Máquina liberada.`)
     setShowReporteModal(false)
     cargarDatos()
   }

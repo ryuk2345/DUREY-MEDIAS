@@ -68,18 +68,14 @@ type StockItem = {
 // ── Servicio de etapas del proceso ────────────────────────────────────────────
 
 function crearServicioProceso(inicial: {
-  stock_listo_voltear: StockItem[]
   stock_listo_planchar: StockItem[]
   lotes_remallado: LoteRemallado[]
-  lotes_volteado: LoteVolteado[]
   maquinas: { id: string; estado: string }[]
   usuarios: { id: string; estado: string }[]
 }) {
   const db = {
-    stock_listo_voltear: [...inicial.stock_listo_voltear],
     stock_listo_planchar: [...inicial.stock_listo_planchar],
     lotes_remallado: JSON.parse(JSON.stringify(inicial.lotes_remallado)),
-    lotes_volteado: JSON.parse(JSON.stringify(inicial.lotes_volteado)),
     maquinas: JSON.parse(JSON.stringify(inicial.maquinas)),
     usuarios: JSON.parse(JSON.stringify(inicial.usuarios)),
     reportes_remallado: [] as any[],
@@ -119,13 +115,13 @@ function crearServicioProceso(inicial: {
       lote.docenas_pendientes = docenas_restantes
       lote.estado = 'completado'
 
-      // 3. CRÍTICO: Incrementar stock_listo_voltear (upsert)
-      const existente = db.stock_listo_voltear.find(s => s.catalogo_media_id === lote.catalogo_media_id)
+      // 3. CRÍTICO: Incrementar stock_listo_planchar (upsert) directamente
+      const existente = db.stock_listo_planchar.find(s => s.catalogo_media_id === lote.catalogo_media_id)
       if (existente) {
         existente.docenas += docenas_remalladas
       } else {
-        db.stock_listo_voltear.push({
-          id: `slv-${lote.catalogo_media_id}`,
+        db.stock_listo_planchar.push({
+          id: `slp-${lote.catalogo_media_id}`,
           catalogo_media_id: lote.catalogo_media_id,
           docenas: docenas_remalladas,
         })
@@ -136,40 +132,6 @@ function crearServicioProceso(inicial: {
       if (maq) maq.estado = 'activa'
       const op = db.usuarios.find(u => u.id === lote.remalladora_id)
       if (op) op.estado = 'disponible'
-
-      return { ok: true }
-    },
-
-    /** ETAPA VOLTEADO: Reportar avance de un lote de volteado */
-    reportarVolteado(params: {
-      lote_id: string
-      docenas_volteadas: number
-      pares_defectuosos: number
-    }): { ok: boolean; error?: string } {
-      const { lote_id, docenas_volteadas, pares_defectuosos } = params
-      const lote = db.lotes_volteado.find(l => l.id === lote_id)
-      if (!lote) return { ok: false, error: 'Lote de volteado no encontrado' }
-      if (lote.estado === 'completado') return { ok: false, error: 'Este lote ya fue completado' }
-      if (docenas_volteadas <= 0) return { ok: false, error: 'Docenas volteadas debe ser mayor a cero' }
-      if (docenas_volteadas > lote.docenas_pendientes) {
-        return { ok: false, error: `Las docenas reportadas (${docenas_volteadas}) superan las pendientes (${lote.docenas_pendientes})` }
-      }
-
-      const nuevasPendientes = Math.max(0, lote.docenas_pendientes - docenas_volteadas)
-      lote.docenas_pendientes = nuevasPendientes
-      lote.estado = nuevasPendientes === 0 ? 'completado' : 'en_proceso'
-
-      // CRÍTICO: Incrementar stock_listo_planchar (upsert)
-      const existente = db.stock_listo_planchar.find(s => s.catalogo_media_id === lote.catalogo_media_id)
-      if (existente) {
-        existente.docenas += docenas_volteadas
-      } else {
-        db.stock_listo_planchar.push({
-          id: `slp-${lote.catalogo_media_id}`,
-          catalogo_media_id: lote.catalogo_media_id,
-          docenas: docenas_volteadas,
-        })
-      }
 
       return { ok: true }
     },
@@ -221,7 +183,6 @@ describe('Flujo 3: Marcar etapa del proceso como completada', () => {
 
   beforeEach(() => {
     servicio = crearServicioProceso({
-      stock_listo_voltear: [{ id: 'slv1', catalogo_media_id: MEDIA_ID, docenas: 0 }],
       stock_listo_planchar: [{ id: 'slp1', catalogo_media_id: MEDIA_ID, docenas: 0 }],
       lotes_remallado: [
         {
@@ -234,22 +195,11 @@ describe('Flujo 3: Marcar etapa del proceso como completada', () => {
           estado: 'en_proceso',
         },
       ],
-      lotes_volteado: [
-        {
-          id: 'lv1',
-          catalogo_media_id: MEDIA_ID,
-          volteador_id: 'op-volt',
-          docenas_asignadas: 40,
-          docenas_pendientes: 40,
-          estado: 'en_proceso',
-        },
-      ],
       maquinas: [
         { id: 'maq-rem', estado: 'ocupada' },
       ],
       usuarios: [
         { id: 'op-rem', estado: 'ocupada' },
-        { id: 'op-volt', estado: 'ocupada' },
       ],
     })
   })
@@ -257,18 +207,18 @@ describe('Flujo 3: Marcar etapa del proceso como completada', () => {
   // ── ENLACE / REMALLADO ───────────────────────────────────────────────────────
 
   describe('Etapa: Enlace / Remallado', () => {
-    it('completa lote correctamente y transfiere docenas a stock_listo_voltear', () => {
-      const stockAntes = servicio.db.stock_listo_voltear.find(s => s.catalogo_media_id === MEDIA_ID)!.docenas
-
+    it('completa lote correctamente y transfiere docenas a stock_listo_planchar', () => {
+      const stockAntes = servicio.db.stock_listo_planchar.find(s => s.catalogo_media_id === MEDIA_ID)!.docenas
+ 
       const result = servicio.completarRemallado({
         lote_id: 'lr1',
         docenas_remalladas: 72,
         docenas_restantes: 3,
       })
-
+ 
       expect(result.ok).toBe(true)
-
-      const stockDespues = servicio.db.stock_listo_voltear.find(s => s.catalogo_media_id === MEDIA_ID)!.docenas
+ 
+      const stockDespues = servicio.db.stock_listo_planchar.find(s => s.catalogo_media_id === MEDIA_ID)!.docenas
       expect(stockDespues).toBe(stockAntes + 72)
     })
 
@@ -302,66 +252,6 @@ describe('Flujo 3: Marcar etapa del proceso como completada', () => {
         docenas_remalladas: 10,
         docenas_restantes: 0,
       })
-
-      expect(result2.ok).toBe(false)
-      expect(result2.error).toContain('ya fue completado')
-    })
-
-    it('[INVARIANTE] el stock_listo_planchar NO se modifica al completar remallado', () => {
-      const slpAntes = servicio.db.stock_listo_planchar.find(s => s.catalogo_media_id === MEDIA_ID)!.docenas
-      servicio.completarRemallado({ lote_id: 'lr1', docenas_remalladas: 75, docenas_restantes: 0 })
-      const slpDespues = servicio.db.stock_listo_planchar.find(s => s.catalogo_media_id === MEDIA_ID)!.docenas
-
-      // Remallado solo alimenta stock_listo_voltear, nunca stock_listo_planchar
-      expect(slpDespues).toBe(slpAntes)
-    })
-  })
-
-  // ── VOLTEADO ─────────────────────────────────────────────────────────────────
-
-  describe('Etapa: Volteado', () => {
-    it('reporta volteado parcial y transfiere docenas a stock_listo_planchar', () => {
-      const slpAntes = servicio.db.stock_listo_planchar.find(s => s.catalogo_media_id === MEDIA_ID)!.docenas
-
-      const result = servicio.reportarVolteado({
-        lote_id: 'lv1',
-        docenas_volteadas: 25,
-        pares_defectuosos: 0,
-      })
-
-      expect(result.ok).toBe(true)
-      const slpDespues = servicio.db.stock_listo_planchar.find(s => s.catalogo_media_id === MEDIA_ID)!.docenas
-      expect(slpDespues).toBe(slpAntes + 25)
-    })
-
-    it('lote queda "en_proceso" si aún quedan docenas pendientes', () => {
-      servicio.reportarVolteado({ lote_id: 'lv1', docenas_volteadas: 25, pares_defectuosos: 0 })
-      const lote = servicio.db.lotes_volteado.find(l => l.id === 'lv1')!
-      expect(lote.estado).toBe('en_proceso')
-      expect(lote.docenas_pendientes).toBe(15) // 40 - 25
-    })
-
-    it('lote queda "completado" cuando se agotan todas las docenas pendientes', () => {
-      servicio.reportarVolteado({ lote_id: 'lv1', docenas_volteadas: 40, pares_defectuosos: 0 })
-      const lote = servicio.db.lotes_volteado.find(l => l.id === 'lv1')!
-      expect(lote.estado).toBe('completado')
-      expect(lote.docenas_pendientes).toBe(0)
-    })
-
-    it('[NEGOCIO] BLOQUEA reportar más docenas de las pendientes en volteado', () => {
-      const result = servicio.reportarVolteado({
-        lote_id: 'lv1',
-        docenas_volteadas: 999, // mucho más de 40
-        pares_defectuosos: 0,
-      })
-
-      expect(result.ok).toBe(false)
-      expect(result.error).toContain('superan las pendientes')
-    })
-
-    it('[NEGOCIO] BLOQUEA reportar avance en lote ya completado', () => {
-      servicio.reportarVolteado({ lote_id: 'lv1', docenas_volteadas: 40, pares_defectuosos: 0 })
-      const result2 = servicio.reportarVolteado({ lote_id: 'lv1', docenas_volteadas: 5, pares_defectuosos: 0 })
 
       expect(result2.ok).toBe(false)
       expect(result2.error).toContain('ya fue completado')
@@ -438,33 +328,16 @@ describe('Flujo 3: Marcar etapa del proceso como completada', () => {
     it('las docenas producidas en remallado llegan íntegras a planchado', () => {
       const docenasRemalladas = 50
 
-      // ETAPA 1: Completar remallado → va a stock_listo_voltear
+      // ETAPA 1: Completar remallado → va directamente a stock_listo_planchar
       servicio.completarRemallado({
         lote_id: 'lr1',
         docenas_remalladas: docenasRemalladas,
         docenas_restantes: 25,
       })
 
-      // Asignar lote de volteado con esas docenas (simular que supervisor asignó)
-      servicio.db.lotes_volteado.push({
-        id: 'lv-new',
-        catalogo_media_id: MEDIA_ID,
-        volteador_id: 'op-volt',
-        docenas_asignadas: docenasRemalladas,
-        docenas_pendientes: docenasRemalladas,
-        estado: 'en_proceso',
-      })
-
-      // ETAPA 2: Completar volteado → va a stock_listo_planchar
-      servicio.reportarVolteado({
-        lote_id: 'lv-new',
-        docenas_volteadas: docenasRemalladas,
-        pares_defectuosos: 0,
-      })
-
       const stockPlanchar = servicio.db.stock_listo_planchar.find(s => s.catalogo_media_id === MEDIA_ID)!.docenas
 
-      // Las docenas deben haber llegado íntegras a stock_listo_planchar
+      // Las docenas deben haber llegado de forma directa
       expect(stockPlanchar).toBe(docenasRemalladas)
     })
   })

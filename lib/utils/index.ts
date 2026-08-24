@@ -81,10 +81,10 @@ export const ROLES_LABELS: Record<string, string> = {
 
 export const MODULOS_POR_ROL: Record<string, string[]> = {
   // Roles activos
-  admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'volteado', 'planchado', 'preparado', 'almacen', 'ventas', 'despacho', 'mantenimiento', 'materia_prima', 'reportes'],
-  supervisor: ['usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'volteado', 'planchado', 'preparado', 'almacen', 'despacho', 'materia_prima', 'reportes'],
+  admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'ventas', 'despacho', 'mantenimiento', 'materia_prima', 'reportes'],
+  supervisor: ['usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'despacho', 'materia_prima', 'reportes'],
   // 'operador' accede a todos los módulos de planta; asignaciones_turno filtra el contexto real
-  operador: ['produccion', 'remallado', 'volteado', 'planchado', 'preparado', 'almacen', 'mantenimiento'],
+  operador: ['produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'mantenimiento'],
   vendedora: ['ventas'],
   tecnico: ['mantenimiento'],
   // Legacy — para usuarios que aún no fueron migrados

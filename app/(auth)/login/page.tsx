@@ -116,6 +116,9 @@ export default function LoginPage() {
           nombre: targetName
         }))
         document.cookie = `durey_mock_session=${sessionPayload}; path=/; max-age=86400`
+      } else {
+        // En producción, guardamos el rol en una cookie simple para el middleware
+        document.cookie = `durey_user_role=${targetRole}; path=/; max-age=86400`
       }
 
       toast.success(`Bienvenido a DUREY, ${targetName}`, { icon: '👋' })

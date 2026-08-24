@@ -662,15 +662,15 @@ export function createMockClient() {
             lote.docenas_pendientes = p_docenas_restantes;
           }
 
-          // 3. UPSERT en stock_listo_voltear
-          if (!db.stock_listo_voltear) db.stock_listo_voltear = [];
-          const stock = db.stock_listo_voltear.find((s: any) => s.catalogo_media_id === p_catalogo_media_id);
+          // 3. UPSERT en stock_listo_planchar (en lugar de stock_listo_voltear)
+          if (!db.stock_listo_planchar) db.stock_listo_planchar = [];
+          const stock = db.stock_listo_planchar.find((s: any) => s.catalogo_media_id === p_catalogo_media_id);
           if (stock) {
             stock.docenas = Number(stock.docenas) + Number(p_docenas_remalladas);
             stock.updated_at = new Date().toISOString();
           } else {
-            db.stock_listo_voltear.push({
-              id: 'slv-' + Math.random().toString(36).substring(2, 11),
+            db.stock_listo_planchar.push({
+              id: 'slp-' + Math.random().toString(36).substring(2, 11),
               catalogo_media_id: p_catalogo_media_id,
               docenas: p_docenas_remalladas,
               created_at: new Date().toISOString(),
