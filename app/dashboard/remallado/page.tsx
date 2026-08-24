@@ -253,49 +253,21 @@ export default function RemalladoMonitorPage() {
       }
     }
 
-    // 1. Guardar reporte de remallado
-    const { error: repErr } = await supabase.from('reportes_remallado').insert({
-      lote_id: loteSeleccionado.id,
-      remalladora_id: loteSeleccionado.remalladora_id,
-      maquina_id: loteSeleccionado.maquina_remalladora_id,
-      docenas_remalladas: remalladas,
-      docenas_restantes: restantes,
-      fecha: new Date().toISOString().split('T')[0],
+    // Ejecutar todas las actualizaciones de forma atómica a través de RPC
+    const { error: rpcErr } = await supabase.rpc('finalizar_lote_remallado', {
+      p_lote_id: loteSeleccionado.id,
+      p_docenas_remalladas: remalladas,
+      p_docenas_restantes: restantes,
+      p_catalogo_media_id: loteSeleccionado.catalogo_media_id,
+      p_remalladora_id: loteSeleccionado.remalladora_id || null,
+      p_maquina_id: loteSeleccionado.maquina_remalladora_id || null
     })
-    if (repErr) { toast.error('Error al guardar reporte'); return }
 
-    // 2. Marcar lote como completado
-    const { error: updLoteErr } = await supabase.from('lotes_remallado')
-      .update({ estado: 'completado', docenas_pendientes: restantes })
-      .eq('id', loteSeleccionado.id)
-    if (updLoteErr) { toast.error(`Error al actualizar el lote: ${updLoteErr.message}`); return }
-
-    // 3. Incrementar el stock listo para voltear
-    const mediaId = loteSeleccionado.catalogo_media_id
-    const { data: slvExist, error: slvFindErr } = await supabase.from('stock_listo_voltear')
-      .select('id, docenas').eq('catalogo_media_id', mediaId).maybeSingle()
-    
-    if (slvFindErr) { toast.error(`Error al consultar stock de volteado: ${slvFindErr.message}`); return }
-
-    if (slvExist) {
-      const { error: slvUpdErr } = await supabase.from('stock_listo_voltear')
-        .update({ docenas: Number(slvExist.docenas) + remalladas }).eq('id', slvExist.id)
-      if (slvUpdErr) { toast.error(`Error al actualizar stock de volteado: ${slvUpdErr.message}`); return }
-    } else {
-      const { error: slvInsErr } = await supabase.from('stock_listo_voltear')
-        .insert({ catalogo_media_id: mediaId, docenas: remalladas })
-      if (slvInsErr) { toast.error(`Error al registrar stock de volteado: ${slvInsErr.message}`); return }
+    if (rpcErr) {
+      toast.error(`Error al finalizar lote de remallado: ${rpcErr.message}`)
+      return
     }
 
-    // 4. Liberar remalladora y máquina
-    if (loteSeleccionado.remalladora_id) {
-      const { error: rUserErr } = await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', loteSeleccionado.remalladora_id)
-      if (rUserErr) { toast.error(`Error al liberar remalladora: ${rUserErr.message}`); return }
-    }
-    if (loteSeleccionado.maquina_remalladora_id) {
-      const { error: rMaqErr } = await supabase.from('maquinas').update({ estado: 'activa' }).eq('id', loteSeleccionado.maquina_remalladora_id)
-      if (rMaqErr) { toast.error(`Error al liberar máquina: ${rMaqErr.message}`); return }
-    }
 
     toast.success(`🎉 ${remalladas} doc. remalladas enviadas a Volteado. Máquina liberada.`)
     setShowReporteModal(false)

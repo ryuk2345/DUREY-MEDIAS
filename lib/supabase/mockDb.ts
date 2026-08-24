@@ -626,6 +626,80 @@ export function createMockClient() {
     from(tableName: string) {
       return new MockQueryBuilder(tableName);
     },
+    async rpc(fnName: string, params: any) {
+      if (fnName === 'finalizar_lote_remallado') {
+        const {
+          p_lote_id,
+          p_docenas_remalladas,
+          p_docenas_restantes,
+          p_catalogo_media_id,
+          p_remalladora_id,
+          p_maquina_id
+        } = params;
+
+        try {
+          const db = await getMockDb();
+
+          // 1. INSERT en reportes_remallado
+          const nuevoReporte = {
+            id: 'rep-' + Math.random().toString(36).substring(2, 11),
+            lote_id: p_lote_id,
+            remalladora_id: p_remalladora_id,
+            maquina_id: p_maquina_id,
+            docenas_remalladas: p_docenas_remalladas,
+            docenas_restantes: p_docenas_restantes,
+            fecha: new Date().toISOString().split('T')[0],
+            created_at: new Date().toISOString()
+          };
+          if (!db.reportes_remallado) db.reportes_remallado = [];
+          db.reportes_remallado.push(nuevoReporte);
+
+          // 2. UPDATE lotes_remallado
+          if (!db.lotes_remallado) db.lotes_remallado = [];
+          const lote = db.lotes_remallado.find((l: any) => l.id === p_lote_id);
+          if (lote) {
+            lote.estado = 'completado';
+            lote.docenas_pendientes = p_docenas_restantes;
+          }
+
+          // 3. UPSERT en stock_listo_voltear
+          if (!db.stock_listo_voltear) db.stock_listo_voltear = [];
+          const stock = db.stock_listo_voltear.find((s: any) => s.catalogo_media_id === p_catalogo_media_id);
+          if (stock) {
+            stock.docenas = Number(stock.docenas) + Number(p_docenas_remalladas);
+            stock.updated_at = new Date().toISOString();
+          } else {
+            db.stock_listo_voltear.push({
+              id: 'slv-' + Math.random().toString(36).substring(2, 11),
+              catalogo_media_id: p_catalogo_media_id,
+              docenas: p_docenas_remalladas,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          }
+
+          // 4. UPDATE usuarios
+          if (p_remalladora_id) {
+            if (!db.usuarios) db.usuarios = [];
+            const user = db.usuarios.find((u: any) => u.id === p_remalladora_id);
+            if (user) user.estado = 'disponible';
+          }
+
+          // 5. UPDATE maquinas
+          if (p_maquina_id) {
+            if (!db.maquinas) db.maquinas = [];
+            const maq = db.maquinas.find((m: any) => m.id === p_maquina_id);
+            if (maq) maq.estado = 'activa';
+          }
+
+          await saveMockDb(db);
+          return { data: null, error: null };
+        } catch (err: any) {
+          return { data: null, error: err };
+        }
+      }
+      return { data: null, error: new Error(`Mock RPC function '${fnName}' not implemented.`) };
+    },
     auth: {
       async getUser() {
         // En cliente, leemos las cookies demo de document.cookie
