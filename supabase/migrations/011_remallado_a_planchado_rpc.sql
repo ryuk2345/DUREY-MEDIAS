@@ -4,6 +4,25 @@
 
 BEGIN;
 
+-- Asegurar que existe la restricción UNIQUE en stock_listo_planchar(catalogo_media_id)
+-- de forma segura (sin fallar si ya está definida en el schema real)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 
+    FROM information_schema.table_constraints tc 
+    JOIN information_schema.key_column_usage kcu 
+      ON tc.constraint_name = kcu.constraint_name 
+      AND tc.table_schema = kcu.table_schema
+    WHERE tc.table_name = 'stock_listo_planchar' 
+      AND tc.constraint_type = 'UNIQUE' 
+      AND kcu.column_name = 'catalogo_media_id'
+  ) THEN
+    ALTER TABLE stock_listo_planchar 
+      ADD CONSTRAINT stock_listo_planchar_catalogo_media_id_key UNIQUE (catalogo_media_id);
+  END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION finalizar_lote_remallado(
   p_lote_id UUID,
   p_docenas_remalladas NUMERIC(10,2),
