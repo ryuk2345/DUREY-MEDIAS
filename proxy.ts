@@ -14,6 +14,10 @@ const ROLE_ROUTES: Record<string, string[]> = {
     '/planchado', '/preparado', '/almacen', '/despacho', '/reportes',
     '/materia-prima'
   ],
+  operador: [
+    '/produccion', '/remallado', '/planchado', '/preparado', '/almacen', 
+    '/mantenimiento'
+  ],
   tejedor: ['/produccion', '/mantenimiento'],
   remalladora: ['/remallado', '/mantenimiento'],
   planchador: ['/planchado'],
