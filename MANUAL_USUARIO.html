@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Manual de Usuario - Sistema DUREY</title>
+  <style>
+    @page {
+      size: letter;
+      margin: 15mm;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: #1e293b;
+      line-height: 1.6;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 30px 20px;
+      background-color: #f8fafc;
+    }
+    .container {
+      background: white;
+      padding: 50px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+    }
+    h1 { color: #4f46e5; font-size: 24pt; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 40px; }
+    h2 { color: #2563eb; font-size: 16pt; margin-top: 30px; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; }
+    h3 { color: #0f172a; font-size: 12pt; margin-top: 20px; font-weight: bold; }
+    img { max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.12); margin: 25px 0; display: block; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 10pt; }
+    th, td { border: 1px solid #cbd5e1; padding: 10px 14px; text-align: left; }
+    th { background-color: #f1f5f9; font-weight: bold; color: #334155; }
+    .info-box { background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 10pt; }
+    .success-box { background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 10pt; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 8pt; font-weight: bold; text-transform: uppercase; }
+    .badge-admin { background-color: #f3e8ff; color: #7e22ce; }
+    .badge-super { background-color: #e0e7ff; color: #4338ca; }
+    .badge-oper { background-color: #ffedd5; color: #c2410c; }
+    .badge-vend { background-color: #fce7f3; color: #be185d; }
+    .badge-tecn { background-color: #fef3c7; color: #b45309; }
+    .print-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #4f46e5;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
+      z-index: 1000;
+    }
+    @media print {
+      body { background: white; padding: 0; }
+      .container { box-shadow: none; padding: 0; }
+      .print-btn { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+  <div class="container">
+    
+<div class="title-page">
+  <br><br><br>
+  <h1>MANUAL DE USUARIO</h1>
+  <h2>Sistema de Control de Producción y Ventas DUREY</h2>
+  <br><br>
+  <p>Un manual sencillo y didáctico para configurar y operar tu fábrica de medias de manera digital.</p>
+  <br><br><br><br>
+  <div class="meta">
+    <p><strong>Fábrica de Medias Durey S.A.</strong></p>
+    <p>Versión del Sistema: 2.1 • Documento de Usuario Final</p>
+    <p>Año 2026</p>
+  </div>
+</div></p><p><h1>Introducción al Sistema DUREY</h1></p><p>El <strong>Sistema de Control DUREY</strong> es una herramienta digital diseñada para supervisar todo el ciclo de fabricación y comercialización de medias en tu planta. El sistema conecta los departamentos de <strong>Tejido, Remallado, Planchado, Empaque, Almacén y Ventas</strong> en una sola plataforma en tiempo real.</p><p><h3>El Flujo de Trabajo en la Fábrica</h3>
+El sistema sigue la secuencia lógica de producción de la fábrica de forma automatizada:</p><p>1. <strong>Tejido</strong>: Se planifican los turnos y se tejen las medias base, las cuales se acumulan en <strong>Minidepósitos</strong>.
+2. <strong>Remallado (Enlace)</strong>: Se toman docenas de los minidepósitos y se remalla la punta de las medias. Al completarse, pasan directo al <strong>Stock Listo para Planchar</strong>.
+3. <strong>Planchado</strong>: Se procesa el stock y se detectan prendas defectuosas, enviando el producto limpio a empaque.
+4. <strong>Preparado (Empaque)</strong>: Las medias se agrupan en docenas y se rotulan con <strong>Códigos de Barras</strong> (<code>PKG-XXXX</code>), ingresando formalmente como inventario en el <strong>Almacén</strong>.
+5. <strong>Ventas y Despacho</strong>: Se venden los paquetes terminados y se facturan mediante cobros en caja.</p><p>---</p><p><h1>Capítulo 1: Primeros Pasos y Configuración Inicial</h1></p><p>Antes de que los trabajadores registren producción, el <strong>Administrador</strong> debe configurar los datos iniciales o "Tablas Maestras".</p><p><div class="info-box">
+  <strong>Paso Clave:</strong> Para configurar el sistema debes iniciar sesión con un usuario con el rol de <strong>Administrador General</strong>.
+</div></p><p><h2>1. Inicio de Sesión</h2>
+Para acceder al sistema:
+1. Abre tu navegador e ingresa a la dirección web provista.
+2. Coloca tu correo electrónico (ej: <code>admin@durey.com</code>) y tu contraseña en la pantalla de bienvenida.
+3. Haz clic en <strong>Sign In</strong>.</p><p><img src="public/images/login.png" alt="Mockup de la Pantalla de Login (Durey)" /></p><p><h2>2. Registrar al Personal (Usuarios)</h2>
+Para dar de alta a tus empleados y asignarles permisos:
+1. Ve al menú <strong>Personal</strong> en la barra lateral izquierda.
+2. Haz clic en el botón <strong>Agregar Usuario</strong> (o botón "+" de registro).
+3. Rellena los datos básicos: Nombre completo, correo electrónico y selecciona el <strong>Rol</strong>:</p><p>| Rol | Función en el Sistema | Permisos |
+| :--- | :--- | :--- |
+| <span class="badge badge-admin">Administrador</span> | Dueño o Gerente general | Acceso total a reportes, auditorías, compras y personal. |
+| <span class="badge badge-super">Supervisor</span> | Encargado de planta | Crea los turnos, asigna los lotes a los operadores and revisa el stock. |
+| <span class="badge badge-oper">Operador</span> | Trabajadores de las máquinas | Registran su producción diaria desde su estación. |
+| <span class="badge badge-vend">Vendedora</span> | Área comercial | Registra ventas, clientes, cobros de dinero y guías de entrega. |
+| <span class="badge badge-tecn">Técnico</span> | Soporte de maquinaria | Revisa y soluciona averías reportadas por los operadores. |</p><p>4. Marca la casilla <strong>Activo</strong> y haz clic en <strong>Guardar</strong>.</p><p><h2>3. Registrar las Máquinas</h2>
+Para llevar el control del estado y mantenimiento de los equipos:
+1. Ve a <strong>Máquinas</strong> en el menú.
+2. Primero registra las marcas de tus equipos en <strong>Marcas</strong> (ej: Lonati, Sangiacomo).
+3. Luego haz clic en <strong>Agregar Máquina</strong>:
+   * Escribe el <strong>Código</strong> identificador (ej: <code>TEJ-01</code> para tejedora 1, <code>REM-01</code> para remalladora 1).
+   * Selecciona el <strong>Tipo</strong> (Tejedora o Remalladora).
+   * Asigna la marca correspondiente.
+4. Al crearse, la máquina quedará en estado <span style="color: #22c55e; font-weight: bold;">Activa</span> lista para trabajar.</p><p><h2>4. Configurar el Catálogo de Medias</h2>
+El catálogo contiene los tipos de medias que fabrica Durey y define sus precios de venta.
+1. Ve al menú <strong>Catálogo</strong>.
+2. Haz clic en <strong>Agregar Media</strong> e ingresa la descripción del producto:
+   * <strong>Modelo</strong>: Ej: Tobillera, Escolar, Vestir.
+   * <strong>Público</strong>: Ej: Niño, Caballero, Dama, Bebé.
+   * <strong>Diseño / Color</strong>: Ej: Blanco Liso, Rayas Rojas, Rombos.
+   * <strong>Talla</strong>: Ej: S, M, L o Única.
+   * <strong>Precio de Venta</strong>: Costo en Soles por docena (ej: <code>25.50</code>).
+3. Haz clic en <strong>Guardar</strong>. El sistema autogenerará un <strong>SKU</strong> y un código único para que sea fácil identificar este producto en el almacén y en las ventas.</p><p>---</p><p><h1>Capítulo 2: El Ciclo Diario de Producción</h1></p><p>Una vez configurado el Personal, las Máquinas y el Catálogo, la planta puede iniciar sus actividades diarias. El supervisor cuenta con una visión general en el <strong>Factory Dashboard</strong>:</p><p><img src="public/images/dashboard.png" alt="Mockup de Monitoreo de Producción en Planta" /></p><p><h2>Etapa 1: Tejido (Producción Inicial)</h2>
+1. <strong>Supervisor</strong>: Entra al módulo <strong>Tejido</strong>, va a "Planificar Turno" y crea un nuevo turno de trabajo. Asigna qué operador tejerá en qué máquina y en qué horario.
+2. <strong>Tejedor (Operador)</strong>:
+   * Inicia sesión en su dispositivo. El sistema le mostrará el lote y máquina que tiene asignados.
+   * Presiona <strong>Iniciar Carga de Lote</strong> al empezar a tejer.
+   * Al finalizar su jornada, ingresa las docenas tejidas reales en la pantalla y presiona <strong>Cerrar Turno / Enviar Producción</strong>.
+3. <strong>Resultado</strong>: Las docenas tejidas se suman automáticamente al inventario de <strong>Minidepósitos</strong> del modelo correspondiente. El operador y la máquina vuelven a figurar libres ("Disponible" y "Activa").</p><p><h2>Etapa 2: Remallado (Cierre de Lote Atómico)</h2>
+En esta etapa se cierran las costuras de las medias tejidas.
+1. <strong>Supervisor</strong>: Crea un lote de remallado asignando una cantidad de docenas desde los <strong>Minidepósitos</strong> a una operadora en una máquina remalladora específica.
+2. <strong>Remalladora (Operador)</strong>:
+   * Abre su pantalla de Remallado y presiona <strong>Iniciar Lote</strong>.
+   * Al terminar el remallado físico, ingresa:
+     * <strong>Docenas Remalladas</strong>: Cantidad total procesada exitosamente.
+     * <strong>Docenas Restantes</strong>: Si quedó material pendiente para el próximo turno.
+   * Presiona <strong>Registrar Producción / Finalizar Lote</strong>.
+3. <strong>Resultado</strong>: El sistema realiza una transacción atómica segura. El lote se cierra, la máquina y operadora quedan libres para el siguiente turno, y el stock de docenas avanza de forma inmediata a la lista de <strong>Stock Listo para Planchar</strong>.</p><p><div class="success-box">
+  <strong>Garantía Transaccional:</strong> El cierre de lote de remallado se ejecuta en un solo paso en la base de datos. Si el guardado falla por algún corte de luz o red, no se guardará nada a medias y los operadores nunca quedarán "atascados" en estado ocupado.
+</div></p><p><h2>Etapa 3: Planchado</h2>
+Las medias remalladas deben ser planchadas para darles su forma final y realizar el control de calidad preliminar.
+1. <strong>Planchador (Operador)</strong>:
+   * En su pantalla de Planchado, selecciona el modelo de media en el que va a trabajar. El sistema le mostrará el stock de docenas disponible acumulado en la etapa anterior.
+   * Al terminar la labor, registra:
+     * <strong>Docenas Planchadas</strong>: La cantidad total procesada.
+     * <strong>Docenas Defectuosas</strong>: La cantidad de medias que salieron rotas, manchadas o con fallas.
+   * Presiona <strong>Guardar Reporte</strong>.
+2. <strong>Resultado</strong>: El stock listo para planchar se reduce y la producción apta (planchada menos defectuosa) pasa al estado "Listo para Empaque".</p><p><h2>Etapa 4: Preparado (Empaque y Almacenamiento)</h2>
+Aquí se empaqueta el producto final para su posterior venta.
+1. <strong>Preparador (Operador)</strong>:
+   * Ingresa a <strong>Preparado</strong> y selecciona las docenas listas.
+   * Agrupa las unidades en paquetes de <strong>1 docena</strong> (12 pares).
+   * Registra el empaque en el sistema.
+2. <strong>Resultado</strong>: El sistema genera un <strong>Código de Paquete</strong> correlativo (ej: <code>PKG-0024</code>) y su respectivo código de barras. Las medias ingresan de forma oficial al <strong>Almacén</strong> listas para la venta.</p><p>---</p><p><h1>Capítulo 3: Ventas, Caja y Entrega</h1></p><p>Este capítulo explica cómo el departamento de <strong>Ventas</strong> (Vendedora) comercializa el producto terminado en Almacén.</p><p><img src="public/images/ventas.png" alt="Mockup de la Creación de una Nueva Venta" /></p><p><h2>1. Crear una Venta</h2>
+1. Ve al menú <strong>Ventas</strong> y haz clic en <strong>Nueva Venta</strong>.
+2. <strong>Seleccionar Cliente</strong>: Selecciona un cliente registrado o escribe el nombre y DNI/RUC de uno nuevo para guardarlo en la agenda.
+3. <strong>Añadir Productos</strong>: 
+   * Selecciona las docenas de medias que el cliente está comprando.
+   * Si cuentas con una lectora de códigos de barras, puedes escanear directamente la etiqueta del paquete físico (<code>PKG-XXXX</code>) para cargarlo al carrito automáticamente.
+4. <strong>Condiciones de Pago</strong>: 
+   * <strong>Contado</strong>: El cliente cancela la totalidad en el momento.
+   * <strong>Crédito Diferido</strong>: El cliente pagará en una fecha posterior o en cuotas. Define la fecha de vencimiento y el monto.
+5. Haz clic en <strong>Confirmar Venta</strong>.</p><p><h2>2. Apertura de Caja y Registro de Cobros</h2>
+Toda entrada de dinero por ventas o cuotas debe registrarse en la caja del día.
+1. Al empezar el día, ve a <strong>Caja</strong> y haz clic en <strong>Aperturar Caja</strong> ingresando el monto de dinero base con el que inicia (dinero en efectivo para vuelto).
+2. Para cobrar una cuota de una venta al crédito:
+   * Busca la venta en la sección de Ventas.
+   * Haz clic en <strong>Registrar Cobro</strong>.
+   * Ingresa el monto pagado por el cliente y selecciona el <strong>Método de Pago</strong> (Efectivo, Yape, Plin o Transferencia Bancaria).
+3. Al terminar el día, haz clic en <strong>Cerrar Caja</strong> para ver el balance de ingresos y cuadrar las cuentas.</p><p><h2>3. Despacho y Guías de Remisión</h2>
+Para formalizar la salida física de mercadería de la fábrica:
+1. Ve al menú <strong>Despacho</strong>.
+2. Selecciona la venta que deseas entregar.
+3. Haz clic en <strong>Generar Guía de Remisión</strong>:
+   * Selecciona el transportista y la dirección de entrega.
+4. Imprime la guía para adjuntarla al paquete físico.
+5. Marca la entrega como <strong>Entregado</strong> en el sistema cuando la mercadería salga de planta.</p><p>---</p><p><h1>Capítulo 4: Gestión de Incidencias (Averías)</h1></p><p>Si una máquina presenta fallas durante el trabajo, el sistema cuenta con un flujo de alerta y reparación:</p><p>1. <strong>Reportar la Falla</strong>:
+   * Si una máquina se traba o malogra en el turno de tejido o remallado, el operador o supervisor va a la sección de <strong>Máquinas</strong> o <strong>Mantenimiento</strong>.
+   * Haz clic en <strong>Reportar Avería</strong> en la máquina dañada.
+   * Describe brevemente el problema (ej: "Aguja rota en cilindro 3").
+2. <strong>Bloqueo Automático</strong>:
+   * Al instante, la máquina cambia su estado a <strong><code>mantenimiento</code></strong> en el sistema.
+   * El sistema bloqueará esta máquina y <strong>no permitirá</strong> que ningún supervisor la asigne a nuevos turnos de producción hasta que sea reparada.
+3. <strong>Trabajo del Técnico</strong>:
+   * El técnico entra al sistema en su módulo de Mantenimiento y verá las alertas de averías activas.
+   * Al reparar la máquina, hace clic en <strong>Registrar Reparación</strong>:
+     * Describe el trabajo realizado.
+     * Registra los repuestos del almacén utilizados.
+   * Haz clic en <strong>Completar Reparación</strong>.
+4. <strong>Resultado</strong>: La máquina vuelve a cambiar automáticamente a estado <strong><code>activa</code></strong> y queda disponible inmediatamente en el panel del supervisor para el siguiente turno de trabajo.
+
+  </div>
+</body>
+</html>
