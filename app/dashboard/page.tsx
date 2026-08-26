@@ -3,6 +3,22 @@ import { redirect } from 'next/navigation'
 import { MODULOS_POR_ROL } from '@/lib/utils'
 import { cookies } from 'next/headers'
 
+function normalizeRole(rawRole: string | undefined | null): string {
+  if (!rawRole) return 'admin'
+  const r = rawRole.toLowerCase().trim()
+  if (r.includes('admin')) return 'admin'
+  if (r.includes('super')) return 'supervisor'
+  if (r.includes('oper')) return 'operador'
+  if (r.includes('vend')) return 'vendedora'
+  if (r.includes('tecn') || r.includes('técn')) return 'tecnico'
+  if (r.includes('tej')) return 'tejedor'
+  if (r.includes('remal')) return 'remalladora'
+  if (r.includes('planc')) return 'planchador'
+  if (r.includes('prep')) return 'preparador'
+  if (r.includes('almac')) return 'almacenero'
+  return r in MODULOS_POR_ROL ? r : 'admin'
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient()
   
@@ -10,7 +26,7 @@ export default async function DashboardPage() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
   const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
 
-  let rol = 'vendedora'
+  let rol = 'admin'
   let isAuthenticated = false
 
   if (isMock) {
@@ -18,7 +34,7 @@ export default async function DashboardPage() {
     if (mockSession) {
       try {
         const parsed = JSON.parse(decodeURIComponent(mockSession))
-        rol = parsed.rol || 'vendedora'
+        rol = parsed.rol || 'admin'
         isAuthenticated = true
       } catch (e) {
         isAuthenticated = false
@@ -39,7 +55,7 @@ export default async function DashboardPage() {
         .single()
 
       if (perfil && perfil.activo) {
-        rol = perfil.rol || roleCookie || 'vendedora'
+        rol = perfil.rol || roleCookie || 'admin'
         isAuthenticated = true
       } else if (roleCookie) {
         rol = roleCookie
@@ -53,10 +69,10 @@ export default async function DashboardPage() {
 
   if (!isAuthenticated) redirect('/login')
 
-  const modulos = MODULOS_POR_ROL[rol] ?? []
-  const primerModulo = modulos[0]
+  const cleanRole = normalizeRole(rol)
+  const modulos = MODULOS_POR_ROL[cleanRole] ?? ['admin']
+  const primerModulo = modulos[0] || 'admin'
 
-  // Redirigir al primer módulo accesible
   if (primerModulo === 'admin') redirect('/dashboard/admin')
   redirect(`/dashboard/${primerModulo}`)
 }

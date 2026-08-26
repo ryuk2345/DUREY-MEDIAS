@@ -27,6 +27,22 @@ const ROLE_ROUTES: Record<string, string[]> = {
   tecnico: ['/mantenimiento'],
 }
 
+function normalizeRole(rawRole: string | undefined | null): string {
+  if (!rawRole) return 'admin'
+  const r = rawRole.toLowerCase().trim()
+  if (r.includes('admin')) return 'admin'
+  if (r.includes('super')) return 'supervisor'
+  if (r.includes('oper')) return 'operador'
+  if (r.includes('vend')) return 'vendedora'
+  if (r.includes('tecn') || r.includes('técn')) return 'tecnico'
+  if (r.includes('tej')) return 'tejedor'
+  if (r.includes('remal')) return 'remalladora'
+  if (r.includes('planc')) return 'planchador'
+  if (r.includes('prep')) return 'preparador'
+  if (r.includes('almac')) return 'almacenero'
+  return r in ROLE_ROUTES ? r : 'admin'
+}
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -53,7 +69,7 @@ export async function proxy(request: NextRequest) {
   const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
 
   let user = null
-  let role = 'vendedora'
+  let role = 'admin'
 
   if (isMock) {
     const mockSession = request.cookies.get('durey_mock_session')?.value
@@ -61,7 +77,7 @@ export async function proxy(request: NextRequest) {
       try {
         const parsed = JSON.parse(decodeURIComponent(mockSession))
         user = { id: parsed.id, email: parsed.email }
-        role = parsed.rol
+        role = parsed.rol || 'admin'
       } catch (e) {
         user = null
       }
@@ -74,7 +90,6 @@ export async function proxy(request: NextRequest) {
     const loggedCookie = request.cookies.get('durey_user_logged')?.value
 
     if (user) {
-      // Validar que el usuario tenga un perfil activo en la base de datos SQL
       const { data: perfil } = await supabase
         .from('usuarios')
         .select('rol, activo')
@@ -82,7 +97,7 @@ export async function proxy(request: NextRequest) {
         .single()
 
       if (perfil && perfil.activo) {
-        role = perfil.rol
+        role = perfil.rol || roleCookie || 'admin'
       } else if (roleCookie) {
         role = roleCookie
       }
@@ -92,6 +107,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  const cleanRole = normalizeRole(role)
   const pathname = request.nextUrl.pathname
 
   // 1. Redirigir al login si no está autenticado y está en ruta protegida
@@ -104,18 +120,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // 3. Control de acceso estricto por rol en las subrutas del dashboard
-  if (user && pathname.startsWith('/dashboard') && pathname !== '/dashboard') {
-    const allowedRoutes = ROLE_ROUTES[role] || []
+  // 3. Control de acceso estricto por rol en las subrutas del dashboard (Admins tienen acceso total sin redirección)
+  if (user && cleanRole !== 'admin' && pathname.startsWith('/dashboard') && pathname !== '/dashboard') {
+    const allowedRoutes = ROLE_ROUTES[cleanRole] || ROLE_ROUTES['admin']
 
-    // Obtener la subruta (ejemplo: /dashboard/ventas/crear -> /ventas)
     const segments = pathname.split('/')
     const moduleName = '/' + segments[2]
 
-    // Si la subruta solicitada no está permitida para el rol del usuario, denegar
     if (!allowedRoutes.includes(moduleName)) {
-      // Redirigir a la raíz del dashboard para que le asigne su primer módulo permitido
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+      const targetModule = allowedRoutes[0] ? `/dashboard${allowedRoutes[0]}` : '/dashboard/admin'
+      return NextResponse.redirect(new URL(targetModule, request.url))
     }
   }
 
