@@ -212,7 +212,11 @@ export default function UsuariosPage() {
             return
           }
 
-          toast.success('🎉 Usuario registrado correctamente en Auth y base de datos SQL.')
+          if (data.warning) {
+            toast.info(data.warning)
+          } else {
+            toast.success('🎉 Usuario registrado correctamente en el sistema.')
+          }
         } catch (e: any) {
           setErrorEnvio(e.message || 'Error de conexión con el servidor')
           toast.error('Error de conexión con el servidor de autenticación')
