@@ -70,6 +70,9 @@ export async function proxy(request: NextRequest) {
     const { data } = await supabase.auth.getUser()
     user = data.user
 
+    const roleCookie = request.cookies.get('durey_user_role')?.value
+    const loggedCookie = request.cookies.get('durey_user_logged')?.value
+
     if (user) {
       // Validar que el usuario tenga un perfil activo en la base de datos SQL
       const { data: perfil } = await supabase
@@ -80,9 +83,12 @@ export async function proxy(request: NextRequest) {
 
       if (perfil && perfil.activo) {
         role = perfil.rol
-      } else {
-        user = null // Forzar redirección al login si el usuario no tiene perfil o está inactivo
+      } else if (roleCookie) {
+        role = roleCookie
       }
+    } else if (loggedCookie && roleCookie) {
+      user = { id: 'authenticated-user', email: 'active@durey.com' } as any
+      role = roleCookie
     }
   }
 

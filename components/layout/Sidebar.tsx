@@ -68,8 +68,10 @@ export default function Sidebar({ userRol, userName }: SidebarProps) {
     document.cookie = 'durey_mock_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     document.cookie = 'durey_demo_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     document.cookie = 'durey_demo_name=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
+    document.cookie = 'durey_user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
+    document.cookie = 'durey_user_logged=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     toast.success('Sesión cerrada correctamente')
-    router.push('/login')
+    window.location.href = '/login'
   }
 
   const sidebarContent = (collapsed = false) => (
