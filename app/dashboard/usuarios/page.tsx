@@ -7,7 +7,7 @@ import { ROLES_LABELS } from '@/lib/utils'
 import {
   Users, UserPlus, Search, Filter, ShieldCheck, UserCheck,
   CheckCircle2, X, Edit2, UserX, Loader2, Sparkles, Mail, Lock, Shield,
-  Calendar, RotateCcw, Award, Clock
+  Calendar, RotateCcw, Award, Clock, Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -240,6 +240,25 @@ export default function UsuariosPage() {
     cargarUsuarios()
   }
 
+  // Eliminar usuario
+  const handleEliminarUsuario = async (u: Usuario) => {
+    if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente a "${u.nombre}" (${u.email})?`)) {
+      return
+    }
+    try {
+      const res = await fetch(`/api/usuarios?id=${u.id}&email=${encodeURIComponent(u.email)}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        toast.error(data.error || 'Error al eliminar el usuario')
+        return
+      }
+      toast.success(`🎉 Usuario "${u.nombre}" eliminado correctamente.`)
+      cargarUsuarios()
+    } catch (e: any) {
+      toast.error('Error de conexión al eliminar usuario')
+    }
+  }
+
   // ── GUARDAR ASIGNACIÓN DE TURNO ──────────────────────────────────────────
   const handleGuardarAsignacion = async (operadorId: string, area: string, turno: string) => {
     if (!area) {
@@ -440,6 +459,13 @@ export default function UsuariosPage() {
                               title={u.activo ? 'Desactivar usuario' : 'Activar usuario'}
                             >
                               {u.activo ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={() => handleEliminarUsuario(u)}
+                              className="p-2 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                              title="Eliminar usuario permanentemente"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
