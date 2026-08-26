@@ -11,36 +11,69 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
   const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
 
-  let userName = 'Usuario'
-  let userRol = 'vendedora'
+  let userName = 'Administrador'
+  let userRol = 'admin'
   let isAuthenticated = false
+
+  const roleCookie = cookieStore.get('durey_user_role')?.value
+  const loggedCookie = cookieStore.get('durey_user_logged')?.value
+  const nameCookie = cookieStore.get('durey_user_name')?.value
 
   if (isMock) {
     const mockSession = cookieStore.get('durey_mock_session')?.value
     if (mockSession) {
       try {
         const parsed = JSON.parse(decodeURIComponent(mockSession))
-        userName = parsed.nombre || 'Usuario Mock'
-        userRol = parsed.rol || 'vendedora'
+        userName = parsed.nombre || 'Usuario'
+        userRol = parsed.rol || 'admin'
         isAuthenticated = true
       } catch (e) {
         isAuthenticated = false
       }
+    } else if (loggedCookie && roleCookie) {
+      userName = nameCookie ? decodeURIComponent(nameCookie) : 'Administrador'
+      userRol = roleCookie
+      isAuthenticated = true
     }
   } else {
-    const { data } = await supabase.auth.getUser()
-    const user = data.user
+    try {
+      const { data } = await supabase.auth.getUser()
+      const user = data?.user
 
-    if (user) {
-      const { data: perfil } = await supabase
-        .from('usuarios')
-        .select('nombre, rol, activo')
-        .eq('auth_id', user.id)
-        .single()
+      if (user) {
+        let { data: perfil } = await supabase
+          .from('usuarios')
+          .select('nombre, rol, activo')
+          .eq('auth_id', user.id)
+          .single()
 
-      if (perfil && perfil.activo) {
-        userName = perfil.nombre || 'Usuario'
-        userRol = perfil.rol || 'vendedora'
+        if (!perfil && user.email) {
+          const { data: perfilEmail } = await supabase
+            .from('usuarios')
+            .select('nombre, rol, activo')
+            .eq('email', user.email.toLowerCase())
+            .single()
+          perfil = perfilEmail
+        }
+
+        if (perfil && perfil.activo) {
+          userName = perfil.nombre || nameCookie ? decodeURIComponent(nameCookie || '') : 'Usuario'
+          userRol = perfil.rol || roleCookie || 'admin'
+          isAuthenticated = true
+        } else if (roleCookie) {
+          userName = nameCookie ? decodeURIComponent(nameCookie) : 'Usuario'
+          userRol = roleCookie
+          isAuthenticated = true
+        }
+      } else if (loggedCookie && roleCookie) {
+        userName = nameCookie ? decodeURIComponent(nameCookie) : 'Administrador'
+        userRol = roleCookie
+        isAuthenticated = true
+      }
+    } catch (e) {
+      if (loggedCookie && roleCookie) {
+        userName = nameCookie ? decodeURIComponent(nameCookie) : 'Administrador'
+        userRol = roleCookie
         isAuthenticated = true
       }
     }

@@ -145,6 +145,7 @@ export default function LoginPage() {
         // En producción, guardamos el rol y la sesión en cookies simples para el middleware
         document.cookie = `durey_user_role=${targetRole}; path=/; max-age=86400`
         document.cookie = `durey_user_logged=true; path=/; max-age=86400`
+        document.cookie = `durey_user_name=${encodeURIComponent(targetName)}; path=/; max-age=86400`
       }
 
       toast.success(`Bienvenido a DUREY, ${targetName}`, { icon: '👋' })
