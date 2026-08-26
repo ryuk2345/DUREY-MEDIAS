@@ -8,6 +8,7 @@ export async function createClient() {
 
   const isMock =
     !url ||
+    !key ||
     !url.startsWith('https://') ||
     url.includes('tu-proyecto') ||
     url.includes('placeholder') ||
@@ -18,27 +19,30 @@ export async function createClient() {
     return createMockClient() as any
   }
 
+  try {
+    const cookieStore = await cookies()
 
-  const cookieStore = await cookies()
-
-  return createServerClient(
-    url,
-    key,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
+    return createServerClient(
+      url,
+      key,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            try {
+              cookiesToSet.forEach(({ name, value, options }) =>
+                cookieStore.set(name, value, options)
+              )
+            } catch {
+              // setAll called from a Server Component — ignorar
+            }
+          },
         },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
-          } catch {
-            // setAll called from a Server Component — ignorar
-          }
-        },
-      },
-    }
-  )
+      }
+    )
+  } catch (e) {
+    return createMockClient() as any
+  }
 }

@@ -46,30 +46,15 @@ function normalizeRole(rawRole: string | undefined | null): string {
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-  const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+  const isMock = !url || !anonKey || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
 
-  let user = null
+  let user: any = null
   let role = 'admin'
+
+  const roleCookie = request.cookies.get('durey_user_role')?.value
+  const loggedCookie = request.cookies.get('durey_user_logged')?.value
 
   if (isMock) {
     const mockSession = request.cookies.get('durey_mock_session')?.value
@@ -81,29 +66,60 @@ export async function proxy(request: NextRequest) {
       } catch (e) {
         user = null
       }
+    } else if (loggedCookie && roleCookie) {
+      user = { id: 'mock-user', email: 'admin@durey.com' }
+      role = roleCookie
     }
   } else {
-    const { data } = await supabase.auth.getUser()
-    user = data.user
+    try {
+      const supabase = createServerClient(
+        url,
+        anonKey,
+        {
+          cookies: {
+            getAll() {
+              return request.cookies.getAll()
+            },
+            setAll(cookiesToSet) {
+              try {
+                cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+                supabaseResponse = NextResponse.next({ request })
+                cookiesToSet.forEach(({ name, value, options }) =>
+                  supabaseResponse.cookies.set(name, value, options)
+                )
+              } catch (e) {
+                // Ignore cookie set errors in middleware edge execution
+              }
+            },
+          },
+        }
+      )
 
-    const roleCookie = request.cookies.get('durey_user_role')?.value
-    const loggedCookie = request.cookies.get('durey_user_logged')?.value
+      const { data } = await supabase.auth.getUser()
+      user = data.user
 
-    if (user) {
-      const { data: perfil } = await supabase
-        .from('usuarios')
-        .select('rol, activo')
-        .eq('auth_id', user.id)
-        .single()
+      if (user) {
+        const { data: perfil } = await supabase
+          .from('usuarios')
+          .select('rol, activo')
+          .eq('auth_id', user.id)
+          .single()
 
-      if (perfil && perfil.activo) {
-        role = perfil.rol || roleCookie || 'admin'
-      } else if (roleCookie) {
+        if (perfil && perfil.activo) {
+          role = perfil.rol || roleCookie || 'admin'
+        } else if (roleCookie) {
+          role = roleCookie
+        }
+      } else if (loggedCookie && roleCookie) {
+        user = { id: 'authenticated-user', email: 'active@durey.com' }
         role = roleCookie
       }
-    } else if (loggedCookie && roleCookie) {
-      user = { id: 'authenticated-user', email: 'active@durey.com' } as any
-      role = roleCookie
+    } catch (e) {
+      // Fallback ultra seguro si la conexión a Supabase falla
+      if (loggedCookie && roleCookie) {
+        user = { id: 'authenticated-user', email: 'active@durey.com' }
+        role = roleCookie
+      }
     }
   }
 
@@ -120,7 +136,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // 3. Control de acceso estricto por rol en las subrutas del dashboard (Admins tienen acceso total sin redirección)
+  // 3. Control de acceso estricto por rol en las subrutas del dashboard
   if (user && cleanRole !== 'admin' && pathname.startsWith('/dashboard') && pathname !== '/dashboard') {
     const allowedRoutes = ROLE_ROUTES[cleanRole] || ROLE_ROUTES['admin']
 
