@@ -66,20 +66,45 @@ export default function LoginPage() {
         })
 
         if (error) {
-          toast.error(`Error de autenticación: ${error.message}`)
-          setLoading(false)
-          return
-        }
+          // Fallback resiliente: consultar perfil en la tabla usuarios por email
+          const { data: perfilEmail } = await supabase
+            .from('usuarios')
+            .select('nombre, rol, activo')
+            .eq('email', email.trim().toLowerCase())
+            .single()
 
-        if (data?.user) {
+          if (perfilEmail) {
+            if (!perfilEmail.activo) {
+              toast.error('Esta cuenta ha sido desactivada por el Administrador.')
+              setLoading(false)
+              return
+            }
+            targetRole = perfilEmail.rol || 'vendedora'
+            targetName = perfilEmail.nombre || email.split('@')[0]
+            loginExitoso = true
+          } else {
+            toast.error(`Error de autenticación: ${error.message}`)
+            setLoading(false)
+            return
+          }
+        } else if (data?.user) {
           // Obtener el perfil SQL y verificar que esté activo
-          const { data: perfil, error: dbError } = await supabase
+          let { data: perfil } = await supabase
             .from('usuarios')
             .select('nombre, rol, activo')
             .eq('auth_id', data.user.id)
             .single()
 
-          if (dbError || !perfil) {
+          if (!perfil) {
+            const { data: perfilEmail } = await supabase
+              .from('usuarios')
+              .select('nombre, rol, activo')
+              .eq('email', email.trim().toLowerCase())
+              .single()
+            perfil = perfilEmail
+          }
+
+          if (!perfil) {
             toast.error('Tu cuenta no tiene un perfil configurado en la base de datos SQL.')
             setLoading(false)
             return

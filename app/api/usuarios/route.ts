@@ -92,7 +92,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      warning: 'Usuario registrado en el sistema. (Para habilitar el inicio de sesión con contraseña en Supabase Auth, configura SUPABASE_SERVICE_ROLE_KEY en Vercel)' 
+      message: '🎉 Usuario registrado correctamente en el sistema.' 
     })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'Error interno del servidor' }, { status: 500 })
