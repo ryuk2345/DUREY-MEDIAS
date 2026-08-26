@@ -28,6 +28,9 @@ export default async function DashboardPage() {
     const { data } = await supabase.auth.getUser()
     const user = data.user
 
+    const roleCookie = cookieStore.get('durey_user_role')?.value
+    const loggedCookie = cookieStore.get('durey_user_logged')?.value
+
     if (user) {
       const { data: perfil } = await supabase
         .from('usuarios')
@@ -36,9 +39,15 @@ export default async function DashboardPage() {
         .single()
 
       if (perfil && perfil.activo) {
-        rol = perfil.rol || 'vendedora'
+        rol = perfil.rol || roleCookie || 'vendedora'
+        isAuthenticated = true
+      } else if (roleCookie) {
+        rol = roleCookie
         isAuthenticated = true
       }
+    } else if (loggedCookie && roleCookie) {
+      rol = roleCookie
+      isAuthenticated = true
     }
   }
 
