@@ -144,43 +144,29 @@ export default function MateriaPrimaPage() {
 
   const supabase = createClient()
 
-  // ── MOCK DATA INICIAL (FALLBACK LOCALSTORAGE) ──────────────────────────────
+  // ── LIMPIEZA Y ALMACENAMIENTO LOCAL VACÍO (FALLBACK LOCALSTORAGE) ─────────
   const initLocalStorageData = () => {
     if (typeof window === 'undefined') return
     
-    if (!localStorage.getItem('durey_materia_prima')) {
-      localStorage.setItem('durey_materia_prima', JSON.stringify([
-        { id: 'h1', material: 'Algodón', color: 'Blanco', stock_kg: 150.000, created_at: new Date().toISOString() },
-        { id: 'h2', material: 'Algodón', color: 'Negro', stock_kg: 120.000, created_at: new Date().toISOString() },
-        { id: 'h3', material: 'Algodón', color: 'Rojo', stock_kg: 2.000, created_at: new Date().toISOString() },
-        { id: 'h4', material: 'Lana', color: 'Roja', stock_kg: 0.000, created_at: new Date().toISOString() },
-        { id: 'h5', material: 'Lycra', color: 'Blanco', stock_kg: 50.000, created_at: new Date().toISOString() }
-      ]))
+    // Si tenían datos mock antiguos con IDs 'h1', 'r1', 'p1', 'e1', limpiarlos
+    const rawHilos = localStorage.getItem('durey_materia_prima')
+    if (!rawHilos || rawHilos.includes('"id":"h1"')) {
+      localStorage.setItem('durey_materia_prima', JSON.stringify([]))
     }
     
-    if (!localStorage.getItem('durey_proveedores')) {
-      localStorage.setItem('durey_proveedores', JSON.stringify([
-        { id: 'p1', nombre: 'Hilados del Sur', ruc: '20123456789', contacto: 'Roberto Cárdenas', telefono: '987654321' },
-        { id: 'p2', nombre: 'Textiles Andinos', ruc: '20987654321', contacto: 'Ana Torres', telefono: '912345678' }
-      ]))
+    const rawProv = localStorage.getItem('durey_proveedores')
+    if (!rawProv || rawProv.includes('"id":"p1"')) {
+      localStorage.setItem('durey_proveedores', JSON.stringify([]))
     }
     
-    if (!localStorage.getItem('durey_repuestos')) {
-      localStorage.setItem('durey_repuestos', JSON.stringify([
-        { id: 'r1', nombre: 'Sensor de aguja M8', stock_actual: 15, costo_unitario: 45.00, created_at: new Date().toISOString() },
-        { id: 'r2', nombre: 'Plancha de hormado T1', stock_actual: 3, costo_unitario: 250.00, created_at: new Date().toISOString() },
-        { id: 'r3', nombre: 'Correa dentada de motor', stock_actual: 8, costo_unitario: 35.00, created_at: new Date().toISOString() },
-        { id: 'r4', nombre: 'Agujas tejedora calibre 12', stock_actual: 200, costo_unitario: 1.50, created_at: new Date().toISOString() }
-      ]))
+    const rawRep = localStorage.getItem('durey_repuestos')
+    if (!rawRep || rawRep.includes('"id":"r1"')) {
+      localStorage.setItem('durey_repuestos', JSON.stringify([]))
     }
 
-    if (!localStorage.getItem('durey_egresos_adicionales')) {
-      localStorage.setItem('durey_egresos_adicionales', JSON.stringify([
-        { id: 'e1', concepto: 'Pago de alquiler local agosto', monto: 2500.00, fecha: new Date(Date.now() - 864000000).toISOString().split('T')[0], categoria: 'alquiler', created_at: new Date().toISOString() },
-        { id: 'e2', concepto: 'Recibo de luz del taller', monto: 450.00, fecha: new Date(Date.now() - 432000000).toISOString().split('T')[0], categoria: 'servicios', created_at: new Date().toISOString() },
-        { id: 'e3', concepto: 'Pago de planilla semanal tejedores', monto: 1800.00, fecha: new Date(Date.now() - 172800000).toISOString().split('T')[0], categoria: 'planilla', created_at: new Date().toISOString() },
-        { id: 'e4', concepto: 'Bolsas plásticas de empaque Durey', monto: 350.00, fecha: new Date().toISOString().split('T')[0], categoria: 'empaque', created_at: new Date().toISOString() }
-      ]))
+    const rawEgr = localStorage.getItem('durey_egresos_adicionales')
+    if (!rawEgr || rawEgr.includes('"id":"e1"')) {
+      localStorage.setItem('durey_egresos_adicionales', JSON.stringify([]))
     }
 
     if (!localStorage.getItem('durey_compras')) {
