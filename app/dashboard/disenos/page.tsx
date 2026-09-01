@@ -125,11 +125,24 @@ export default function DisenosPage() {
       if (marcasData) setMarcas(marcasData)
 
       // 3. Máquinas tejedoras
-      const { data: maquinasData } = await supabase
+      let loadedMaquinas: any[] = []
+      const { data: maquinasData, error: maqErr } = await supabase
         .from('maquinas')
-        .select('*, marcas_maquinas(nombre)')
+        .select('*, marca:marcas_maquinas(nombre)')
         .order('codigo')
-      if (maquinasData) setMaquinas(maquinasData)
+
+      if (!maqErr && maquinasData && maquinasData.length > 0) {
+        loadedMaquinas = maquinasData
+      } else {
+        const { data: maquinasSimple } = await supabase
+          .from('maquinas')
+          .select('*')
+          .order('codigo')
+        if (maquinasSimple && maquinasSimple.length > 0) {
+          loadedMaquinas = maquinasSimple
+        }
+      }
+      setMaquinas(loadedMaquinas)
 
       // 4. Diseños con asignaciones
       const { data: disenosData, error: dErr } = await supabase
@@ -142,7 +155,7 @@ export default function DisenosPage() {
             id,
             maquina_id,
             activo,
-            maquina:maquinas(id, codigo, marca_id, marcas_maquinas(nombre))
+            maquina:maquinas(id, codigo, marca_id, marca:marcas_maquinas(nombre))
           )
         `)
         .order('created_at', { ascending: false })
@@ -847,31 +860,38 @@ export default function DisenosPage() {
                   🧵 Asignar a Máquinas Tejedoras (Multimarca compatible)
                 </label>
                 <div className="grid grid-cols-3 gap-2 max-h-36 overflow-y-auto p-2 bg-slate-900/60 rounded-2xl border border-white/[0.06]">
-                  {maquinas.map(m => {
-                    const isSelected = createForm.maquina_ids.includes(m.id)
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          setCreateForm(prev => ({
-                            ...prev,
-                            maquina_ids: isSelected 
-                              ? prev.maquina_ids.filter(id => id !== m.id)
-                              : [...prev.maquina_ids, m.id]
-                          }))
-                        }}
-                        className={`p-2 rounded-xl text-left border text-xs transition-all ${
-                          isSelected 
-                            ? 'bg-fuchsia-500/20 border-fuchsia-500 text-fuchsia-300 font-bold'
-                            : 'bg-slate-800/40 border-white/[0.04] text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <span className="block font-mono">{m.codigo}</span>
-                        <span className="block text-[9px] text-slate-500 truncate">{m.marcas_maquinas?.nombre || 'Tejedora'}</span>
-                      </button>
-                    )
-                  })}
+                  {maquinas.length === 0 ? (
+                    <div className="col-span-3 text-center py-4 text-slate-500 text-xs">
+                      No hay máquinas registradas en la base de datos.
+                    </div>
+                  ) : (
+                    maquinas.map(m => {
+                      const isSelected = createForm.maquina_ids.includes(m.id)
+                      const marcaNom = marcas.find(br => br.id === m.marca_id)?.nombre || (m as any).marca?.nombre || (m as any).marcas_maquinas?.nombre || 'Tejedora'
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => {
+                            setCreateForm(prev => ({
+                              ...prev,
+                              maquina_ids: isSelected 
+                                ? prev.maquina_ids.filter(id => id !== m.id)
+                                : [...prev.maquina_ids, m.id]
+                            }))
+                          }}
+                          className={`p-2 rounded-xl text-left border text-xs transition-all ${
+                            isSelected 
+                              ? 'bg-fuchsia-500/20 border-fuchsia-500 text-fuchsia-300 font-bold shadow-md shadow-fuchsia-500/10'
+                              : 'bg-slate-800/40 border-white/[0.04] text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <span className="block font-mono font-bold text-xs">{m.codigo}</span>
+                          <span className="block text-[9px] text-slate-400 truncate">{marcaNom}</span>
+                        </button>
+                      )
+                    })
+                  )}
                 </div>
               </div>
 
@@ -934,31 +954,38 @@ export default function DisenosPage() {
 
             <form onSubmit={handleGuardarAsignaciones} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
               <div className="grid grid-cols-2 gap-2">
-                {maquinas.map(m => {
-                  const isSelected = asignarMaquinaIds.includes(m.id)
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        setAsignarMaquinaIds(prev => 
-                          isSelected ? prev.filter(id => id !== m.id) : [...prev, m.id]
-                        )
-                      }}
-                      className={`p-3 rounded-2xl text-left border transition-all flex items-center justify-between ${
-                        isSelected 
-                          ? 'bg-sky-500/20 border-sky-500 text-sky-300 shadow-md shadow-sky-500/10'
-                          : 'bg-slate-900/60 border-white/[0.06] text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <div>
-                        <span className="block font-mono font-bold text-sm">{m.codigo}</span>
-                        <span className="block text-[10px] text-slate-500">{m.marcas_maquinas?.nombre || 'Tejedora'}</span>
-                      </div>
-                      {isSelected && <Check className="w-4 h-4 text-sky-400 flex-shrink-0" />}
-                    </button>
-                  )
-                })}
+                {maquinas.length === 0 ? (
+                  <div className="col-span-2 text-center py-4 text-slate-500 text-xs">
+                    No hay máquinas disponibles para asignar.
+                  </div>
+                ) : (
+                  maquinas.map(m => {
+                    const isSelected = asignarMaquinaIds.includes(m.id)
+                    const marcaNom = marcas.find(br => br.id === m.marca_id)?.nombre || (m as any).marca?.nombre || (m as any).marcas_maquinas?.nombre || 'Tejedora'
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setAsignarMaquinaIds(prev => 
+                            isSelected ? prev.filter(id => id !== m.id) : [...prev, m.id]
+                          )
+                        }}
+                        className={`p-3 rounded-2xl text-left border transition-all flex items-center justify-between ${
+                          isSelected 
+                            ? 'bg-sky-500/20 border-sky-500 text-sky-300 shadow-md shadow-sky-500/10'
+                            : 'bg-slate-900/60 border-white/[0.06] text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <div>
+                          <span className="block font-mono font-bold text-sm">{m.codigo}</span>
+                          <span className="block text-[10px] text-slate-400">{marcaNom}</span>
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 text-sky-400 flex-shrink-0" />}
+                      </button>
+                    )
+                  })
+                )}
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-4 flex-shrink-0">
