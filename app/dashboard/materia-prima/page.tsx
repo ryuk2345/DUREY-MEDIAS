@@ -9,6 +9,7 @@ import {
   Building2, Phone, MessageCircle, User, ExternalLink, Edit2
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface MateriaPrima {
   id: string
@@ -2584,18 +2585,19 @@ export default function MateriaPrimaPage() {
                 </div>
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">🏷️ Categoría de Gasto</label>
-                  <select 
+                  <CustomSelect 
                     value={egresoForm.categoria}
-                    onChange={e => setEgresoForm(prev => ({ ...prev, categoria: e.target.value }))}
-                    className="input-dark w-full text-sm py-2.5 font-bold"
-                  >
-                    <option value="empaque">Insumos Empaque (Bolsas/Etiquetas)</option>
-                    <option value="repuestos">Repuestos de Maquinaria</option>
-                    <option value="planilla">Planillas Personal</option>
-                    <option value="servicios">Servicios Básicos (Luz/Agua)</option>
-                    <option value="alquiler">Alquiler de Local</option>
-                    <option value="otros">Otros Gastos</option>
-                  </select>
+                    onChange={val => setEgresoForm(prev => ({ ...prev, categoria: val }))}
+                    options={[
+                      { value: 'empaque', label: 'Insumos Empaque (Bolsas/Etiquetas)' },
+                      { value: 'repuestos', label: 'Repuestos de Maquinaria' },
+                      { value: 'planilla', label: 'Planillas Personal' },
+                      { value: 'servicios', label: 'Servicios Básicos (Luz/Agua)' },
+                      { value: 'alquiler', label: 'Alquiler de Local' },
+                      { value: 'otros', label: 'Otros Gastos' }
+                    ]}
+                    triggerClassName="text-sm py-2.5 font-bold"
+                  />
                 </div>
               </div>
 
@@ -2638,37 +2640,34 @@ export default function MateriaPrimaPage() {
             <form onSubmit={handleRegistrarCompra} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
               <div>
                 <label className="block text-slate-300 font-bold mb-1">🏢 Proveedor</label>
-                <select 
+                <CustomSelect 
                   value={compraForm.proveedor_id} 
-                  onChange={e => setCompraForm(prev => ({ ...prev, proveedor_id: e.target.value }))}
-                  className="input-dark w-full"
-                  required
-                >
-                  <option value="">Selecciona el proveedor...</option>
-                  {proveedores.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} (RUC: {p.ruc})</option>
-                  ))}
-                </select>
+                  onChange={val => setCompraForm(prev => ({ ...prev, proveedor_id: val }))}
+                  options={[
+                    { value: '', label: 'Selecciona el proveedor...' },
+                    ...proveedores.map(p => ({ value: p.id, label: `${p.nombre} (RUC: ${p.ruc})` }))
+                  ]}
+                  placeholder="Selecciona el proveedor..."
+                />
               </div>
 
               <div>
                 <label className="block text-slate-300 font-bold mb-1">🧵 Insumo / Materia Prima</label>
-                <select 
+                <CustomSelect 
                   value={compraForm.materia_prima_id} 
-                  onChange={e => setCompraForm(prev => ({ ...prev, materia_prima_id: e.target.value }))}
-                  className="input-dark w-full"
-                  required
-                >
-                  <option value="">Selecciona tipo de insumo...</option>
-                  {stockHilos.map(h => {
-                    const empTag = h.tipo_empaque === 'caja' ? '📦 Caja' : h.tipo_empaque === 'bolsa' ? '🛍️ Bolsa' : '🧵 Cono'
-                    return (
-                      <option key={h.id} value={h.id}>
-                        [{empTag}] {h.material} - {h.color} (Stock: {Number(h.stock_kg).toFixed(0)})
-                      </option>
-                    )
-                  })}
-                </select>
+                  onChange={val => setCompraForm(prev => ({ ...prev, materia_prima_id: val }))}
+                  options={[
+                    { value: '', label: 'Selecciona tipo de insumo...' },
+                    ...stockHilos.map(h => {
+                      const empTag = h.tipo_empaque === 'caja' ? '📦 Caja' : h.tipo_empaque === 'bolsa' ? '🛍️ Bolsa' : '🧵 Cono'
+                      return {
+                        value: h.id,
+                        label: `[${empTag}] ${h.material} - ${h.color} (Stock: ${Number(h.stock_kg).toFixed(0)})`
+                      }
+                    })
+                  ]}
+                  placeholder="Selecciona tipo de insumo..."
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -2701,26 +2700,26 @@ export default function MateriaPrimaPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">💳 Condición Pago</label>
-                  <select 
+                  <CustomSelect 
                     value={compraForm.condicion_pago}
-                    onChange={e => setCompraForm(prev => ({ ...prev, condicion_pago: e.target.value as any }))}
-                    className="input-dark w-full"
-                  >
-                    <option value="contado">Al Contado</option>
-                    <option value="pago_diferido">A Crédito (Pago Diferido)</option>
-                  </select>
+                    onChange={val => setCompraForm(prev => ({ ...prev, condicion_pago: val as any }))}
+                    options={[
+                      { value: 'contado', label: 'Al Contado' },
+                      { value: 'pago_diferido', label: 'A Crédito (Pago Diferido)' }
+                    ]}
+                  />
                 </div>
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">💵 Método de Pago</label>
-                  <select 
+                  <CustomSelect 
                     value={compraForm.metodo_pago}
-                    onChange={e => setCompraForm(prev => ({ ...prev, metodo_pago: e.target.value }))}
-                    className="input-dark w-full"
-                  >
-                    <option value="Transferencia">Transferencia</option>
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="Yape/Plin">Yape/Plin</option>
-                  </select>
+                    onChange={val => setCompraForm(prev => ({ ...prev, metodo_pago: val }))}
+                    options={[
+                      { value: 'Transferencia', label: 'Transferencia' },
+                      { value: 'Efectivo', label: 'Efectivo' },
+                      { value: 'Yape/Plin', label: 'Yape/Plin' }
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -2865,15 +2864,16 @@ export default function MateriaPrimaPage() {
             <form onSubmit={handlePagarCuota} className="space-y-4 text-xs">
               <div>
                 <label className="block text-slate-300 font-bold mb-1">💵 Método de Pago utilizado</label>
-                <select 
+                <CustomSelect 
                   value={payCuotaForm.metodo_pago}
-                  onChange={e => setPayCuotaForm(prev => ({ ...prev, metodo_pago: e.target.value }))}
-                  className="input-dark w-full text-sm py-2.5 font-bold"
-                >
-                  <option value="Transferencia">Transferencia Bancaria</option>
-                  <option value="Efectivo">Efectivo de Caja</option>
-                  <option value="Yape/Plin">Yape/Plin</option>
-                </select>
+                  onChange={val => setPayCuotaForm(prev => ({ ...prev, metodo_pago: val }))}
+                  options={[
+                    { value: 'Transferencia', label: 'Transferencia Bancaria' },
+                    { value: 'Efectivo', label: 'Efectivo de Caja' },
+                    { value: 'Yape/Plin', label: 'Yape/Plin' }
+                  ]}
+                  triggerClassName="text-sm py-2.5 font-bold"
+                />
               </div>
 
               <div>

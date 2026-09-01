@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearFecha, formatearMoneda, generarCodigoGuia } from '@/lib/utils'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 // ── TIPOS ──────────────────────────────────────────────────────────────────
 interface Venta {
@@ -122,7 +123,7 @@ export default function DespachoPage() {
       `).order('fecha_despacho', { ascending: false }),
 
       supabase.from('catalogo_medias').select('id, codigo, sku, modelo, publico, diseno_color, talla'),
-      
+
       supabase.from('vista_stock_medias').select('catalogo_media_id, stock_docenas')
     ])
 
@@ -322,11 +323,10 @@ export default function DespachoPage() {
         <div className="flex gap-2 p-1 bg-white/[0.03] rounded-xl border border-white/[0.06]">
           <button
             onClick={() => setVistaActiva('despacho')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              vistaActiva === 'despacho'
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${vistaActiva === 'despacho'
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
                 : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-            }`}
+              }`}
           >
             <Scan className="w-4 h-4" /> Despachar
             {ventasPendientes.length > 0 && (
@@ -337,11 +337,10 @@ export default function DespachoPage() {
           </button>
           <button
             onClick={() => setVistaActiva('kardex')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              vistaActiva === 'kardex'
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${vistaActiva === 'kardex'
                 ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20'
                 : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-            }`}
+              }`}
           >
             <History className="w-4 h-4" /> Kárdex ({guias.length})
           </button>
@@ -370,11 +369,10 @@ export default function DespachoPage() {
                 <button
                   key={v.id}
                   onClick={() => seleccionarVenta(v)}
-                  className={`w-full text-left p-4 rounded-xl border transition-all ${
-                    ventaSeleccionada?.id === v.id
+                  className={`w-full text-left p-4 rounded-xl border transition-all ${ventaSeleccionada?.id === v.id
                       ? 'border-blue-400 bg-blue-500/10 shadow-lg shadow-blue-500/5'
                       : 'border-white/[0.06] hover:border-white/12 hover:bg-white/[0.02]'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <code className="text-blue-300 font-mono text-xs bg-blue-500/15 px-2 py-0.5 rounded">{v.codigo_venta}</code>
@@ -420,11 +418,10 @@ export default function DespachoPage() {
                 <div className="flex gap-2 p-1 bg-white/[0.03] rounded-xl border border-white/[0.06]">
                   {(['pistola', 'manual'] as const).map(modo => (
                     <button key={modo} onClick={() => setModoEscaneo(modo)}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                        modoEscaneo === modo
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${modoEscaneo === modo
                           ? modo === 'pistola' ? 'bg-blue-600 text-white' : 'bg-violet-600 text-white'
                           : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-                      }`}
+                        }`}
                     >
                       {modo === 'pistola' ? <><Scan className="w-4 h-4" /> Pistola / Escáner</> : <><Keyboard className="w-4 h-4" /> Manual</>}
                     </button>
@@ -474,11 +471,10 @@ export default function DespachoPage() {
                     const sinStock = stockDisp < linea.docenas_requeridas
 
                     return (
-                      <div key={linea.catalogo_media_id} className={`p-4 rounded-xl border transition-all ${
-                        completado ? 'border-emerald-500/30 bg-emerald-500/[0.04]'
-                        : linea.docenas_escaneadas > 0 ? 'border-amber-500/30 bg-amber-500/[0.03]'
-                        : 'border-white/[0.06] bg-white/[0.01]'
-                      }`}>
+                      <div key={linea.catalogo_media_id} className={`p-4 rounded-xl border transition-all ${completado ? 'border-emerald-500/30 bg-emerald-500/[0.04]'
+                          : linea.docenas_escaneadas > 0 ? 'border-amber-500/30 bg-amber-500/[0.03]'
+                            : 'border-white/[0.06] bg-white/[0.01]'
+                        }`}>
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
@@ -495,20 +491,18 @@ export default function DespachoPage() {
                                 <span>{pct}%</span>
                               </div>
                               <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all duration-300 ${
-                                  completado ? 'bg-emerald-500' : linea.docenas_escaneadas > 0 ? 'bg-amber-500' : 'bg-slate-700'
-                                }`} style={{ width: `${pct}%` }} />
+                                <div className={`h-full rounded-full transition-all duration-300 ${completado ? 'bg-emerald-500' : linea.docenas_escaneadas > 0 ? 'bg-amber-500' : 'bg-slate-700'
+                                  }`} style={{ width: `${pct}%` }} />
                               </div>
                             </div>
-                            <div className={`ml-6 mt-1.5 flex items-center gap-1 text-[10px] font-semibold ${
-                              stockDisp === 0 ? 'text-red-400' : sinStock ? 'text-red-400'
-                              : stockDisp <= 5 ? 'text-amber-400' : 'text-emerald-400'
-                            }`}>
+                            <div className={`ml-6 mt-1.5 flex items-center gap-1 text-[10px] font-semibold ${stockDisp === 0 ? 'text-red-400' : sinStock ? 'text-red-400'
+                                : stockDisp <= 5 ? 'text-amber-400' : 'text-emerald-400'
+                              }`}>
                               <AlertTriangle className="w-3 h-3" />
                               {stockDisp === 0 ? '⛔ SIN STOCK'
                                 : sinStock ? `⛔ Solo ${stockDisp} doc. disponibles`
-                                : stockDisp <= 5 ? `⚠️ Stock bajo — ${stockDisp} doc.`
-                                : `✓ ${stockDisp} doc. en almacén`}
+                                  : stockDisp <= 5 ? `⚠️ Stock bajo — ${stockDisp} doc.`
+                                    : `✓ ${stockDisp} doc. en almacén`}
                             </div>
                           </div>
 
@@ -693,10 +687,15 @@ export default function DespachoPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Agencia de Transporte</label>
-                <select value={agenciaSeleccionada} onChange={e => setAgenciaSeleccionada(e.target.value)} className="input-dark">
-                  <option value="">Seleccionar agencia...</option>
-                  {AGENCIAS.map(ag => <option key={ag} value={ag}>{ag}</option>)}
-                </select>
+                <CustomSelect
+                  value={agenciaSeleccionada}
+                  onChange={val => setAgenciaSeleccionada(val)}
+                  options={[
+                    { value: '', label: 'Seleccionar agencia...' },
+                    ...AGENCIAS.map(ag => ({ value: ag, label: ag }))
+                  ]}
+                  placeholder="Seleccionar agencia..."
+                />
               </div>
 
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex gap-2">
@@ -718,3 +717,7 @@ export default function DespachoPage() {
     </div>
   )
 }
+
+
+
+

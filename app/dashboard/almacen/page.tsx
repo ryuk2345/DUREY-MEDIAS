@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { validarTransicionEstadoPaquete, convertirDocenasAPares } from '@/lib/domain/packaging'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 
 interface Ubicacion { id: string; nombre: string; tipo: string }
@@ -635,26 +636,26 @@ export default function AlmacenPage() {
           </h2>
 
           <div className="flex items-center gap-2 flex-wrap text-xs">
-            <select
+            <CustomSelect
               value={filtroUbicacion}
-              onChange={e => setFiltroUbicacion(e.target.value)}
-              className="input-dark py-1.5 px-3 text-xs font-bold text-cyan-300 border-cyan-500/30"
-            >
-              <option value="todas">Todos los Salones</option>
-              {ubicaciones.map(u => (
-                <option key={u.id} value={u.id}>📍 {u.nombre}</option>
-              ))}
-            </select>
+              onChange={val => setFiltroUbicacion(val)}
+              options={[
+                { value: 'todas', label: 'Todos los Salones' },
+                ...ubicaciones.map(u => ({ value: u.id, label: `📍 ${u.nombre}` }))
+              ]}
+              triggerClassName="py-1.5 px-3 text-xs font-bold text-cyan-300 border-cyan-500/30"
+            />
 
-            <select
+            <CustomSelect
               value={filtroEstado}
-              onChange={e => setFiltroEstado(e.target.value)}
-              className="input-dark py-1.5 px-3 text-xs font-bold text-slate-300"
-            >
-              <option value="todos">Todos los Estados</option>
-              <option value="almacenado">Almacenado en Salón</option>
-              <option value="pendiente_almacenar">Pendiente de Almacenar</option>
-            </select>
+              onChange={val => setFiltroEstado(val)}
+              options={[
+                { value: 'todos', label: 'Todos los Estados' },
+                { value: 'almacenado', label: 'Almacenado en Salón' },
+                { value: 'pendiente_almacenar', label: 'Pendiente de Almacenar' }
+              ]}
+              triggerClassName="py-1.5 px-3 text-xs font-bold text-slate-300"
+            />
           </div>
         </div>
 
@@ -699,15 +700,12 @@ export default function AlmacenPage() {
                   <td className="text-right">
                     {p.estado !== 'almacenado' && (
                       <div className="flex items-center justify-end gap-2">
-                        <select
+                        <CustomSelect
                           value={salonDestinoManual[p.id] || p.ubicacion_id || p.ubicacion?.id || ubicaciones[0]?.id || ''}
-                          onChange={e => setSalonDestinoManual(prev => ({ ...prev, [p.id]: e.target.value }))}
-                          className="bg-slate-900 border border-white/10 rounded-xl px-2 py-1 text-xs text-white font-medium"
-                        >
-                          {ubicaciones.map(u => (
-                            <option key={u.id} value={u.id}>{u.nombre}</option>
-                          ))}
-                        </select>
+                          onChange={val => setSalonDestinoManual(prev => ({ ...prev, [p.id]: val }))}
+                          options={ubicaciones.map(u => ({ value: u.id, label: u.nombre }))}
+                          triggerClassName="px-2 py-1 text-xs text-white font-medium min-w-[120px]"
+                        />
                         <button
                           onClick={async () => {
                             const v = validarTransicionEstadoPaquete(p.estado as any, 'almacenado')
@@ -961,16 +959,16 @@ export default function AlmacenPage() {
                         <span className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-black flex items-center justify-center">3</span>
                         Salón Destino
                       </label>
-                      <select
+                      <CustomSelect
                         value={formIngreso.salon_id}
-                        onChange={e => setFormIngreso(f => ({ ...f, salon_id: e.target.value }))}
-                        className="input-dark py-3 font-bold text-sm text-cyan-300 w-full"
-                      >
-                        <option value="">Seleccionar salón...</option>
-                        {ubicaciones.map(u => (
-                          <option key={u.id} value={u.id}>📍 {u.nombre}</option>
-                        ))}
-                      </select>
+                        onChange={val => setFormIngreso(f => ({ ...f, salon_id: val }))}
+                        options={[
+                          { value: '', label: 'Seleccionar salón...' },
+                          ...ubicaciones.map(u => ({ value: u.id, label: `📍 ${u.nombre}` }))
+                        ]}
+                        triggerClassName="py-3 font-bold text-sm text-cyan-300 w-full"
+                        placeholder="Seleccionar salón..."
+                      />
                     </div>
                   </div>
 

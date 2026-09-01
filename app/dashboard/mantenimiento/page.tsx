@@ -7,6 +7,7 @@ import { Wrench, AlertTriangle, Plus, Clock, CheckCircle, TrendingUp, Loader2, X
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 
 interface Maquina { id: string; codigo: string; tipo: string; estado: string }
@@ -457,10 +458,15 @@ export default function MantenimientoPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Máquina Afectada</label>
-                <select value={averiaForm.maquina_id} onChange={e => setAveriaForm({...averiaForm, maquina_id: e.target.value})} className="input-dark">
-                  <option value="">Seleccionar máquina...</option>
-                  {maquinas.filter(m => m.estado !== 'malograda').map(m => <option key={m.id} value={m.id}>{m.codigo} ({m.tipo})</option>)}
-                </select>
+                <CustomSelect
+                  value={averiaForm.maquina_id}
+                  onChange={val => setAveriaForm({ ...averiaForm, maquina_id: val })}
+                  options={[
+                    { value: '', label: 'Seleccionar máquina...' },
+                    ...maquinas.filter(m => m.estado !== 'malograda').map(m => ({ value: m.id, label: `${m.codigo} (${m.tipo})` }))
+                  ]}
+                  placeholder="Seleccionar máquina..."
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Descripción del Problema</label>
