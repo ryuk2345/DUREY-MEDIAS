@@ -51,6 +51,24 @@ interface Marca {
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 // 5MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
 
+const DEFAULT_MARCAS: Marca[] = [
+  { id: 'm1', nombre: 'Angies' },
+  { id: 'm2', nombre: 'Chinas Azules' },
+  { id: 'm3', nombre: 'Chinas Verdes' },
+  { id: 'm4', nombre: 'Rosso Speed' },
+  { id: 'm5', nombre: 'Jacquard BK' },
+  { id: 'm6', nombre: 'Durey' },
+]
+
+const DEFAULT_MAQUINAS: Maquina[] = [
+  { id: 'maq1', codigo: 'M01', tipo: 'tejedora', marca_id: 'm1', estado: 'activa' },
+  { id: 'maq2', codigo: 'M02', tipo: 'tejedora', marca_id: 'm1', estado: 'activa' },
+  { id: 'maq3', codigo: 'M03', tipo: 'tejedora', marca_id: 'm2', estado: 'activa' },
+  { id: 'maq4', codigo: 'M04', tipo: 'tejedora', marca_id: 'm1', estado: 'activa' },
+  { id: 'maq5', codigo: 'M05', tipo: 'remalladora', marca_id: 'm3', estado: 'activa' },
+  { id: 'maq6', codigo: 'M06', tipo: 'remalladora', marca_id: 'm3', estado: 'activa' },
+]
+
 const ESTADO_CONFIG = {
   en_muestra: { label: 'En Muestra', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: Clock },
   aprobada: { label: 'Aprobada', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: CheckCircle2 },
@@ -65,8 +83,8 @@ export default function DisenosPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [disenos, setDisenos] = useState<Diseno[]>([])
-  const [maquinas, setMaquinas] = useState<Maquina[]>([])
-  const [marcas, setMarcas] = useState<Marca[]>([])
+  const [maquinas, setMaquinas] = useState<Maquina[]>(DEFAULT_MAQUINAS)
+  const [marcas, setMarcas] = useState<Marca[]>(DEFAULT_MARCAS)
   const [currentUser, setCurrentUser] = useState<any>(null)
 
   // Filtros
@@ -128,19 +146,11 @@ export default function DisenosPage() {
       ])
 
       // Procesar Marcas
-      let marcasList: Marca[] = marcasRes.data || []
-      if (marcasList.length === 0) {
-        const { data: mSimple } = await supabase.from('marcas_maquinas').select('*')
-        if (mSimple && mSimple.length > 0) marcasList = mSimple
-      }
+      let marcasList: Marca[] = (marcasRes.data && marcasRes.data.length > 0) ? marcasRes.data : DEFAULT_MARCAS
       setMarcas(marcasList)
 
       // Procesar Máquinas
-      let maquinasList: Maquina[] = maquinasRes.data || []
-      if (maquinasList.length === 0) {
-        const { data: maqSimple } = await supabase.from('maquinas').select('*').order('codigo')
-        if (maqSimple && maqSimple.length > 0) maquinasList = maqSimple
-      }
+      let maquinasList: Maquina[] = (maquinasRes.data && maquinasRes.data.length > 0) ? maquinasRes.data : DEFAULT_MAQUINAS
       setMaquinas(maquinasList)
 
       // Procesar Diseños
