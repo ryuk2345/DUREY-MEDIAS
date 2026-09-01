@@ -87,7 +87,7 @@ export default function LoginPage() {
       else if (user.rol === 'planchador') redirectPath = '/dashboard/planchado'
       else if (user.rol === 'tejedor') redirectPath = '/dashboard/produccion'
 
-      window.location.href = redirectPath
+      router.push(redirectPath)
     } catch (err: any) {
       toast.error('Error al conectar con el servidor: ' + (err.message || 'Error desconocido'))
       setLoading(false)
