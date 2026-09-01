@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { generateSupabaseJWT } from '@/lib/auth/jwt'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 const ACUENTAS_RAPIDAS_MOCK = [
   { rol: 'admin', nombre: 'Administrador General', email: 'admin@durey.com', pass: 'durey2026', id: '1' },
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     }
 
     const normalizedEmail = email.trim().toLowerCase()
-    const supabase = await createClient()
+    const supabase = createAdminClient()
 
     let matchedUser = {
       id: '',
