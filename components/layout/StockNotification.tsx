@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Bell, AlertTriangle, X, Package, Database, Info, Loader2, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { toast } from 'sonner'
 import Link from 'next/link'
 
 interface LowStockProduct {
@@ -18,6 +19,7 @@ interface LowStockMaterial {
   material: string
   color: string
   stock_kg: number
+  tipo_empaque?: 'bolsa' | 'cono' | 'caja'
 }
 
 interface StockNotificationProps {
@@ -37,19 +39,64 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
     if (!isAuthorized) return
     setLoading(true)
     try {
-      // 1. Materia prima con stock menor o igual a 10 kg
+      // 1. Materia prima con stock crítico según su tipo de empaque
       const { data: rawData } = await supabase
         .from('materia_prima')
-        .select('id, material, color, stock_kg')
-        .lte('stock_kg', 10.000)
+        .select('id, material, color, stock_kg, tipo_empaque')
 
+      const lowMats: LowStockMaterial[] = []
+      const criticalMatsToToast: LowStockMaterial[] = []
+
+      // Obtener los IDs previamente alertados para control de cruce de umbral
+      const notifiedSet = new Set<string>(
+        JSON.parse(typeof window !== 'undefined' ? (sessionStorage.getItem('durey_notified_low_mats') || '[]') : '[]')
+      )
+      let stateChanged = false
+
+      rawData?.forEach((m: any) => {
+        const empaque = (m.tipo_empaque || 'cono') as 'bolsa' | 'cono' | 'caja'
+        const stock = Number(m.stock_kg ?? 0)
+
+        // Umbrales específicos solicitados:
+        // Cajas: <= 4 | Bolsas: <= 4 | Conos: <= 10
+        const isLow = empaque === 'caja' ? stock <= 4 : empaque === 'bolsa' ? stock <= 4 : stock <= 10
+
+        if (isLow) {
+          const item: LowStockMaterial = {
+            id: m.id,
+            material: m.material,
+            color: m.color,
+            stock_kg: stock,
+            tipo_empaque: empaque
+          }
+          lowMats.push(item)
+
+          // Disparar solo cuando cruza el umbral por primera vez hacia abajo
+          if (!notifiedSet.has(m.id)) {
+            notifiedSet.add(m.id)
+            criticalMatsToToast.push(item)
+            stateChanged = true
+          }
+        } else {
+          // Si fue reabastecido y superó el umbral, limpiar de los alertados
+          if (notifiedSet.has(m.id)) {
+            notifiedSet.delete(m.id)
+            stateChanged = true
+          }
+        }
+      })
+
+      if (stateChanged && typeof window !== 'undefined') {
+        sessionStorage.setItem('durey_notified_low_mats', JSON.stringify(Array.from(notifiedSet)))
+      }
+
+      // 2. Medias en Stock Crítico (<= 5 docenas)
       const { data: catData } = await supabase
         .from('catalogo_medias')
         .select('id, codigo, modelo, publico')
         .eq('estado', 'activo')
 
       const stockMap: Record<string, number> = {}
-
       const { data: viewData } = await supabase
         .from('vista_stock_medias')
         .select('catalogo_media_id, stock_docenas')
@@ -75,7 +122,7 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
       })
 
       setLowProducts(lowMedias)
-      setLowMaterials((rawData as LowStockMaterial[]) ?? [])
+      setLowMaterials(lowMats)
     } catch (error) {
       console.error('Error checking low stock:', error)
     } finally {
@@ -133,7 +180,7 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
                     </div>
                     <div>
                       <h2 className="text-lg font-bold text-white">Alertas de Stock Bajo</h2>
-                      <p className="text-xs text-slate-400">Notificaciones críticas para el supervisor</p>
+                      <p className="text-xs text-slate-400">Notificaciones críticas por tipo de empaque</p>
                     </div>
                   </div>
                   <button
@@ -165,30 +212,40 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
                     </div>
                   )}
 
-                  {/* 1. SECCIÓN MATERIAS PRIMAS */}
+                  {/* 1. SECCIÓN MATERIAS PRIMAS (DIFERENCIADAS POR EMPAQUE) */}
                   {lowMaterials.length > 0 && (
                     <div className="space-y-3">
                       <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <Database className="w-4 h-4 text-emerald-400" /> Materias Primas Críticas ({lowMaterials.length})
+                        <Database className="w-4 h-4 text-emerald-400" /> Materia Prima Crítica ({lowMaterials.length})
                       </h3>
                       <div className="space-y-2">
-                        {lowMaterials.map((mat) => (
-                          <div
-                            key={mat.id}
-                            className="p-4 rounded-xl bg-red-500/[0.03] border border-red-500/20 hover:border-red-500/40 transition-colors flex items-center justify-between"
-                          >
-                            <div>
-                              <p className="text-sm font-semibold text-white">{mat.material}</p>
-                              <p className="text-xs text-slate-500">Color: {mat.color}</p>
+                        {lowMaterials.map((mat) => {
+                          const empaqueIcon = mat.tipo_empaque === 'caja' ? '📦 Caja' : mat.tipo_empaque === 'bolsa' ? '🛍️ Bolsa' : '🧵 Cono'
+                          const umbralText = mat.tipo_empaque === 'cono' ? '≤ 10' : '≤ 4'
+                          const unidadText = mat.tipo_empaque === 'caja' ? 'cajas' : mat.tipo_empaque === 'bolsa' ? 'bolsas' : 'conos'
+                          return (
+                            <div
+                              key={mat.id}
+                              className="p-4 rounded-xl bg-red-500/[0.03] border border-red-500/20 hover:border-red-500/40 transition-colors flex items-center justify-between"
+                            >
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-900 text-slate-200 border border-white/10">
+                                    {empaqueIcon}
+                                  </span>
+                                  <p className="text-sm font-semibold text-white">{mat.material}</p>
+                                </div>
+                                <p className="text-xs text-slate-400 mt-1">Color: {mat.color} · <span className="text-amber-400">Límite {umbralText}</span></p>
+                              </div>
+                              <div className="text-right">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20">
+                                  {mat.stock_kg.toFixed(0)} {unidadText}
+                                </span>
+                                <p className="text-[10px] text-red-500/80 mt-1 font-medium">Reabastecer</p>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/10 text-red-400 border border-red-500/20">
-                                {mat.stock_kg.toFixed(3)} kg
-                              </span>
-                              <p className="text-[10px] text-red-500/80 mt-1 font-medium">Reabastecer urgente</p>
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
                   )}
@@ -233,16 +290,16 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
                   <div className="flex items-start gap-2 text-xs text-slate-400 bg-white/[0.02] p-3 rounded-xl border border-white/[0.04]">
                     <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
                     <p>
-                      Los límites de alerta son automáticos: <strong>&lt;= 10 kg</strong> para insumos y <strong>&lt;= 5 docenas</strong> para medias.
+                      Límites de alerta: <strong>Cajas ≤ 4</strong>, <strong>Bolsas ≤ 4</strong>, <strong>Conos ≤ 10</strong> y <strong>Medias ≤ 5 doc.</strong>
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <Link
-                      href="/dashboard/produccion"
+                      href="/dashboard/materia-prima"
                       onClick={() => setIsOpen(false)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-lg shadow-blue-600/10"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all shadow-lg shadow-emerald-600/10"
                     >
-                      Programar Producción <ArrowRight className="w-3.5 h-3.5" />
+                      Ver Materia Prima <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>
                 </div>

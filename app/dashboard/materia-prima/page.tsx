@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { 
   Database, Plus, Check, X, RefreshCw, Truck, FileText, AlertTriangle, 
-  TrendingUp, TrendingDown, CreditCard, DollarSign, BarChart3, Wrench, Info, Scale, ShoppingCart
+  TrendingUp, TrendingDown, CreditCard, DollarSign, BarChart3, Wrench, Info, Scale, ShoppingCart, Trash2, PackageCheck
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
@@ -14,6 +14,7 @@ interface MateriaPrima {
   material: string
   color: string
   stock_kg: number
+  tipo_empaque?: 'bolsa' | 'cono' | 'caja'
   created_at: string
 }
 
@@ -88,6 +89,7 @@ interface Movimiento {
 
 export default function MateriaPrimaPage() {
   const [activeTab, setActiveTab] = useState<'hilos' | 'repuestos' | 'proveedores' | 'egresos' | 'balance'>('hilos')
+  const [empaqueTab, setEmpaqueTab] = useState<'todos' | 'bolsas' | 'conos' | 'cajas'>('todos')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [usingFallback, setUsingFallback] = useState(false)
@@ -120,7 +122,12 @@ export default function MateriaPrimaPage() {
   const [selectedRepuesto, setSelectedRepuesto] = useState<Repuesto | null>(null)
 
   // Forms
-  const [hiloForm, setHiloForm] = useState({ material: '', color: '', stock_kg: '' })
+  const [hiloForm, setHiloForm] = useState<{ material: string; color: string; stock_kg: string; tipo_empaque: 'bolsa' | 'cono' | 'caja' }>({
+    material: '',
+    color: '',
+    stock_kg: '',
+    tipo_empaque: 'cono'
+  })
   const [repuestoForm, setRepuestoForm] = useState({ nombre: '', stock_actual: '', costo_unitario: '' })
   const [egresoForm, setEgresoForm] = useState({ concepto: '', monto: '', categoria: 'planilla' })
   const [payCuotaForm, setPayCuotaForm] = useState({ metodo_pago: 'Transferencia', comprobante_url: '' })
@@ -293,7 +300,7 @@ export default function MateriaPrimaPage() {
     localStorage.setItem(key, JSON.stringify(data))
   }
 
-  // ── AÑADIR NUEVO HILO / ALGODÓN ──────────────────────────────────────────
+  // ── AÑADIR NUEVO HILO / ALGODÓN / MATERIA PRIMA ─────────────────────────
   const handleAddHilo = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!hiloForm.material || !hiloForm.color) {
@@ -307,6 +314,7 @@ export default function MateriaPrimaPage() {
       material: hiloForm.material.trim(),
       color: hiloForm.color.trim(),
       stock_kg: parseFloat(hiloForm.stock_kg || '0'),
+      tipo_empaque: hiloForm.tipo_empaque || 'cono',
       created_at: new Date().toISOString()
     }
 
@@ -315,7 +323,8 @@ export default function MateriaPrimaPage() {
         const { error } = await supabase.from('materia_prima').insert({
           material: newHilo.material,
           color: newHilo.color,
-          stock_kg: newHilo.stock_kg
+          stock_kg: newHilo.stock_kg,
+          tipo_empaque: newHilo.tipo_empaque
         })
         if (error) throw error
       } else {
@@ -323,14 +332,34 @@ export default function MateriaPrimaPage() {
         saveToLocal('durey_materia_prima', list)
       }
 
-      toast.success('🧶 Nuevo tipo de fibra/hilo agregado al almacén')
+      const empaqueName = newHilo.tipo_empaque === 'caja' ? '📦 Caja' : newHilo.tipo_empaque === 'bolsa' ? '🛍️ Bolsa' : '🧵 Cono'
+      toast.success(`${empaqueName} registrado exitosamente en el almacén`)
       setShowAddHiloModal(false)
-      setHiloForm({ material: '', color: '', stock_kg: '' })
+      setHiloForm({ material: '', color: '', stock_kg: '', tipo_empaque: 'cono' })
       cargarDatos()
     } catch (err: any) {
-      toast.error(`Error al registrar hilo: ${err.message}`)
+      toast.error(`Error al registrar insumo: ${err.message}`)
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Eliminar hilo / materia prima
+  const handleEliminarHilo = async (h: MateriaPrima) => {
+    const empaqueName = h.tipo_empaque === 'caja' ? 'caja' : h.tipo_empaque === 'bolsa' ? 'bolsa' : 'cono'
+    if (!confirm(`¿Estás seguro de eliminar el registro de ${empaqueName} "${h.material} ${h.color}"?`)) return
+    try {
+      if (!usingFallback) {
+        const { error } = await supabase.from('materia_prima').delete().eq('id', h.id)
+        if (error) throw error
+      } else {
+        const list = stockHilos.filter(x => x.id !== h.id)
+        saveToLocal('durey_materia_prima', list)
+      }
+      toast.success('Insumo eliminado correctamente')
+      cargarDatos()
+    } catch (err: any) {
+      toast.error(`Error al eliminar insumo: ${err.message}`)
     }
   }
 
@@ -774,9 +803,27 @@ export default function MateriaPrimaPage() {
     }
   }
 
-  // ── CALCULAR SUGERENCIAS DE COMPRAS Y SALDOS PENDIENTES ──────────────────
+  // ── CALCULAR SUB-LISTAS POR TIPO DE EMPAQUE Y ALERTAS ESPECÍFICAS ──────────
+  const isItemCritical = (h: MateriaPrima) => {
+    const empaque = h.tipo_empaque || 'cono'
+    const stock = Number(h.stock_kg || 0)
+    return empaque === 'caja' ? stock <= 4 : empaque === 'bolsa' ? stock <= 4 : stock <= 10
+  }
+
+  const getItemThreshold = (empaque?: 'bolsa' | 'cono' | 'caja') => {
+    return empaque === 'cono' ? 10 : 4
+  }
+
+  const getItemUnitLabel = (empaque?: 'bolsa' | 'cono' | 'caja') => {
+    return empaque === 'caja' ? 'cajas' : empaque === 'bolsa' ? 'bolsas' : 'conos'
+  }
+
+  const stockBolsas = useMemo(() => stockHilos.filter(h => (h.tipo_empaque || 'cono') === 'bolsa'), [stockHilos])
+  const stockConos = useMemo(() => stockHilos.filter(h => (h.tipo_empaque || 'cono') === 'cono'), [stockHilos])
+  const stockCajas = useMemo(() => stockHilos.filter(h => (h.tipo_empaque || 'cono') === 'caja'), [stockHilos])
+
   const stockSugerencias = useMemo(() => {
-    return stockHilos.filter(h => h.stock_kg < 20.0)
+    return stockHilos.filter(isItemCritical)
   }, [stockHilos])
 
   const proveedoresSaldos = useMemo(() => {
@@ -988,162 +1035,529 @@ export default function MateriaPrimaPage() {
         <div className="p-12 text-center text-slate-400 text-xs">Cargando datos...</div>
       ) : (
         <>
-          {/* TAB 1: MATERIA PRIMA */}
+          {/* TAB 1: MATERIA PRIMA (3 APARTADOS: BOLSAS, CONOS Y CAJAS) */}
           {activeTab === 'hilos' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
-              <div className="lg:col-span-2 space-y-6">
-                
-                {/* Inventario Hilos */}
-                <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-4">
-                  <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                    🧵 Almacén de Hilos, Fibras y Algodón
-                  </h2>
-                  
-                  <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-white/[0.03] text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                        <tr>
-                          <th className="p-4">Fibra / Material</th>
-                          <th className="p-4">Color</th>
-                          <th className="p-4 text-right">Stock (Kg)</th>
-                          <th className="p-4 text-center">Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/[0.04]">
-                        {stockHilos.map((hilo) => {
-                          const isCritical = hilo.stock_kg < 20.0
-                          return (
-                            <tr key={hilo.id} className="hover:bg-white/[0.01] transition-colors">
-                              <td className="p-4 font-bold text-white">{hilo.material}</td>
-                              <td className="p-4">
-                                <span className="flex items-center gap-2 text-slate-300 font-medium">
-                                  <span 
-                                    className="w-3.5 h-3.5 rounded-full border border-white/20" 
-                                    style={{ 
-                                      backgroundColor: hilo.color.toLowerCase() === 'rojo' ? '#ef4444' : 
-                                                       hilo.color.toLowerCase() === 'negro' ? '#0f172a' : '#ffffff' 
-                                    }} 
-                                  />
-                                  {hilo.color}
+            <div className="space-y-6 animate-fadeIn">
+              
+              {/* Resumen Superior de los 3 Empaques */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Card Bolsas */}
+                <div 
+                  onClick={() => setEmpaqueTab(empaqueTab === 'bolsas' ? 'todos' : 'bolsas')}
+                  className={`cursor-pointer p-4 rounded-3xl border transition-all glass shadow-lg flex items-center justify-between ${
+                    empaqueTab === 'bolsas' ? 'ring-2 ring-emerald-500 bg-emerald-500/[0.06] border-emerald-500/40' : 'border-white/[0.08] hover:border-emerald-500/30'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      🛍️ Apartado Bolsas
+                    </span>
+                    <h3 className="text-xl font-black text-white font-mono">
+                      {stockBolsas.length} <span className="text-xs font-normal text-slate-400">tipos</span>
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      Total: <strong className="text-emerald-400 font-mono">{stockBolsas.reduce((acc, h) => acc + Number(h.stock_kg || 0), 0).toFixed(0)} bolsas</strong>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-[10px] font-bold py-1 px-2.5 rounded-full border ${
+                      stockBolsas.filter(isItemCritical).length > 0 
+                        ? 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse' 
+                        : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    }`}>
+                      {stockBolsas.filter(isItemCritical).length > 0 ? `${stockBolsas.filter(isItemCritical).length} Crítico (≤4)` : 'Normal'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card Conos */}
+                <div 
+                  onClick={() => setEmpaqueTab(empaqueTab === 'conos' ? 'todos' : 'conos')}
+                  className={`cursor-pointer p-4 rounded-3xl border transition-all glass shadow-lg flex items-center justify-between ${
+                    empaqueTab === 'conos' ? 'ring-2 ring-indigo-500 bg-indigo-500/[0.06] border-indigo-500/40' : 'border-white/[0.08] hover:border-indigo-500/30'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      🧵 Apartado Conos
+                    </span>
+                    <h3 className="text-xl font-black text-white font-mono">
+                      {stockConos.length} <span className="text-xs font-normal text-slate-400">tipos</span>
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      Total: <strong className="text-indigo-400 font-mono">{stockConos.reduce((acc, h) => acc + Number(h.stock_kg || 0), 0).toFixed(0)} conos</strong>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-[10px] font-bold py-1 px-2.5 rounded-full border ${
+                      stockConos.filter(isItemCritical).length > 0 
+                        ? 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse' 
+                        : 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+                    }`}>
+                      {stockConos.filter(isItemCritical).length > 0 ? `${stockConos.filter(isItemCritical).length} Crítico (≤10)` : 'Normal'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card Cajas */}
+                <div 
+                  onClick={() => setEmpaqueTab(empaqueTab === 'cajas' ? 'todos' : 'cajas')}
+                  className={`cursor-pointer p-4 rounded-3xl border transition-all glass shadow-lg flex items-center justify-between ${
+                    empaqueTab === 'cajas' ? 'ring-2 ring-amber-500 bg-amber-500/[0.06] border-amber-500/40' : 'border-white/[0.08] hover:border-amber-500/30'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      📦 Apartado Cajas
+                    </span>
+                    <h3 className="text-xl font-black text-white font-mono">
+                      {stockCajas.length} <span className="text-xs font-normal text-slate-400">tipos</span>
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      Total: <strong className="text-amber-400 font-mono">{stockCajas.reduce((acc, h) => acc + Number(h.stock_kg || 0), 0).toFixed(0)} cajas</strong>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-[10px] font-bold py-1 px-2.5 rounded-full border ${
+                      stockCajas.filter(isItemCritical).length > 0 
+                        ? 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse' 
+                        : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                    }`}>
+                      {stockCajas.filter(isItemCritical).length > 0 ? `${stockCajas.filter(isItemCritical).length} Crítico (≤4)` : 'Normal'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filtro secundario de visualización */}
+              <div className="flex items-center justify-between">
+                <div className="flex gap-2 p-1 rounded-2xl bg-white/[0.02] border border-white/[0.06]">
+                  {[
+                    { id: 'todos', label: `Todos (${stockHilos.length})` },
+                    { id: 'bolsas', label: `🛍️ Bolsas (${stockBolsas.length})` },
+                    { id: 'conos', label: `🧵 Conos (${stockConos.length})` },
+                    { id: 'cajas', label: `📦 Cajas (${stockCajas.length})` }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setEmpaqueTab(tab.id as any)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        empaqueTab === tab.id 
+                          ? 'bg-slate-800 text-white shadow-sm border border-white/10' 
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAddHiloModal(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/10"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Registrar Insumo
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+
+                  {/* ── APARTADO 1: BOLSAS ── */}
+                  {(empaqueTab === 'todos' || empaqueTab === 'bolsas') && (
+                    <div className="glass rounded-3xl border border-emerald-500/20 p-6 shadow-xl space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                          <span className="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">🛍️</span> 
+                          Apartado: Inventario de Bolsas
+                        </h2>
+                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                          Alerta: ≤ 4 bolsas
+                        </span>
+                      </div>
+                      
+                      <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-white/[0.03] text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                            <tr>
+                              <th className="p-4">Fibra / Material</th>
+                              <th className="p-4">Color</th>
+                              <th className="p-4 text-right">Stock (Bolsas)</th>
+                              <th className="p-4 text-center">Estado Alerta</th>
+                              <th className="p-4 text-center">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/[0.04]">
+                            {stockBolsas.map((hilo) => {
+                              const isCritical = isItemCritical(hilo)
+                              return (
+                                <tr key={hilo.id} className="hover:bg-white/[0.01] transition-colors">
+                                  <td className="p-4 font-bold text-white">{hilo.material}</td>
+                                  <td className="p-4">
+                                    <span className="flex items-center gap-2 text-slate-300 font-medium">
+                                      <span 
+                                        className="w-3.5 h-3.5 rounded-full border border-white/20" 
+                                        style={{ 
+                                          backgroundColor: hilo.color.toLowerCase() === 'rojo' ? '#ef4444' : 
+                                                           hilo.color.toLowerCase() === 'negro' ? '#0f172a' : '#ffffff' 
+                                        }} 
+                                      />
+                                      {hilo.color}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 text-right font-mono font-black text-sm text-white">
+                                    {Number(hilo.stock_kg).toFixed(0)} <span className="text-[10px] font-normal text-slate-400">bolsas</span>
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    {isCritical ? (
+                                      <span className="badge bg-red-500/20 text-red-400 border-red-500/30 text-[10px] py-1 px-2.5 font-bold animate-pulse inline-flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" /> Pedir Más (≤ 4)
+                                      </span>
+                                    ) : (
+                                      <span className="badge bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] py-1 px-2.5 font-bold">
+                                        Suficiente
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCompraForm(prev => ({ ...prev, materia_prima_id: hilo.id }))
+                                          setShowCompraModal(true)
+                                        }}
+                                        className="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold"
+                                        title="Reabastecer"
+                                      >
+                                        + Pedir
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleEliminarHilo(hilo)}
+                                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                        title="Eliminar"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                            {stockBolsas.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="p-6 text-center text-slate-500 text-xs">
+                                  No hay materias primas registradas en presentación de bolsas.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── APARTADO 2: CONOS ── */}
+                  {(empaqueTab === 'todos' || empaqueTab === 'conos') && (
+                    <div className="glass rounded-3xl border border-indigo-500/20 p-6 shadow-xl space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                          <span className="p-1.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">🧵</span> 
+                          Apartado: Inventario de Conos
+                        </h2>
+                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                          Alerta: ≤ 10 conos
+                        </span>
+                      </div>
+                      
+                      <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-white/[0.03] text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                            <tr>
+                              <th className="p-4">Fibra / Material</th>
+                              <th className="p-4">Color</th>
+                              <th className="p-4 text-right">Stock (Conos)</th>
+                              <th className="p-4 text-center">Estado Alerta</th>
+                              <th className="p-4 text-center">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/[0.04]">
+                            {stockConos.map((hilo) => {
+                              const isCritical = isItemCritical(hilo)
+                              return (
+                                <tr key={hilo.id} className="hover:bg-white/[0.01] transition-colors">
+                                  <td className="p-4 font-bold text-white">{hilo.material}</td>
+                                  <td className="p-4">
+                                    <span className="flex items-center gap-2 text-slate-300 font-medium">
+                                      <span 
+                                        className="w-3.5 h-3.5 rounded-full border border-white/20" 
+                                        style={{ 
+                                          backgroundColor: hilo.color.toLowerCase() === 'rojo' ? '#ef4444' : 
+                                                           hilo.color.toLowerCase() === 'negro' ? '#0f172a' : '#ffffff' 
+                                        }} 
+                                      />
+                                      {hilo.color}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 text-right font-mono font-black text-sm text-white">
+                                    {Number(hilo.stock_kg).toFixed(0)} <span className="text-[10px] font-normal text-slate-400">conos</span>
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    {isCritical ? (
+                                      <span className="badge bg-red-500/20 text-red-400 border-red-500/30 text-[10px] py-1 px-2.5 font-bold animate-pulse inline-flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" /> Pedir Más (≤ 10)
+                                      </span>
+                                    ) : (
+                                      <span className="badge bg-indigo-500/20 text-indigo-400 border-indigo-500/30 text-[10px] py-1 px-2.5 font-bold">
+                                        Suficiente
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCompraForm(prev => ({ ...prev, materia_prima_id: hilo.id }))
+                                          setShowCompraModal(true)
+                                        }}
+                                        className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 text-[10px] font-bold"
+                                        title="Reabastecer"
+                                      >
+                                        + Pedir
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleEliminarHilo(hilo)}
+                                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                        title="Eliminar"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                            {stockConos.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="p-6 text-center text-slate-500 text-xs">
+                                  No hay materias primas registradas en presentación de conos.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── APARTADO 3: CAJAS ── */}
+                  {(empaqueTab === 'todos' || empaqueTab === 'cajas') && (
+                    <div className="glass rounded-3xl border border-amber-500/20 p-6 shadow-xl space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                          <span className="p-1.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">📦</span> 
+                          Apartado: Inventario de Cajas
+                        </h2>
+                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                          Alerta: ≤ 4 cajas
+                        </span>
+                      </div>
+                      
+                      <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-white/[0.03] text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                            <tr>
+                              <th className="p-4">Fibra / Material</th>
+                              <th className="p-4">Color</th>
+                              <th className="p-4 text-right">Stock (Cajas)</th>
+                              <th className="p-4 text-center">Estado Alerta</th>
+                              <th className="p-4 text-center">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/[0.04]">
+                            {stockCajas.map((hilo) => {
+                              const isCritical = isItemCritical(hilo)
+                              return (
+                                <tr key={hilo.id} className="hover:bg-white/[0.01] transition-colors">
+                                  <td className="p-4 font-bold text-white">{hilo.material}</td>
+                                  <td className="p-4">
+                                    <span className="flex items-center gap-2 text-slate-300 font-medium">
+                                      <span 
+                                        className="w-3.5 h-3.5 rounded-full border border-white/20" 
+                                        style={{ 
+                                          backgroundColor: hilo.color.toLowerCase() === 'rojo' ? '#ef4444' : 
+                                                           hilo.color.toLowerCase() === 'negro' ? '#0f172a' : '#ffffff' 
+                                        }} 
+                                      />
+                                      {hilo.color}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 text-right font-mono font-black text-sm text-white">
+                                    {Number(hilo.stock_kg).toFixed(0)} <span className="text-[10px] font-normal text-slate-400">cajas</span>
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    {isCritical ? (
+                                      <span className="badge bg-red-500/20 text-red-400 border-red-500/30 text-[10px] py-1 px-2.5 font-bold animate-pulse inline-flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" /> Pedir Más (≤ 4)
+                                      </span>
+                                    ) : (
+                                      <span className="badge bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] py-1 px-2.5 font-bold">
+                                        Suficiente
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-4 text-center">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCompraForm(prev => ({ ...prev, materia_prima_id: hilo.id }))
+                                          setShowCompraModal(true)
+                                        }}
+                                        className="p-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 text-[10px] font-bold"
+                                        title="Reabastecer"
+                                      >
+                                        + Pedir
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleEliminarHilo(hilo)}
+                                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                        title="Eliminar"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                            {stockCajas.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="p-6 text-center text-slate-500 text-xs">
+                                  No hay materias primas registradas en presentación de cajas.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Compras e Inspección de Entregas */}
+                  <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-4">
+                    <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-emerald-400" /> Registro de Entregas e Inspección
+                    </h2>
+
+                    <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-white/[0.03] text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                          <tr>
+                            <th className="p-4">Fecha</th>
+                            <th className="p-4">Proveedor</th>
+                            <th className="p-4">Insumo</th>
+                            <th className="p-4 text-right">Cantidad</th>
+                            <th className="p-4 text-right">Costo</th>
+                            <th className="p-4 text-center">Condición</th>
+                            <th className="p-4 text-center">Estado</th>
+                            <th className="p-4 text-center">Control Calidad</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.04]">
+                          {compras.map((compra) => (
+                            <tr key={compra.id} className="hover:bg-white/[0.01] transition-colors">
+                              <td className="p-4 text-slate-300 font-medium font-mono">{compra.fecha}</td>
+                              <td className="p-4 font-bold text-white">{compra.proveedores?.nombre || 'Desconocido'}</td>
+                              <td className="p-4 text-slate-300 font-medium">{compra.materia_prima?.material} {compra.materia_prima?.color}</td>
+                              <td className="p-4 text-right font-bold text-white">{Number(compra.cantidad_kg).toFixed(0)} uds.</td>
+                              <td className="p-4 text-right font-bold text-slate-300">S/ {Number(compra.costo_total).toFixed(2)}</td>
+                              <td className="p-4 text-center capitalize">{compra.condicion_pago === 'pago_diferido' ? 'A Crédito' : 'Contado'}</td>
+                              <td className="p-4 text-center">
+                                <span className={`badge text-[9px] font-bold py-1 px-2.5 ${
+                                  compra.estado === 'recibida' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                                  compra.estado === 'devuelta' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                                  'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                }`}>
+                                  {compra.estado === 'recibida' ? 'Entregada' :
+                                   compra.estado === 'devuelta' ? 'Devuelta' : 'Pendiente QC'}
                                 </span>
                               </td>
-                              <td className="p-4 text-right font-mono font-black text-sm text-white">
-                                {Number(hilo.stock_kg).toFixed(3)} Kg
-                              </td>
                               <td className="p-4 text-center">
-                                {isCritical ? (
-                                  <span className="badge bg-red-500/20 text-red-400 border-red-500/30 text-[10px] py-1 px-2.5 font-bold animate-pulse inline-flex items-center gap-1">
-                                    <AlertTriangle className="w-3 h-3" /> Pedir Más (&lt;20kg)
-                                  </span>
+                                {compra.estado === 'pendiente' ? (
+                                  <button 
+                                    type="button"
+                                    onClick={() => abrirModalQC(compra)}
+                                    className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shadow-lg"
+                                  >
+                                    Inspeccionar
+                                  </button>
                                 ) : (
-                                  <span className="badge bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] py-1 px-2.5 font-bold">
-                                    Suficiente
-                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-bold">Verificado</span>
                                 )}
                               </td>
                             </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
+
                 </div>
 
-                {/* Compras de Hilos */}
-                <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-4">
-                  <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-emerald-400" /> Registro de Entregas e Inspección
-                  </h2>
+                {/* Sugerencias de Pedido de Insumos */}
+                <div className="space-y-6">
+                  <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-4">
+                    <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                      💡 Sugerencias de Reabastecimiento
+                    </h2>
 
-                  <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-white/[0.03] text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                        <tr>
-                          <th className="p-4">Fecha</th>
-                          <th className="p-4">Proveedor</th>
-                          <th className="p-4">Insumo</th>
-                          <th className="p-4 text-right">Cantidad</th>
-                          <th className="p-4 text-right">Costo</th>
-                          <th className="p-4 text-center">Condición</th>
-                          <th className="p-4 text-center">Estado</th>
-                          <th className="p-4 text-center">Control Calidad</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/[0.04]">
-                        {compras.map((compra) => (
-                          <tr key={compra.id} className="hover:bg-white/[0.01] transition-colors">
-                            <td className="p-4 text-slate-300 font-medium font-mono">{compra.fecha}</td>
-                            <td className="p-4 font-bold text-white">{compra.proveedores?.nombre || 'Desconocido'}</td>
-                            <td className="p-4 text-slate-300 font-medium">{compra.materia_prima?.material} {compra.materia_prima?.color}</td>
-                            <td className="p-4 text-right font-bold text-white">{Number(compra.cantidad_kg).toFixed(1)} Kg</td>
-                            <td className="p-4 text-right font-bold text-slate-300">S/ {Number(compra.costo_total).toFixed(2)}</td>
-                            <td className="p-4 text-center capitalize">{compra.condicion_pago === 'pago_diferido' ? 'A Crédito' : 'Contado'}</td>
-                            <td className="p-4 text-center">
-                              <span className={`badge text-[9px] font-bold py-1 px-2.5 ${
-                                compra.estado === 'recibida' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
-                                compra.estado === 'devuelta' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                                'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                              }`}>
-                                {compra.estado === 'recibida' ? 'Entregada' :
-                                 compra.estado === 'devuelta' ? 'Devuelta' : 'Pendiente QC'}
-                              </span>
-                            </td>
-                            <td className="p-4 text-center">
-                              {compra.estado === 'pendiente' ? (
-                                <button 
-                                  type="button"
-                                  onClick={() => abrirModalQC(compra)}
-                                  className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold shadow-lg"
-                                >
-                                  Inspeccionar
-                                </button>
-                              ) : (
-                                <span className="text-[10px] text-slate-500 font-bold">Verificado</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Sugerencias de Pedido de Insumos */}
-              <div className="space-y-6">
-                <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-4">
-                  <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                    💡 Sugerencias de Pedido (Mandados a pedir más)
-                  </h2>
-
-                  <div className="space-y-3.5">
-                    {stockSugerencias.map((h) => (
-                      <div key={h.id} className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex flex-col justify-between gap-3">
-                        <div className="flex gap-3 items-start">
-                          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <h3 className="text-xs font-bold text-white">{h.material} {h.color}</h3>
-                            <p className="text-[10px] text-slate-400 mt-1">El stock actual es de solo <strong>{Number(h.stock_kg).toFixed(3)} Kg</strong> (Crítico &lt;20kg).</p>
+                    <div className="space-y-3.5">
+                      {stockSugerencias.map((h) => {
+                        const empIcon = h.tipo_empaque === 'caja' ? '📦 Caja' : h.tipo_empaque === 'bolsa' ? '🛍️ Bolsa' : '🧵 Cono'
+                        const threshold = getItemThreshold(h.tipo_empaque)
+                        const unitLabel = getItemUnitLabel(h.tipo_empaque)
+                        return (
+                          <div key={h.id} className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex flex-col justify-between gap-3">
+                            <div className="flex gap-3 items-start">
+                              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-900 text-slate-200 border border-white/10">
+                                    {empIcon}
+                                  </span>
+                                  <h3 className="text-xs font-bold text-white">{h.material} {h.color}</h3>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-1.5">
+                                  Stock crítico: <strong className="text-red-400 font-mono">{Number(h.stock_kg).toFixed(0)} {unitLabel}</strong> (Límite ≤ {threshold} {unitLabel}).
+                                </p>
+                              </div>
+                            </div>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                setCompraForm(prev => ({ ...prev, materia_prima_id: h.id }))
+                                setShowCompraModal(true)
+                              }}
+                              className="w-full py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] tracking-wide"
+                            >
+                              Generar Pedido de {empIcon}
+                            </button>
                           </div>
+                        )
+                      })}
+                      {stockSugerencias.length === 0 && (
+                        <div className="p-6 text-center text-slate-400 text-xs">
+                          ✨ Todos los insumos (bolsas, conos y cajas) tienen stock saludable.
                         </div>
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            setCompraForm(prev => ({ ...prev, materia_prima_id: h.id }))
-                            setShowCompraModal(true)
-                          }}
-                          className="w-full py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] tracking-wide"
-                        >
-                          Generar Pedido de Reabastecimiento
-                        </button>
-                      </div>
-                    ))}
-                    {stockSugerencias.length === 0 && (
-                      <div className="p-6 text-center text-slate-400 text-xs">
-                        ✨ Todos los hilos tienen stock suficiente.
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1556,13 +1970,40 @@ export default function MateriaPrimaPage() {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">⚖️ Stock Inicial (Kg)</label>
+                <label className="block text-slate-300 font-bold mb-1.5">📦 Tipo de Empaque / Presentación</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'bolsa', label: '🛍️ Bolsa', sub: 'Alerta ≤ 4' },
+                    { id: 'cono', label: '🧵 Cono', sub: 'Alerta ≤ 10' },
+                    { id: 'caja', label: '📦 Caja', sub: 'Alerta ≤ 4' }
+                  ].map(emp => (
+                    <button
+                      key={emp.id}
+                      type="button"
+                      onClick={() => setHiloForm(prev => ({ ...prev, tipo_empaque: emp.id as any }))}
+                      className={`p-2.5 rounded-xl font-bold text-center border transition-all ${
+                        hiloForm.tipo_empaque === emp.id 
+                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-md shadow-emerald-500/10' 
+                          : 'bg-slate-900/60 border-white/[0.08] text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span className="block text-xs">{emp.label}</span>
+                      <span className="block text-[9px] font-normal text-slate-400 mt-0.5">{emp.sub}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-bold mb-1">
+                  ⚖️ Stock Inicial ({hiloForm.tipo_empaque === 'caja' ? 'Cajas' : hiloForm.tipo_empaque === 'bolsa' ? 'Bolsas' : 'Conos / Kg'})
+                </label>
                 <input 
                   type="number" 
                   step="0.1"
                   value={hiloForm.stock_kg} 
                   onChange={e => setHiloForm(prev => ({ ...prev, stock_kg: e.target.value }))}
-                  placeholder="Ej: 50.0" 
+                  placeholder={hiloForm.tipo_empaque === 'caja' ? 'Ej: 10 cajas' : hiloForm.tipo_empaque === 'bolsa' ? 'Ej: 8 bolsas' : 'Ej: 50 conos'} 
                   className="input-dark w-full text-sm py-2.5 font-bold"
                 />
               </div>
@@ -1952,7 +2393,7 @@ export default function MateriaPrimaPage() {
               </div>
 
               <div>
-                <label className="block text-slate-300 font-bold mb-1">🧵 Hilo / Algodón</label>
+                <label className="block text-slate-300 font-bold mb-1">🧵 Insumo / Materia Prima</label>
                 <select 
                   value={compraForm.materia_prima_id} 
                   onChange={e => setCompraForm(prev => ({ ...prev, materia_prima_id: e.target.value }))}
@@ -1960,9 +2401,14 @@ export default function MateriaPrimaPage() {
                   required
                 >
                   <option value="">Selecciona tipo de insumo...</option>
-                  {stockHilos.map(h => (
-                    <option key={h.id} value={h.id}>{h.material} {h.color}</option>
-                  ))}
+                  {stockHilos.map(h => {
+                    const empTag = h.tipo_empaque === 'caja' ? '📦 Caja' : h.tipo_empaque === 'bolsa' ? '🛍️ Bolsa' : '🧵 Cono'
+                    return (
+                      <option key={h.id} value={h.id}>
+                        [{empTag}] {h.material} - {h.color} (Stock: {Number(h.stock_kg).toFixed(0)})
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
 
