@@ -38,131 +38,59 @@ export default function LoginPage() {
 
     setLoading(true)
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-    const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
+    try {
+      // 1. Invocar endpoint de autenticación que emite JWT firmado
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password: password.trim() })
+      })
 
-    let targetRole = 'vendedora'
-    let targetName = email.split('@')[0]
-    let loginExitoso = false
+      const data = await res.json()
 
-    if (isMock) {
-      // MODO MOCK/DEMO LOCAL (Requiere escribir credenciales válidas)
-      const acc = ACUENTAS_RAPIDAS_MOCK.find(a => a.email.toLowerCase() === email.trim().toLowerCase())
-      if (acc && password === acc.pass) {
-        targetRole = acc.rol
-        targetName = acc.nombre
-        loginExitoso = true
-      } else {
-        toast.error('Credenciales mock incorrectas. Tip: usa email@durey.com con contraseña durey2026')
+      if (!res.ok || !data.success) {
+        toast.error(data.error || 'Credenciales inválidas')
         setLoading(false)
         return
       }
-    } else {
-      // MODO PRODUCCIÓN REAL (Supabase Auth estricto)
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password: password.trim()
-        })
 
-        if (error) {
-          // Fallback resiliente: consultar perfil en la tabla usuarios por email
-          const { data: perfilEmail } = await supabase
-            .from('usuarios')
-            .select('nombre, rol, activo')
-            .eq('email', email.trim().toLowerCase())
-            .single()
+      const { user, access_token } = data
 
-          if (perfilEmail) {
-            if (!perfilEmail.activo) {
-              toast.error('Esta cuenta ha sido desactivada por el Administrador.')
-              setLoading(false)
-              return
-            }
-            targetRole = perfilEmail.rol || 'vendedora'
-            targetName = perfilEmail.nombre || email.split('@')[0]
-            loginExitoso = true
-          } else {
-            toast.error(`Error de autenticación: ${error.message}`)
-            setLoading(false)
-            return
+      // 2. Inyectar el JWT en el cliente de Supabase para que las peticiones lleven Authorization: Bearer <jwt>
+      if (access_token) {
+        try {
+          const { error: sessionErr } = await supabase.auth.setSession({
+            access_token,
+            refresh_token: access_token
+          })
+          if (!sessionErr) {
+            console.log('🔑 [Shadow Auth] Sesión Supabase activada con JWT:', {
+              user_id: user.id,
+              role: user.rol,
+              email: user.email
+            })
           }
-        } else if (data?.user) {
-          // Obtener el perfil SQL y verificar que esté activo
-          let { data: perfil } = await supabase
-            .from('usuarios')
-            .select('nombre, rol, activo')
-            .eq('auth_id', data.user.id)
-            .single()
-
-          if (!perfil) {
-            const { data: perfilEmail } = await supabase
-              .from('usuarios')
-              .select('nombre, rol, activo')
-              .eq('email', email.trim().toLowerCase())
-              .single()
-            perfil = perfilEmail
-          }
-
-          if (!perfil) {
-            toast.error('Tu cuenta no tiene un perfil configurado en la base de datos SQL.')
-            setLoading(false)
-            return
-          }
-
-          if (!perfil.activo) {
-            toast.error('Esta cuenta ha sido desactivada por el Administrador.')
-            setLoading(false)
-            return
-          }
-
-          targetRole = perfil.rol || 'vendedora'
-          targetName = perfil.nombre || email.split('@')[0]
-          loginExitoso = true
-        } else {
-          toast.error('No se pudo verificar la sesión del usuario')
-          setLoading(false)
-          return
+        } catch (sessionEx) {
+          console.warn('Nota: Sincronización de sesión Supabase en progreso:', sessionEx)
         }
-      } catch (err) {
-        toast.error('Error al conectar con el servidor de autenticación')
-        setLoading(false)
-        return
-      }
-    }
-
-    if (loginExitoso) {
-      if (isMock) {
-        // En mock, guardamos la sesión simulada cifrada en cookie para el middleware
-        const sessionPayload = encodeURIComponent(JSON.stringify({
-          id: 'mock-uuid',
-          email: email.trim(),
-          rol: targetRole,
-          nombre: targetName
-        }))
-        document.cookie = `durey_mock_session=${sessionPayload}; path=/; max-age=86400`
-      } else {
-        // En producción, guardamos el rol y la sesión en cookies simples para el middleware
-        document.cookie = `durey_user_role=${targetRole}; path=/; max-age=86400`
-        document.cookie = `durey_user_logged=true; path=/; max-age=86400`
-        document.cookie = `durey_user_name=${encodeURIComponent(targetName)}; path=/; max-age=86400`
       }
 
-      toast.success(`Bienvenido a DUREY, ${targetName}`, { icon: '👋' })
+      toast.success(`Bienvenido a DUREY, ${user.nombre}`, { icon: '👋' })
 
       let redirectPath = '/dashboard/admin'
-      if (targetRole === 'vendedora') redirectPath = '/dashboard/ventas'
-      else if (targetRole === 'tecnico') redirectPath = '/dashboard/mantenimiento'
-      else if (targetRole === 'supervisor') redirectPath = '/dashboard/usuarios'
-      // Rol genérico 'operador' → primer módulo asignado por asignaciones_turno
-      else if (targetRole === 'operador') redirectPath = '/dashboard/produccion'
-      // Legacy
-      else if (targetRole === 'almacenero') redirectPath = '/dashboard/almacen'
-      else if (targetRole === 'preparador') redirectPath = '/dashboard/preparado'
-      else if (targetRole === 'planchador') redirectPath = '/dashboard/planchado'
-      else if (targetRole === 'tejedor') redirectPath = '/dashboard/produccion'
+      if (user.rol === 'vendedora') redirectPath = '/dashboard/ventas'
+      else if (user.rol === 'tecnico') redirectPath = '/dashboard/mantenimiento'
+      else if (user.rol === 'supervisor') redirectPath = '/dashboard/usuarios'
+      else if (user.rol === 'operador') redirectPath = '/dashboard/produccion'
+      else if (user.rol === 'almacenero') redirectPath = '/dashboard/almacen'
+      else if (user.rol === 'preparador') redirectPath = '/dashboard/preparado'
+      else if (user.rol === 'planchador') redirectPath = '/dashboard/planchado'
+      else if (user.rol === 'tejedor') redirectPath = '/dashboard/produccion'
 
       window.location.href = redirectPath
+    } catch (err: any) {
+      toast.error('Error al conectar con el servidor: ' + (err.message || 'Error desconocido'))
+      setLoading(false)
     }
   }
 
