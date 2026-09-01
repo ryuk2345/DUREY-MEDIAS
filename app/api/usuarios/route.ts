@@ -121,7 +121,7 @@ export async function DELETE(request: Request) {
       const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
       if (email) {
         const { data: usersData } = await supabaseAdmin.auth.admin.listUsers()
-        const user = usersData?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+        const user = (usersData?.users as any[])?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
         if (user) {
           await supabaseAdmin.auth.admin.deleteUser(user.id)
         }
