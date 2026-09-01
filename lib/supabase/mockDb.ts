@@ -21,21 +21,8 @@ const SEMILLAS = {
     { id: '11', nombre: 'Jorge Ramírez', email: 'jramirez@automation.com', rol: 'tecnico', activo: true, estado: 'en_reparacion', especialidad: 'Sensores y Sistemas Neumáticos', telefono: '+51 955 443 322', tipo: 'externo' },
     { id: '12', nombre: 'Tomas Volteador', email: 'volteador@durey.com', rol: 'operador', activo: true, estado: 'disponible' }
   ],
-  marcas_maquinas: [
-    { id: 'm1', nombre: 'Angies' },
-    { id: 'm2', nombre: 'Chinas Azules' },
-    { id: 'm3', nombre: 'Chinas Verdes' },
-    { id: 'm4', nombre: 'Rosso Speed' },
-    { id: 'm5', nombre: 'Jacquard BK' }
-  ],
-  maquinas: [
-    { id: 'maq1', codigo: 'M01', tipo: 'tejedora', marca_id: 'm1', anio: 2024, caracteristicas: 'Tejido Fino', estado: 'activa', eficiencia: 98, detalle_estado: 'EFICIENCIA: 98%', marca: { nombre: 'Angies' } },
-    { id: 'maq2', codigo: 'M02', tipo: 'tejedora', marca_id: 'm1', anio: 2024, caracteristicas: 'Tejido Grueso', estado: 'activa', eficiencia: 95, detalle_estado: 'EFICIENCIA: 95%', marca: { nombre: 'Angies' } },
-    { id: 'maq3', codigo: 'M03', tipo: 'tejedora', marca_id: 'm2', anio: 2023, caracteristicas: 'Tejido Deportivo', estado: 'activa', eficiencia: 90, detalle_estado: 'EFICIENCIA: 90%', marca: { nombre: 'Chinas Azules' } },
-    { id: 'maq4', codigo: 'M05', tipo: 'remalladora', marca_id: 'm3', anio: 2024, caracteristicas: 'Remallado Rápido', estado: 'ocupada', eficiencia: 92, detalle_estado: 'OPERATIVA', marca: { nombre: 'Chinas Verdes' } },
-    { id: 'maq5', codigo: 'M06', tipo: 'remalladora', marca_id: 'm3', anio: 2024, caracteristicas: 'Remallado Estándar', estado: 'activa', eficiencia: 90, detalle_estado: 'OPERATIVA', marca: { nombre: 'Chinas Verdes' } },
-    { id: 'maq6', codigo: 'M04', tipo: 'tejedora', marca_id: 'm1', anio: 2026, caracteristicas: 'Tejido Grueso', estado: 'activa', eficiencia: 98, detalle_estado: 'OPERATIVA', marca: { nombre: 'Angies' } }
-  ],
+  marcas_maquinas: [],
+  maquinas: [],
   ubicaciones: [
     { id: 'u1', nombre: 'Salón A', tipo: 'salon', activo: true },
     { id: 'u2', nombre: 'Salón B', tipo: 'salon', activo: true },
@@ -222,8 +209,10 @@ export async function getMockDb() {
       parsed.disenos = [];
       changed = true;
     }
-    if (!parsed.disenos_maquinas) {
-      parsed.disenos_maquinas = [];
+    // Purgar semillas ficticias previas si existían en el caché del usuario
+    if (parsed.maquinas && parsed.maquinas.some((m: any) => m.id === 'maq1' || m.codigo === 'M01')) {
+      parsed.maquinas = [];
+      parsed.marcas_maquinas = [];
       changed = true;
     }
 
