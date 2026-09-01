@@ -32,9 +32,15 @@ interface Asignacion {
 const ROLES_LISTA = [
   { id: 'admin', label: 'Administrador General', color: 'bg-violet-500/20 text-violet-300 border-violet-500/30' },
   { id: 'supervisor', label: 'Supervisor de Producción', color: 'bg-sky-500/20 text-sky-300 border-sky-500/30' },
-  { id: 'operador', label: 'Operador Multifuncional', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
+  { id: 'disenador', label: 'Diseñador Textil y Muestras', color: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30' },
+  { id: 'tejedor', label: 'Tejedor (Tejido Circular)', color: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
+  { id: 'remalladora', label: 'Remallador / Remalladora', color: 'bg-orange-500/20 text-orange-300 border-orange-500/30' },
+  { id: 'planchador', label: 'Planchador (Hormado)', color: 'bg-red-500/20 text-red-300 border-red-500/30' },
+  { id: 'preparador', label: 'Preparador (Empaques y Paquetes)', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+  { id: 'almacenero', label: 'Almacenero y Despacho', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
   { id: 'vendedora', label: 'Asesora de Ventas', color: 'bg-pink-500/20 text-pink-300 border-pink-500/30' },
   { id: 'tecnico', label: 'Técnico de Mantenimiento', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+  { id: 'operador', label: 'Operador Multifuncional', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
 ]
 
 export default function UsuariosPage() {
@@ -123,9 +129,10 @@ export default function UsuariosPage() {
     })
   }, [usuarios, selectedRolFilter, searchQuery])
 
-  // Operadores activos para asignación de turnos
+  // Operadores y personal de planta activos para asignación de turnos
   const operadoresDisponibles = useMemo(() => {
-    return usuarios.filter(u => u.rol === 'operador' && u.activo)
+    const rolesPlanta = ['operador', 'tejedor', 'remalladora', 'remallador', 'volteador', 'planchador', 'preparador', 'almacenero']
+    return usuarios.filter(u => rolesPlanta.includes(u.rol) && u.activo)
   }, [usuarios])
 
   // ── ACCIÓN: CREAR / EDITAR USUARIO ────────────────────────────────────────
@@ -593,11 +600,17 @@ export default function UsuariosPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {[
-              { id: 'admin', nombre: 'Administrador General', modulos: ['Dashboard', 'Personal / Accesos / Turnos', 'Catálogo de Medias', 'Máquinas de Planta', 'Tejido', 'Remallado', 'Volteado', 'Planchado', 'Preparado', 'Almacén', 'Ventas', 'Despacho', 'Mantenimiento', 'Reportes Financieros'], color: 'border-violet-500/40 text-violet-300' },
-              { id: 'supervisor', nombre: 'Supervisor de Planta', modulos: ['Calendario de Turnos', 'Asignación de Máquinas', 'Control de Tejido', 'Remallado y Volteo', 'Reporte de Mermas', 'Planchado', 'Almacén', 'Materia Prima'], color: 'border-sky-500/40 text-sky-300' },
-              { id: 'operador', nombre: 'Operador Multifuncional', modulos: ['Módulo del Área Asignada hoy (Tejido, Remallado, Volteado, Planchado, Preparado o Almacén)', 'Registro de Mermas/Averías en Turno activo'], color: 'border-indigo-500/40 text-indigo-300' },
-              { id: 'vendedora', nombre: 'Asesora de Ventas', modulos: ['Ventas y Cobranzas', 'Catálogo de Medias', 'Despacho a Agencias', 'Reportes de Ventas'], color: 'border-pink-500/40 text-pink-300' },
-              { id: 'tecnico', nombre: 'Técnico de Mantenimiento', modulos: ['Mantenimiento de Máquinas', 'Machinery Monitor', 'Catálogo de Repuestos'], color: 'border-amber-500/40 text-amber-300' },
+              { id: 'admin', nombre: 'Administrador General', modulos: ['Dashboard Principal', 'Gestión de Personal y Accesos', 'Catálogo de Medias', 'Inventario de Máquinas', 'Diseños y Muestras', 'Tejido', 'Remallado', 'Planchado', 'Preparado', 'Almacén y Despacho', 'Ventas y Cobranzas', 'Materia Prima y Finanzas', 'Reportes Ejecutivos'], color: 'border-violet-500/40 text-violet-300' },
+              { id: 'supervisor', nombre: 'Supervisor de Producción', modulos: ['Calendario de Turnos y Personal', 'Control de Tejido y Máquinas', 'Remallado y Volteo', 'Planchado y Hormado', 'Preparado y Empaques', 'Almacén y Despacho', 'Materia Prima e Hilados', 'Reportes de Planta'], color: 'border-sky-500/40 text-sky-300' },
+              { id: 'disenador', nombre: 'Diseñador Textil', modulos: ['Módulo de Diseños y Fichas Técnicas', 'Registro y Validación de Muestras', 'Asignación Multimarca a Tejedoras', 'Catálogo de Medias', 'Consulta de Máquinas'], color: 'border-fuchsia-500/40 text-fuchsia-300' },
+              { id: 'tejedor', nombre: 'Tejedor (Tejido Circular)', modulos: ['Módulo de Tejido (Producción)', 'Fichas Técnicas y Órdenes de Muestra', 'Reporte de Averías y Paradas de Máquina'], color: 'border-purple-500/40 text-purple-300' },
+              { id: 'remalladora', nombre: 'Remallador / Remalladora', modulos: ['Módulo de Remallado (Finalizar Lotes)', 'Generación de Stock para Planchar', 'Reporte de Averías de Remalladoras'], color: 'border-orange-500/40 text-orange-300' },
+              { id: 'planchador', nombre: 'Planchador (Hormado)', modulos: ['Módulo de Planchado y Hormado', 'Recepción de Lotes de Remallado', 'Registro de Docenas Planchadas'], color: 'border-red-500/40 text-red-300' },
+              { id: 'preparador', nombre: 'Preparador (Empaques)', modulos: ['Módulo de Preparado y Etiquetado', 'Registro de Paquetes Terminados', 'Empaque de Docenas Listas'], color: 'border-emerald-500/40 text-emerald-300' },
+              { id: 'almacenero', nombre: 'Almacenero y Despacho', modulos: ['Módulo de Almacén Central', 'Módulo de Despacho a Agencias', 'Gestión de Materia Prima e Hilados'], color: 'border-cyan-500/40 text-cyan-300' },
+              { id: 'vendedora', nombre: 'Asesora de Ventas', modulos: ['Módulo de Ventas y Pedidos', 'Catálogo de Medias y Precios', 'Despacho y Agencias de Envío'], color: 'border-pink-500/40 text-pink-300' },
+              { id: 'tecnico', nombre: 'Técnico de Mantenimiento', modulos: ['Machinery Monitor en Vivo', 'Registro y Reparación de Averías', 'Control de Stock de Repuestos'], color: 'border-amber-500/40 text-amber-300' },
+              { id: 'operador', nombre: 'Operador Multifuncional', modulos: ['Módulos según Turno Asignado (Tejido, Remallado, Planchado, Preparado, Almacén)'], color: 'border-indigo-500/40 text-indigo-300' },
             ].map(r => (
               <div key={r.id} className={`p-5 rounded-2xl bg-slate-900/60 border ${r.color} space-y-3`}>
                 <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
