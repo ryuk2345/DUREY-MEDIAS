@@ -218,7 +218,17 @@ function crearServicioDisenos(initialState?: {
       db.disenos.splice(idx, 1)
       // Limpiar asignaciones inactivas históricas
       db.disenos_maquinas = db.disenos_maquinas.filter(dm => dm.diseno_id !== disenoId)
+      return { ok: true }
+    },
 
+    // 6. Eliminar máquina del inventario
+    eliminarMaquina(maquinaId: string): { ok: boolean; error?: string } {
+      const idx = db.maquinas.findIndex(m => m.id === maquinaId)
+      if (idx === -1) return { ok: false, error: 'Máquina no encontrada' }
+
+      db.maquinas.splice(idx, 1)
+      // Desvincular asignaciones
+      db.disenos_maquinas = db.disenos_maquinas.filter(dm => dm.maquina_id !== maquinaId)
       return { ok: true }
     },
 
@@ -422,6 +432,36 @@ describe('E2E: Módulo de Diseñadores, Muestras y Asignación Multimarca', () =
       // Pasa a producción en planta
       servicio.actualizarEstadoMuestra(diseno_id!, 'en_produccion')
       expect(d.estado).toBe('en_produccion')
+    })
+  })
+
+  describe('5. Gestión y Eliminación de Máquinas de Planta', () => {
+    it('permite eliminar una máquina del inventario y desvincula asignaciones huérfanas', () => {
+      // 1. Crear diseño y asignarlo a M01
+      const { diseno_id } = servicio.registrarDisenoConAsignaciones({
+        codigo: 'DIS-MAQ-DEL',
+        nombre: 'Media Prueba Máquina',
+        foto_url: null,
+        color_muestra: 'Negro',
+        marca_id: 'marca-durey',
+        orden_muestra: 'MUE-DEL-01',
+        maquina_ids: ['maq-m01'],
+      })
+
+      expect(servicio.db.maquinas.some(m => m.id === 'maq-m01')).toBe(true)
+      expect(servicio.db.disenos_maquinas.some(dm => dm.maquina_id === 'maq-m01')).toBe(true)
+
+      // 2. Eliminar máquina M01
+      const resDel = servicio.eliminarMaquina('maq-m01')
+      expect(resDel.ok).toBe(true)
+      expect(servicio.db.maquinas.some(m => m.id === 'maq-m01')).toBe(false)
+
+      // 3. Verificar que las asignaciones se desvincularon
+      expect(servicio.db.disenos_maquinas.some(dm => dm.maquina_id === 'maq-m01')).toBe(false)
+
+      // 4. Ahora el diseño se puede eliminar sin restricción
+      const resDelDis = servicio.eliminarDiseno(diseno_id!)
+      expect(resDelDis.ok).toBe(true)
     })
   })
 })

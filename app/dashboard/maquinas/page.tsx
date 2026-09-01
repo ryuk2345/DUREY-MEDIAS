@@ -316,6 +316,57 @@ export default function MaquinasPage() {
     cargarDatos()
   }
 
+  // Eliminar Máquina CRUD
+  const eliminarMaquina = async (m: Maquina) => {
+    if (!confirm(`¿Eliminar definitivamente la máquina ${m.codigo} (${m.tipo})?\n\nEsta acción removerá la máquina del inventario de planta.`)) {
+      return
+    }
+
+    try {
+      // 1. Limpiar posibles asignaciones vinculadas en disenos_maquinas
+      try {
+        await supabase.from('disenos_maquinas').delete().eq('maquina_id', m.id)
+      } catch (e) {}
+
+      // 2. Eliminar máquina en DB
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id)
+      let delErr = null
+      if (isUuid) {
+        const { error } = await supabase.from('maquinas').delete().eq('id', m.id)
+        delErr = error
+      } else {
+        const { error } = await supabase.from('maquinas').delete().eq('codigo', m.codigo)
+        delErr = error
+      }
+
+      if (delErr) {
+        toast.error('Error al eliminar máquina: ' + delErr.message)
+        return
+      }
+
+      // 3. Limpiar de mockDb en browser si existe
+      try {
+        const mockStr = localStorage.getItem('durey_mock_db')
+        if (mockStr) {
+          const parsed = JSON.parse(mockStr)
+          if (parsed.maquinas) {
+            parsed.maquinas = parsed.maquinas.filter((item: any) => item.id !== m.id && item.codigo !== m.codigo)
+          }
+          if (parsed.disenos_maquinas) {
+            parsed.disenos_maquinas = parsed.disenos_maquinas.filter((item: any) => item.maquina_id !== m.id)
+          }
+          localStorage.setItem('durey_mock_db', JSON.stringify(parsed))
+        }
+      } catch (err) {}
+
+      setMaquinas(prev => prev.filter(item => item.id !== m.id && item.codigo !== m.codigo))
+      toast.success(`✅ Máquina ${m.codigo} eliminada correctamente`)
+      cargarDatos()
+    } catch (e: any) {
+      toast.error('Error al eliminar máquina')
+    }
+  }
+
 
 
   // Filtrado en el monitor
@@ -716,9 +767,17 @@ export default function MaquinasPage() {
                     <td className="text-right space-x-2">
                       <button
                         onClick={() => abrirMaquinaModal(m)}
-                        className="btn-secondary py-1 px-2.5 text-xs"
+                        className="btn-secondary py-1 px-2.5 text-xs hover:border-cyan-500/50 text-slate-300 hover:text-white"
+                        title="Editar Máquina"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => eliminarMaquina(m)}
+                        className="btn-secondary py-1 px-2.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/20"
+                        title="Eliminar Máquina"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </td>
                   </tr>
