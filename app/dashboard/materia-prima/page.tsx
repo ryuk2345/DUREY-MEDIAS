@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { 
   Database, Plus, Check, X, RefreshCw, Truck, FileText, AlertTriangle, 
-  TrendingUp, TrendingDown, CreditCard, DollarSign, BarChart3, Wrench, Info, Scale, ShoppingCart, Trash2, PackageCheck
+  TrendingUp, TrendingDown, CreditCard, DollarSign, BarChart3, Wrench, Info, Scale, ShoppingCart, Trash2, PackageCheck,
+  Building2, Phone, MessageCircle, User, ExternalLink
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
@@ -403,6 +404,48 @@ export default function MateriaPrimaPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  // ── ELIMINAR PROVEEDOR ────────────────────────────────────────────────────
+  const handleEliminarProveedor = async (prov: Proveedor) => {
+    const tieneCompras = compras.some(c => c.proveedor_id === prov.id)
+    if (tieneCompras) {
+      if (!confirm(`El proveedor "${prov.nombre}" tiene compras registradas en el historial. ¿Deseas eliminarlo de todos modos?`)) {
+        return
+      }
+    } else {
+      if (!confirm(`¿Eliminar definitivamente al proveedor "${prov.nombre}"?`)) {
+        return
+      }
+    }
+
+    try {
+      if (!usingFallback) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prov.id)
+        if (isUuid) {
+          const { error } = await supabase.from('proveedores').delete().eq('id', prov.id)
+          if (error) throw error
+        } else {
+          await supabase.from('proveedores').delete().eq('nombre', prov.nombre)
+        }
+      }
+      const list = proveedores.filter(p => p.id !== prov.id && p.nombre !== prov.nombre)
+      setProveedores(list)
+      saveToLocal('durey_proveedores', list)
+      toast.success(`Proveedor "${prov.nombre}" eliminado`)
+      cargarDatos()
+    } catch (err: any) {
+      toast.error(`Error al eliminar proveedor: ${err.message}`)
+    }
+  }
+
+  // ── ABRIR COMPRA CON PROVEEDOR PRESELECCIONADO ─────────────────────────────
+  const abrirCompraConProveedor = (proveedorId: string) => {
+    setCompraForm(prev => ({
+      ...prev,
+      proveedor_id: proveedorId
+    }))
+    setShowCompraModal(true)
   }
 
   // ── REGISTRAR NUEVO REPUESTO ──────────────────────────────────────────────
@@ -826,31 +869,24 @@ export default function MateriaPrimaPage() {
     return stockHilos.filter(isItemCritical)
   }, [stockHilos])
 
-  const proveedoresSaldos = useMemo(() => {
-    const saldos: Record<string, { ruc: string; nombre: string; total: number; pagado: number; saldo: number }> = {}
-    
-    proveedores.forEach(p => {
-      saldos[p.id] = { ruc: p.ruc, nombre: p.nombre, total: 0, pagado: 0, saldo: 0 }
-    })
+  const proveedoresInfo = useMemo(() => {
+    return proveedores.map(p => {
+      const misCompras = compras.filter(c => c.proveedor_id === p.id)
+      const totalComprado = misCompras.reduce((sum, c) => sum + Number(c.costo_total || 0), 0)
 
-    // Sumar por cuotas asociadas a compras
-    cuotasCompras.forEach(q => {
-      const comp = q.compra
-      if (comp) {
-        const pId = comp.proveedor_id
-        if (saldos[pId]) {
-          saldos[pId].total += Number(q.monto)
-          if (q.estado === 'pagada') {
-            saldos[pId].pagado += Number(q.monto)
-          } else {
-            saldos[pId].saldo += Number(q.monto)
-          }
-        }
+      const misCuotas = cuotasCompras.filter(q => q.compra?.proveedor_id === p.id)
+      const saldoPendiente = misCuotas
+        .filter(q => q.estado === 'pendiente')
+        .reduce((sum, q) => sum + Number(q.monto || 0), 0)
+
+      return {
+        ...p,
+        totalComprado,
+        saldoPendiente,
+        totalComprasCount: misCompras.length
       }
     })
-
-    return Object.values(saldos).filter(s => s.total > 0)
-  }, [proveedores, cuotasCompras])
+  }, [proveedores, compras, cuotasCompras])
 
   const balanceCompleto = useMemo(() => {
     // Egresos por compras recibidas
@@ -950,6 +986,25 @@ export default function MateriaPrimaPage() {
                 <Plus className="w-4 h-4" /> Registrar Compra
               </button>
             </>
+          )}
+
+          {activeTab === 'proveedores' && (
+            <div className="flex items-center gap-2">
+              <button 
+                type="button"
+                onClick={() => setShowAddProveedorModal(true)} 
+                className="btn-primary text-xs py-2.5 px-4 rounded-2xl bg-amber-600 hover:bg-amber-500 border-none flex items-center gap-1.5 font-bold shadow-lg"
+              >
+                <Building2 className="w-4 h-4" /> + Nuevo Proveedor
+              </button>
+              <button 
+                type="button"
+                onClick={() => setShowCompraModal(true)} 
+                className="btn-secondary text-xs py-2.5 px-4 rounded-2xl border-white/10 hover:bg-white/5 text-white flex items-center gap-1.5 font-bold"
+              >
+                <ShoppingCart className="w-4 h-4 text-amber-400" /> Registrar Compra
+              </button>
+            </div>
           )}
 
           {activeTab === 'repuestos' && (
@@ -1622,38 +1677,144 @@ export default function MateriaPrimaPage() {
             </div>
           )}
 
-          {/* TAB 3: CUENTAS POR PAGAR (PAGO DIFERIDO Y SALDOS) */}
+          {/* TAB 3: PROVEEDORES, CONTACTOS Y CUENTAS POR PAGAR */}
           {activeTab === 'proveedores' && (
-            <div className="space-y-6 animate-fadeIn">
+            <div className="space-y-8 animate-fadeIn">
               
-              {/* Saldos por Proveedor */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {proveedoresSaldos.map((s) => (
-                  <div key={s.ruc} className="glass p-5 rounded-3xl border border-white/[0.08] flex justify-between items-center shadow-md">
-                    <div>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Deuda / Saldo Pendiente</p>
-                      <h3 className="text-base font-black text-white mt-1">{s.nombre}</h3>
-                      <p className="text-[10px] text-slate-400 mt-0.5">RUC: {s.ruc}</p>
-                      <p className="text-xs font-bold text-red-400 mt-2 font-mono">S/ {s.saldo.toFixed(2)} pendiente</p>
+              {/* ── 1. DIRECTORIO COMPLETO DE PROVEEDORES ──────────────────────── */}
+              <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                      <Building2 className="w-6 h-6" />
                     </div>
-                    <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-center font-mono font-black text-sm">
-                      S/ {s.total.toFixed(0)}
-                      <span className="block text-[8px] font-bold text-slate-500 mt-0.5">TOTAL CRÉDITO</span>
+                    <div>
+                      <h2 className="text-base font-black text-white tracking-tight">Directorio de Proveedores de Hilados e Insumos</h2>
+                      <p className="text-slate-400 text-xs">Consulta números telefónicos, enlaces a WhatsApp para pedidos inmediatos y saldos por proveedor</p>
                     </div>
                   </div>
-                ))}
-                {proveedoresSaldos.length === 0 && (
-                  <div className="p-6 text-center text-slate-500 text-xs col-span-full">
-                    ✨ No tienes deudas o saldos pendientes de pago diferido con ningún proveedor de materia prima.
+                  <button 
+                    type="button"
+                    onClick={() => setShowAddProveedorModal(true)} 
+                    className="btn-primary text-xs py-2 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 border-none flex items-center gap-1.5 font-bold self-start sm:self-auto"
+                  >
+                    <Plus className="w-4 h-4" /> Registrar Proveedor
+                  </button>
+                </div>
+
+                {proveedoresInfo.length === 0 ? (
+                  <div className="p-10 text-center space-y-3 bg-slate-900/40 rounded-2xl border border-white/[0.04]">
+                    <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto text-xl">
+                      🏢
+                    </div>
+                    <p className="text-slate-300 font-bold text-sm">No tienes proveedores registrados todavía</p>
+                    <p className="text-slate-500 text-xs max-w-md mx-auto">
+                      Registra a tus proveedores de hilados, algodón, licra o repuestos con su número de teléfono para poder contactarlos y gestionar sus pagos.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddProveedorModal(true)}
+                      className="btn-primary text-xs py-2 px-4 bg-amber-600 hover:bg-amber-500 border-none font-bold rounded-xl inline-flex items-center gap-1.5 mt-2"
+                    >
+                      <Plus className="w-4 h-4" /> Registrar Primer Proveedor
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {proveedoresInfo.map((p) => {
+                      const cleanPhone = (p.telefono || '').replace(/\D/g, '')
+                      const tieneSaldo = p.saldoPendiente > 0
+
+                      return (
+                        <div 
+                          key={p.id} 
+                          className="glass p-5 rounded-3xl border border-white/[0.08] hover:border-amber-500/30 transition-all flex flex-col justify-between space-y-4 shadow-lg bg-gradient-to-b from-white/[0.02] to-transparent"
+                        >
+                          {/* Header Proveedor */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <h3 className="text-base font-black text-white tracking-tight leading-tight">{p.nombre}</h3>
+                              <button
+                                type="button"
+                                onClick={() => handleEliminarProveedor(p)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                title="Eliminar Proveedor"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            {p.ruc && (
+                              <p className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+                                <span className="font-bold text-slate-500">RUC:</span> {p.ruc}
+                              </p>
+                            )}
+                            {p.contacto && (
+                              <p className="text-[11px] text-slate-300 flex items-center gap-1.5">
+                                <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                <span className="font-medium">{p.contacto}</span>
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Contacto Directo: Teléfono y WhatsApp */}
+                          <div className="p-3 bg-slate-900/60 rounded-2xl border border-white/[0.04] space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Contacto</span>
+                              <span className="text-xs font-mono font-bold text-white">{p.telefono || 'Sin teléfono'}</span>
+                            </div>
+                            {p.telefono && (
+                              <div className="grid grid-cols-2 gap-2 pt-1">
+                                <a
+                                  href={`tel:${p.telefono}`}
+                                  className="btn-secondary py-1.5 px-2 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1 text-slate-200 hover:text-white border-white/10"
+                                >
+                                  <Phone className="w-3 h-3 text-cyan-400" /> Llamar
+                                </a>
+                                <a
+                                  href={`https://wa.me/${cleanPhone.startsWith('51') ? cleanPhone : '51' + cleanPhone}?text=Hola%20${encodeURIComponent(p.nombre)},%20te%20escribo%20de%20Durey%20Medias%20para%20hacer%20un%20pedido%20de%20materia%20prima.`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="py-1.5 px-2 text-[11px] font-bold rounded-xl flex items-center justify-center gap-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition-all"
+                                >
+                                  <MessageCircle className="w-3 h-3 text-emerald-400" /> WhatsApp
+                                </a>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Resumen Financiero y Acción */}
+                          <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between gap-2">
+                            <div>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block">Deuda Pendiente</span>
+                              <span className={`text-xs font-mono font-black ${tieneSaldo ? 'text-red-400' : 'text-emerald-400'}`}>
+                                {tieneSaldo ? `S/ ${p.saldoPendiente.toFixed(2)}` : 'Al día (S/ 0.00)'}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => abrirCompraConProveedor(p.id)}
+                              className="btn-secondary py-1.5 px-3 text-[11px] font-bold rounded-xl border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 flex items-center gap-1"
+                            >
+                              <ShoppingCart className="w-3 h-3" /> Pedir Hilado
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
 
-              {/* Cronograma de Cuotas */}
+              {/* ── 2. CRONOGRAMA DE CUOTAS POR VENCER (PAGO DIFERIDO) ────────── */}
               <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-4">
-                <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                  📅 Fechas y Calendario de Cuotas por Vencer (Cronograma de Créditos)
-                </h2>
+                <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+                  <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                    📅 Fechas y Calendario de Cuotas por Vencer (Cronograma de Créditos)
+                  </h2>
+                  <span className="text-xs font-mono text-slate-400">
+                    {cuotasCompras.filter(q => q.estado === 'pendiente').length} cuotas pendientes
+                  </span>
+                </div>
 
                 <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
                   <table className="w-full text-left text-xs">
@@ -1669,39 +1830,47 @@ export default function MateriaPrimaPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.04] text-slate-300">
-                      {cuotasCompras.map((cuota) => (
-                        <tr key={cuota.id} className="hover:bg-white/[0.01] transition-colors">
-                          <td className="p-4 font-mono font-bold text-red-300">{cuota.fecha_vencimiento}</td>
-                          <td className="p-4 font-bold text-white">{(cuota.compra as any)?.proveedores?.nombre || 'Desconocido'}</td>
-                          <td className="p-4 text-slate-400">
-                            {(cuota.compra as any)?.materia_prima?.material} {(cuota.compra as any)?.materia_prima?.color}
-                          </td>
-                          <td className="p-4 text-right font-mono font-black text-sm text-white">S/ {Number(cuota.monto).toFixed(2)}</td>
-                          <td className="p-4 text-center">
-                            <span className={`badge text-[9px] font-bold py-1 px-2.5 ${
-                              cuota.estado === 'pagada' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse'
-                            }`}>
-                              {cuota.estado === 'pagada' ? 'Pagada' : 'Pendiente'}
-                            </span>
-                          </td>
-                          <td className="p-4 text-center font-mono text-slate-400">{cuota.fecha_pago || '-'}</td>
-                          <td className="p-4 text-center">
-                            {cuota.estado === 'pendiente' ? (
-                              <button 
-                                type="button"
-                                onClick={() => abrirModalPagarCuota(cuota)}
-                                className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px]"
-                              >
-                                Pagar Cuota
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-slate-500 font-bold flex items-center justify-center gap-1">
-                                <Check className="w-3.5 h-3.5 text-emerald-400" /> Liquidado
-                              </span>
-                            )}
+                      {cuotasCompras.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-6 text-center text-slate-500 text-xs">
+                            ✨ No tienes deudas o cuotas pendientes de pago diferido con ningún proveedor.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        cuotasCompras.map((cuota) => (
+                          <tr key={cuota.id} className="hover:bg-white/[0.01] transition-colors">
+                            <td className="p-4 font-mono font-bold text-red-300">{cuota.fecha_vencimiento}</td>
+                            <td className="p-4 font-bold text-white">{(cuota.compra as any)?.proveedores?.nombre || 'Desconocido'}</td>
+                            <td className="p-4 text-slate-400">
+                              {(cuota.compra as any)?.materia_prima?.material} {(cuota.compra as any)?.materia_prima?.color}
+                            </td>
+                            <td className="p-4 text-right font-mono font-black text-sm text-white">S/ {Number(cuota.monto).toFixed(2)}</td>
+                            <td className="p-4 text-center">
+                              <span className={`badge text-[9px] font-bold py-1 px-2.5 ${
+                                cuota.estado === 'pagada' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse'
+                              }`}>
+                                {cuota.estado === 'pagada' ? 'Pagada' : 'Pendiente'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center font-mono text-slate-400">{cuota.fecha_pago || '-'}</td>
+                            <td className="p-4 text-center">
+                              {cuota.estado === 'pendiente' ? (
+                                <button 
+                                  type="button"
+                                  onClick={() => abrirModalPagarCuota(cuota)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px]"
+                                >
+                                  Pagar Cuota
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 font-bold flex items-center justify-center gap-1">
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" /> Liquidado
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
