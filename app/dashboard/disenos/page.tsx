@@ -449,13 +449,16 @@ export default function DisenosPage() {
 
   // ── ELIMINAR CON RESTRICCIÓN DE ASIGNACIONES ACTIVAS (ON DELETE RESTRICT) ─
   const handleEliminarDiseno = async (d: Diseno) => {
-    const asignacionesActivas = (d.asignaciones || []).filter(a => a.activo)
-    if (asignacionesActivas.length > 0) {
-      const maquinasNombres = asignacionesActivas
-        .map(a => a.maquina?.codigo || 'Máquina')
+    const asignacionesActivasReales = (d.asignaciones || []).filter(
+      a => a.activo && maquinas.some(m => m.id === a.maquina_id)
+    )
+
+    if (asignacionesActivasReales.length > 0) {
+      const maquinasNombres = asignacionesActivasReales
+        .map(a => a.maquina?.codigo || maquinas.find(m => m.id === a.maquina_id)?.codigo || 'Máquina')
         .join(', ')
       toast.error(
-        `⛔ No se puede eliminar: El diseño está asignado activamente a [${maquinasNombres}]. Desasígnalo primero o cámbialo a estado "Archivada".`,
+        `⛔ No se puede eliminar: El diseño está asignado activamente a las tejedoras en planta [${maquinasNombres}]. Desasígnalo primero o cámbialo a estado "Archivada".`,
         { duration: 5000 }
       )
       return
