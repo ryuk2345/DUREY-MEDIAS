@@ -52,5 +52,7 @@
   "reportes_preparado": [],
   "stock_listo_voltear": [],
   "lotes_volteado": [],
-  "reportes_volteado": []
+  "reportes_volteado": [],
+  "disenos": [],
+  "disenos_maquinas": []
 }

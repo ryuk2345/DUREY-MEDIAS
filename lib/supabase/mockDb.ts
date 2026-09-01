@@ -158,7 +158,9 @@ const SEMILLAS = {
   ],
   reparaciones: [],
   guias_remision: [],
-  movimientos_stock: []
+  movimientos_stock: [],
+  disenos: [],
+  disenos_maquinas: []
 };
 
 // Singleton en el servidor para almacenar en memoria durante ejecución
@@ -384,6 +386,18 @@ class MockQueryBuilder {
             maquina: db.maquinas.find((m: any) => m.id === a.maquina_id) || { codigo: 'M01', tipo: 'tejedora' },
             reportado_por: db.usuarios.find((u: any) => u.id === a.reportado_por_id) || { nombre: 'Carlos Tejedor' },
             reparaciones: db.reparaciones.filter((r: any) => r.averia_id === a.id)
+          }));
+        } else if (self.tableName === 'disenos') {
+          result = result.map(d => ({
+            ...d,
+            marca: db.marcas_maquinas?.find((br: any) => br.id === d.marca_id) || null,
+            disenador: db.usuarios?.find((u: any) => u.id === d.disenador_id) || null,
+            asignaciones: (db.disenos_maquinas || [])
+              .filter((dm: any) => dm.diseno_id === d.id && dm.activo)
+              .map((dm: any) => ({
+                ...dm,
+                maquina: db.maquinas?.find((m: any) => m.id === dm.maquina_id) || { codigo: 'M01', tipo: 'tejedora' }
+              }))
           }));
         } else if (self.tableName === 'cuotas') {
           result = result.map(q => {
@@ -698,6 +712,118 @@ export function createMockClient() {
           return { data: null, error: err };
         }
       }
+
+      if (fnName === 'registrar_diseno_con_asignaciones') {
+        const {
+          p_codigo,
+          p_nombre,
+          p_foto_url,
+          p_color_muestra,
+          p_marca_id,
+          p_disenador_id,
+          p_orden_muestra,
+          p_cantidad_muestra,
+          p_observaciones,
+          p_maquina_ids
+        } = params;
+
+        try {
+          const db = await getMockDb();
+          if (!db.disenos) db.disenos = [];
+          if (!db.disenos_maquinas) db.disenos_maquinas = [];
+
+          const disenoId = 'dis-' + Math.random().toString(36).substring(2, 11);
+          const nuevoDiseno = {
+            id: disenoId,
+            codigo: p_codigo,
+            nombre: p_nombre,
+            foto_url: p_foto_url,
+            color_muestra: p_color_muestra,
+            marca_id: p_marca_id,
+            disenador_id: p_disenador_id,
+            orden_muestra: p_orden_muestra,
+            cantidad_muestra: p_cantidad_muestra || 1,
+            observaciones: p_observaciones,
+            estado: 'en_muestra',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+
+          db.disenos.unshift(nuevoDiseno);
+
+          if (p_maquina_ids && Array.isArray(p_maquina_ids)) {
+            for (const mId of p_maquina_ids) {
+              db.disenos_maquinas.push({
+                id: 'dm-' + Math.random().toString(36).substring(2, 11),
+                diseno_id: disenoId,
+                maquina_id: mId,
+                activo: true,
+                fecha_asignacion: new Date().toISOString()
+              });
+            }
+          }
+
+          await saveMockDb(db);
+          return { data: disenoId, error: null };
+        } catch (err: any) {
+          return { data: null, error: err };
+        }
+      }
+
+      if (fnName === 'asignar_diseno_a_maquinas') {
+        const { p_diseno_id, p_maquina_ids } = params;
+        try {
+          const db = await getMockDb();
+          if (!db.disenos_maquinas) db.disenos_maquinas = [];
+
+          db.disenos_maquinas.forEach((dm: any) => {
+            if (dm.diseno_id === p_diseno_id && !p_maquina_ids.includes(dm.maquina_id)) {
+              dm.activo = false;
+            }
+          });
+
+          for (const mId of p_maquina_ids) {
+            const existing = db.disenos_maquinas.find(
+              (dm: any) => dm.diseno_id === p_diseno_id && dm.maquina_id === mId
+            );
+            if (existing) {
+              existing.activo = true;
+            } else {
+              db.disenos_maquinas.push({
+                id: 'dm-' + Math.random().toString(36).substring(2, 11),
+                diseno_id: p_diseno_id,
+                maquina_id: mId,
+                activo: true,
+                fecha_asignacion: new Date().toISOString()
+              });
+            }
+          }
+
+          await saveMockDb(db);
+          return { data: true, error: null };
+        } catch (err: any) {
+          return { data: null, error: err };
+        }
+      }
+
+      if (fnName === 'actualizar_estado_muestra_diseno') {
+        const { p_diseno_id, p_nuevo_estado, p_observaciones } = params;
+        try {
+          const db = await getMockDb();
+          if (!db.disenos) db.disenos = [];
+          const dis = db.disenos.find((d: any) => d.id === p_diseno_id);
+          if (dis) {
+            dis.estado = p_nuevo_estado;
+            if (p_observaciones) dis.observaciones = p_observaciones;
+            dis.updated_at = new Date().toISOString();
+          }
+          await saveMockDb(db);
+          return { data: true, error: null };
+        } catch (err: any) {
+          return { data: null, error: err };
+        }
+      }
+
       return { data: null, error: new Error(`Mock RPC function '${fnName}' not implemented.`) };
     },
     auth: {
