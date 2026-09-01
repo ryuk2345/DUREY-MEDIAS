@@ -95,30 +95,24 @@ export default function PlanchadoPage() {
     if (cat.error) toast.error(`Error al cargar catálogo de medias: ${cat.error.message}`)
 
     const hoy = new Date().toISOString().split('T')[0]
-    const { data: asigData, error: asigErr } = await supabase
-      .from('asignaciones_turno')
-      .select('operador_id, operador:usuarios(id, nombre)')
-      .eq('area', 'planchado')
-      .eq('fecha', hoy)
+    const [espRes, asigRes] = await Promise.all([
+      supabase.from('usuarios').select('id, nombre').eq('rol', 'planchador').eq('activo', true).order('nombre'),
+      supabase.from('asignaciones_turno').select('operador_id, operador:usuarios(id, nombre)').eq('area', 'planchado').eq('fecha', hoy)
+    ])
 
-    let planchadoresList = []
-    if (asigErr) {
-      toast.error(`Error al cargar asignaciones de turno: ${asigErr.message}`)
-    } else if (asigData && asigData.length > 0) {
-      planchadoresList = asigData.map((a: any) => a.operador).filter(Boolean)
-    } else {
-      const { data: usersData, error: usersErr } = await supabase
-        .from('usuarios')
-        .select('id, nombre')
-        .in('rol', ['operador', 'planchador'])
-        .eq('activo', true)
-        .order('nombre')
-      if (usersErr) {
-        toast.error(`Error al cargar operarios: ${usersErr.message}`)
-      } else if (usersData) {
-        planchadoresList = usersData
-      }
+    const mapaPlanchadores = new Map<string, { id: string; nombre: string }>()
+    if (espRes.data) {
+      espRes.data.forEach((u: any) => mapaPlanchadores.set(u.id, u))
     }
+    if (asigRes.data) {
+      asigRes.data.forEach((a: any) => {
+        if (a.operador) {
+          mapaPlanchadores.set(a.operador.id, a.operador)
+        }
+      })
+    }
+
+    const planchadoresList = Array.from(mapaPlanchadores.values())
 
     setPlanchadores(planchadoresList)
     setStock((st.data ?? []) as StockPlanchar[])
@@ -656,7 +650,7 @@ export default function PlanchadoPage() {
               </thead>
               <tbody>
                 {planchadores.length === 0 ? (
-                  <tr><td colSpan={DIAS.length + 1} className="text-center py-8 text-slate-500">No hay planchadores registrados en el sistema</td></tr>
+                  <tr><td colSpan={DIAS.length + 1} className="text-center py-8 text-slate-400 text-xs">⚠️ No hay planchadores asignados a esta área hoy — pide al supervisor que complete el Calendario de Turnos</td></tr>
                 ) : planchadores.map(p => (
                   <tr key={p.id}>
                     <td className="font-bold text-white py-4">
@@ -742,8 +736,8 @@ export default function PlanchadoPage() {
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="w-7 h-7 animate-spin text-red-400" /></div>
         ) : planchadores.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">
-            No hay planchadores registrados
+          <div className="text-center py-12 text-slate-400 text-xs bg-slate-900/40 rounded-3xl border border-white/[0.06] p-8">
+            ⚠️ No hay planchadores asignados a esta área hoy — pide al supervisor que complete el Calendario de Turnos en el módulo de Personal.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -896,9 +890,13 @@ export default function PlanchadoPage() {
                   onChange={e => setCronoForm({ ...cronoForm, planchador_id: e.target.value })}
                   className="input-dark text-xs w-full font-medium"
                 >
-                  {planchadores.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre}</option>
-                  ))}
+                  {planchadores.length === 0 ? (
+                    <option value="" disabled>⚠️ No hay planchadores asignados hoy</option>
+                  ) : (
+                    planchadores.map(p => (
+                      <option key={p.id} value={p.id}>{p.nombre}</option>
+                    ))
+                  )}
                 </select>
               </div>
 

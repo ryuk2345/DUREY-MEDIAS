@@ -118,30 +118,24 @@ export default function PreparadoPage() {
     if (cat.error) toast.error(`Error al cargar catálogo de medias: ${cat.error.message}`)
 
     const hoy = new Date().toISOString().split('T')[0]
-    const { data: asigData, error: asigErr } = await supabase
-      .from('asignaciones_turno')
-      .select('operador_id, operador:usuarios(id, nombre)')
-      .eq('area', 'preparado')
-      .eq('fecha', hoy)
+    const [espRes, asigRes] = await Promise.all([
+      supabase.from('usuarios').select('id, nombre').eq('rol', 'preparador').eq('activo', true).order('nombre'),
+      supabase.from('asignaciones_turno').select('operador_id, operador:usuarios(id, nombre)').eq('area', 'preparado').eq('fecha', hoy)
+    ])
 
-    let preparadoresList = []
-    if (asigErr) {
-      toast.error(`Error al cargar asignaciones de turno: ${asigErr.message}`)
-    } else if (asigData && asigData.length > 0) {
-      preparadoresList = asigData.map((a: any) => a.operador).filter(Boolean)
-    } else {
-      const { data: usersData, error: usersErr } = await supabase
-        .from('usuarios')
-        .select('id, nombre')
-        .in('rol', ['operador', 'preparador'])
-        .eq('activo', true)
-        .order('nombre')
-      if (usersErr) {
-        toast.error(`Error al cargar operarios: ${usersErr.message}`)
-      } else if (usersData) {
-        preparadoresList = usersData
-      }
+    const mapaPreparadores = new Map<string, { id: string; nombre: string }>()
+    if (espRes.data) {
+      espRes.data.forEach((u: any) => mapaPreparadores.set(u.id, u))
     }
+    if (asigRes.data) {
+      asigRes.data.forEach((a: any) => {
+        if (a.operador) {
+          mapaPreparadores.set(a.operador.id, a.operador)
+        }
+      })
+    }
+
+    const preparadoresList = Array.from(mapaPreparadores.values())
 
     setPreparadores(preparadoresList)
     setStock((st.data ?? []) as StockEmpacar[])
@@ -493,8 +487,13 @@ export default function PreparadoPage() {
           Empacadores Activos — Día <span className="text-white capitalize">{diaSeleccionado}</span> (Semana N° {semanaSeleccionada})
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {preparadores.map(prep => {
+        {preparadores.length === 0 ? (
+          <div className="p-8 text-center bg-slate-900/40 rounded-3xl border border-white/[0.06] text-slate-400 text-xs font-medium">
+            ⚠️ No hay empacadores/preparadores asignados a esta área hoy — pide al supervisor que complete el Calendario de Turnos en el módulo de Personal.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {preparadores.map(prep => {
             const asignacionDia = cronograma.find(c => c.preparador_id === prep.id && c.dia_semana === diaSeleccionado)
             const inputVals = produccionMasiva[prep.id] || { empacadas: '', defectuosas: '' }
 
@@ -601,6 +600,7 @@ export default function PreparadoPage() {
             )
           })}
         </div>
+        )}
       </div>
 
       {/* ── LISTADO DE SACOS MAESTROS Y PAQUETES GENERADOS ───────────────────── */}

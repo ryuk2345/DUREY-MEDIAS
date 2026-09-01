@@ -97,29 +97,24 @@ export default function ProduccionTejidoPage() {
     }
 
     const hoy = new Date().toISOString().split('T')[0]
-    const { data: asigData, error: asigErr } = await supabase
-      .from('asignaciones_turno')
-      .select('operador_id, operador:usuarios(id, nombre)')
-      .eq('area', 'tejido')
-      .eq('fecha', hoy)
+    const [espRes, asigRes] = await Promise.all([
+      supabase.from('usuarios').select('id, nombre, estado').eq('rol', 'tejedor').eq('activo', true).order('nombre'),
+      supabase.from('asignaciones_turno').select('operador_id, operador:usuarios(id, nombre, estado)').eq('area', 'tejido').eq('fecha', hoy)
+    ])
 
-    let tejedoresList = []
-    if (asigErr) {
-      toast.error(`Error cargando asignaciones de turno: ${asigErr.message}`)
-    } else if (asigData && asigData.length > 0) {
-      tejedoresList = asigData.map((a: any) => a.operador).filter(Boolean)
-    } else {
-      const { data: usersData, error: usersErr } = await supabase
-        .from('usuarios')
-        .select('id, nombre')
-        .in('rol', ['operador', 'tejedor'])
-        .eq('activo', true)
-      if (usersErr) {
-        toast.error(`Error cargando operarios: ${usersErr.message}`)
-      } else if (usersData) {
-        tejedoresList = usersData
-      }
+    const mapaTejedores = new Map<string, { id: string; nombre: string; estado?: string }>()
+    if (espRes.data) {
+      espRes.data.forEach((u: any) => mapaTejedores.set(u.id, u))
     }
+    if (asigRes.data) {
+      asigRes.data.forEach((a: any) => {
+        if (a.operador) {
+          mapaTejedores.set(a.operador.id, a.operador)
+        }
+      })
+    }
+
+    const tejedoresList = Array.from(mapaTejedores.values())
 
     setMarcas(mar.data ?? [])
     setMaquinas((maq.data ?? []) as Maquina[])
@@ -672,10 +667,16 @@ export default function ProduccionTejidoPage() {
                   onChange={e => setCargaForm({ ...cargaForm, tejedor_id: e.target.value })}
                   className="input-dark text-xs w-full font-medium"
                 >
-                  <option value="">Seleccionar tejedor...</option>
-                  {tejedores.map(t => (
-                    <option key={t.id} value={t.id}>{t.nombre}</option>
-                  ))}
+                  {tejedores.length === 0 ? (
+                    <option value="" disabled>⚠️ No hay tejedores asignados a esta área hoy — pide al supervisor que complete el Calendario de Turnos</option>
+                  ) : (
+                    <>
+                      <option value="">Seleccionar tejedor...</option>
+                      {tejedores.map(t => (
+                        <option key={t.id} value={t.id}>{t.nombre}</option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
 

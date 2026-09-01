@@ -96,29 +96,24 @@ export default function RemalladoMonitorPage() {
     }
 
     const hoy = new Date().toISOString().split('T')[0]
-    const { data: asigData, error: asigErr } = await supabase
-      .from('asignaciones_turno')
-      .select('operador_id, operador:usuarios(id, nombre, estado)')
-      .eq('area', 'enlace')
-      .eq('fecha', hoy)
+    const [espRes, asigRes] = await Promise.all([
+      supabase.from('usuarios').select('id, nombre, estado').in('rol', ['remalladora', 'remallador']).eq('activo', true).order('nombre'),
+      supabase.from('asignaciones_turno').select('operador_id, operador:usuarios(id, nombre, estado)').eq('area', 'enlace').eq('fecha', hoy)
+    ])
 
-    let remalladorasList = []
-    if (asigErr) {
-      toast.error(`Error cargando asignaciones de turno: ${asigErr.message}`)
-    } else if (asigData && asigData.length > 0) {
-      remalladorasList = asigData.map((a: any) => a.operador).filter(Boolean)
-    } else {
-      const { data: usersData, error: usersErr } = await supabase
-        .from('usuarios')
-        .select('id, nombre, estado')
-        .in('rol', ['operador', 'remalladora'])
-        .eq('activo', true)
-      if (usersErr) {
-        toast.error(`Error cargando operarios: ${usersErr.message}`)
-      } else if (usersData) {
-        remalladorasList = usersData
-      }
+    const mapaRemalladoras = new Map<string, { id: string; nombre: string; estado?: string }>()
+    if (espRes.data) {
+      espRes.data.forEach((u: any) => mapaRemalladoras.set(u.id, u))
     }
+    if (asigRes.data) {
+      asigRes.data.forEach((a: any) => {
+        if (a.operador) {
+          mapaRemalladoras.set(a.operador.id, a.operador)
+        }
+      })
+    }
+
+    const remalladorasList = Array.from(mapaRemalladoras.values())
 
     setLotes((lot.data ?? []) as unknown as LoteRemallado[])
     setRemalladoras(remalladorasList)
@@ -528,10 +523,16 @@ export default function RemalladoMonitorPage() {
                   onChange={e => setCargaForm({ ...cargaForm, remalladora_id: e.target.value })}
                   className="input-dark text-xs w-full font-medium"
                 >
-                  <option value="">Seleccionar remalladora...</option>
-                  {remalladorasDisponibles.map(r => (
-                    <option key={r.id} value={r.id}>{r.nombre}</option>
-                  ))}
+                  {remalladorasDisponibles.length === 0 ? (
+                    <option value="" disabled>⚠️ No hay remalladoras asignadas a esta área hoy — pide al supervisor que complete el Calendario de Turnos</option>
+                  ) : (
+                    <>
+                      <option value="">Seleccionar remalladora...</option>
+                      {remalladorasDisponibles.map(r => (
+                        <option key={r.id} value={r.id}>{r.nombre}</option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -724,10 +725,16 @@ export default function RemalladoMonitorPage() {
                   onChange={e => setTraspasoForm({ ...traspasoForm, remalladora_destino_id: e.target.value })}
                   className="input-dark text-xs w-full"
                 >
-                  <option value="">Seleccionar remalladora libre...</option>
-                  {remalladorasDisponibles.map(r => (
-                    <option key={r.id} value={r.id}>{r.nombre}</option>
-                  ))}
+                  {remalladorasDisponibles.length === 0 ? (
+                    <option value="" disabled>⚠️ No hay remalladoras asignadas hoy</option>
+                  ) : (
+                    <>
+                      <option value="">Seleccionar remalladora libre...</option>
+                      {remalladorasDisponibles.map(r => (
+                        <option key={r.id} value={r.id}>{r.nombre}</option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
 
