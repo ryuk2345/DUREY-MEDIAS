@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha, generarCodigoVenta } from '@/lib/utils'
 import { generarCronogramaCuotas } from '@/lib/domain/finance'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface Cliente {
   id: string
@@ -1139,15 +1140,13 @@ export default function VentasPage() {
             {/* SECCIÓN VENDEDORA ENCARGADA */}
             <div className="mb-4">
               <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-wider">Vendedora / Asesora Encargada *</label>
-              <select
+              <CustomSelect
                 value={vendedoraSeleccionadaId}
-                onChange={e => setVendedoraSeleccionadaId(e.target.value)}
-                className="input-dark text-xs w-full font-bold text-pink-300 border-pink-500/30"
-              >
-                {vendedoras.map(v => (
-                  <option key={v.id} value={v.id}>👩‍💼 {v.nombre}</option>
-                ))}
-              </select>
+                onChange={val => setVendedoraSeleccionadaId(val)}
+                options={vendedoras.map(v => ({ value: v.id, label: `👩‍💼 ${v.nombre}` }))}
+                triggerClassName="text-xs font-bold text-pink-300 border-pink-500/30"
+                placeholder="Seleccionar Vendedora..."
+              />
             </div>
 
             {/* 1. SECCIÓN CLIENTE */}
@@ -1157,29 +1156,29 @@ export default function VentasPage() {
                   <User className="w-4 h-4 text-pink-400" /> Datos del Cliente / Comprobante
                 </label>
 
-                <select
+                <CustomSelect
                   value={clienteSeleccionadoId}
-                  onChange={e => handleSeleccionarClienteExistente(e.target.value)}
-                  className="input-dark text-xs py-1 px-2.5 font-medium border-pink-500/30 text-pink-300 max-w-[220px]"
-                >
-                  <option value="">+ Cliente Frecuente / Nuevo</option>
-                  {clientes.map(c => (
-                    <option key={c.id} value={c.id}>{c.nombre} ({c.numero_documento})</option>
-                  ))}
-                </select>
+                  onChange={val => handleSeleccionarClienteExistente(val)}
+                  options={[
+                    { value: '', label: '+ Cliente Frecuente / Nuevo' },
+                    ...clientes.map(c => ({ value: c.id, label: `${c.nombre} (${c.numero_documento})` }))
+                  ]}
+                  triggerClassName="text-xs py-1 px-2.5 font-medium border-pink-500/30 text-pink-300 min-w-[200px]"
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 mb-1">Tipo Doc.</label>
-                  <select
+                  <CustomSelect
                     value={clienteForm.tipo_documento}
-                    onChange={e => setClienteForm({ ...clienteForm, tipo_documento: e.target.value })}
-                    className="input-dark text-xs w-full font-bold"
-                  >
-                    <option value="dni">DNI (8 dígitos)</option>
-                    <option value="ruc">RUC (11 dígitos)</option>
-                  </select>
+                    onChange={val => setClienteForm({ ...clienteForm, tipo_documento: val })}
+                    options={[
+                      { value: 'dni', label: 'DNI (8 dígitos)' },
+                      { value: 'ruc', label: 'RUC (11 dígitos)' }
+                    ]}
+                    triggerClassName="text-xs font-bold"
+                  />
                 </div>
 
                 <div className="sm:col-span-2">
@@ -1263,26 +1262,29 @@ export default function VentasPage() {
                       sinStock ? 'border-red-500/40 bg-red-500/[0.04]' : 'border-white/[0.04] bg-slate-900/40'
                     }`}>
                       <div className="grid grid-cols-12 gap-2 items-center">
-                        <select
+                        <CustomSelect
                           value={item.catalogo_media_id}
-                          onChange={e => {
-                            const media = catalogo.find(c => c.id === e.target.value)
+                          onChange={val => {
+                            const media = catalogo.find(c => c.id === val)
                             const arr = [...carrito]
-                            arr[idx] = { ...arr[idx], catalogo_media_id: e.target.value, codigo: media?.codigo ?? '' }
+                            arr[idx] = { ...arr[idx], catalogo_media_id: val, codigo: media?.codigo ?? '' }
                             setCarrito(arr)
                           }}
-                          className="input-dark col-span-5 text-xs font-mono font-medium"
-                        >
-                          <option value="">Tipo de media...</option>
-                          {catalogo.map(c => {
-                            const s = stockPorMedia[c.id] ?? 0
-                            return (
-                              <option key={c.id} value={c.id}>
-                                {c.codigo} {s === 0 ? '⛔ SIN STOCK' : s <= 5 ? `⚠️ Stock: ${s} doc.` : ''}
-                              </option>
-                            )
-                          })}
-                        </select>
+                          options={[
+                            { value: '', label: 'Tipo de media...' },
+                            ...catalogo.map(c => {
+                              const s = stockPorMedia[c.id] ?? 0
+                              return {
+                                value: c.id,
+                                label: `${c.codigo} ${s === 0 ? '⛔ SIN STOCK' : s <= 5 ? `⚠️ Stock: ${s} doc.` : ''}`,
+                                disabled: s === 0
+                              }
+                            })
+                          ]}
+                          className="col-span-5"
+                          triggerClassName="text-xs font-mono font-medium"
+                          placeholder="Tipo de media..."
+                        />
 
                         <div className="col-span-3">
                           <input
@@ -1391,15 +1393,16 @@ export default function VentasPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Frecuencia de Pago</label>
-                      <select
+                      <CustomSelect
                         value={frecuenciaPago}
-                        onChange={e => setFrecuenciaPago(e.target.value as any)}
-                        className="input-dark text-xs w-full font-bold text-amber-300 border-amber-500/30"
-                      >
-                        <option value="semanal">Cada 7 días (Semanal)</option>
-                        <option value="quincenal">Cada 15 días (Quincenal)</option>
-                        <option value="mensual">Cada 30 días (Mensual)</option>
-                      </select>
+                        onChange={val => setFrecuenciaPago(val as any)}
+                        options={[
+                          { value: 'semanal', label: 'Cada 7 días (Semanal)' },
+                          { value: 'quincenal', label: 'Cada 15 días (Quincenal)' },
+                          { value: 'mensual', label: 'Cada 30 días (Mensual)' }
+                        ]}
+                        triggerClassName="text-xs font-bold text-amber-300 border-amber-500/30"
+                      />
                     </div>
 
                     <div>

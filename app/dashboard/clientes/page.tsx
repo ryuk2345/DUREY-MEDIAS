@@ -11,6 +11,7 @@ import {
   AlertTriangle, X, Edit2, Trash2, Eye, ExternalLink, ArrowRight,
   FileText, Building2, User, ChevronRight, RefreshCw, Layers
 } from 'lucide-react'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface Cliente {
   id: string
@@ -635,14 +636,15 @@ export default function ClientesPage() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">Tipo Doc.</label>
-                  <select
+                  <CustomSelect
                     value={clienteForm.tipo_documento}
-                    onChange={e => setClienteForm({ ...clienteForm, tipo_documento: e.target.value })}
-                    className="input-dark w-full py-2 font-bold"
-                  >
-                    <option value="dni">DNI</option>
-                    <option value="ruc">RUC</option>
-                  </select>
+                    onChange={val => setClienteForm({ ...clienteForm, tipo_documento: val })}
+                    options={[
+                      { value: 'dni', label: 'DNI' },
+                      { value: 'ruc', label: 'RUC' }
+                    ]}
+                    triggerClassName="py-2 font-bold"
+                  />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-slate-300 font-bold mb-1">Número de DNI / RUC *</label>
