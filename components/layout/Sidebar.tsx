@@ -10,7 +10,7 @@ import {
   Shirt, LayoutDashboard, Cog, Layers, Scissors, Wind,
   Package, Warehouse, ShoppingCart, Truck, Wrench,
   BarChart3, LogOut, ChevronRight, Cpu, Users, Menu, X,
-  ClipboardList, Database, RotateCcw, Palette
+  ClipboardList, Database, RotateCcw, Palette, UserCheck
 } from 'lucide-react'
 import StockNotification from './StockNotification'
 
@@ -27,6 +27,7 @@ const MODULO_CONFIG: Record<string, { label: string; icon: React.ReactNode; href
   preparado:    { label: 'Preparado',    icon: <Package className="w-5 h-5" />,         href: '/dashboard/preparado',     color: 'text-emerald-400' },
   almacen:      { label: 'Almacén',      icon: <Warehouse className="w-5 h-5" />,       href: '/dashboard/almacen',       color: 'text-cyan-400' },
   ventas:       { label: 'Ventas',       icon: <ShoppingCart className="w-5 h-5" />,    href: '/dashboard/ventas',        color: 'text-pink-400' },
+  clientes:     { label: 'Clientes',     icon: <UserCheck className="w-5 h-5" />,       href: '/dashboard/clientes',      color: 'text-rose-400' },
   despacho:     { label: 'Despacho',     icon: <Truck className="w-5 h-5" />,           href: '/dashboard/despacho',      color: 'text-blue-400' },
   mantenimiento:{ label: 'Mantenimiento',icon: <Wrench className="w-5 h-5" />,         href: '/dashboard/mantenimiento', color: 'text-amber-400' },
   materia_prima:{ label: 'Materia Prima',icon: <Database className="w-5 h-5" />,         href: '/dashboard/materia-prima', color: 'text-emerald-300' },

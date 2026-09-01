@@ -80,8 +80,8 @@ export const ROLES_LABELS: Record<string, string> = {
 }
 
 export const MODULOS_POR_ROL: Record<string, string[]> = {
-  admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'disenos', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'ventas', 'despacho', 'mantenimiento', 'materia_prima', 'reportes'],
-  supervisor: ['usuarios', 'catalogo', 'maquinas', 'disenos', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'despacho', 'materia_prima', 'reportes'],
+  admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'disenos', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'ventas', 'clientes', 'despacho', 'mantenimiento', 'materia_prima', 'reportes'],
+  supervisor: ['usuarios', 'catalogo', 'maquinas', 'disenos', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'ventas', 'clientes', 'despacho', 'materia_prima', 'reportes'],
   disenador: ['disenos', 'catalogo', 'maquinas'],
   tejedor: ['produccion', 'disenos', 'mantenimiento'],
   remalladora: ['remallado', 'mantenimiento'],
@@ -90,7 +90,7 @@ export const MODULOS_POR_ROL: Record<string, string[]> = {
   planchador: ['planchado', 'mantenimiento'],
   preparador: ['preparado'],
   almacenero: ['almacen', 'despacho', 'materia_prima'],
-  vendedora: ['ventas', 'catalogo', 'despacho'],
+  vendedora: ['ventas', 'clientes', 'catalogo', 'despacho'],
   tecnico: ['maquinas', 'mantenimiento'],
   operador: ['produccion', 'remallado', 'disenos', 'planchado', 'preparado', 'almacen', 'mantenimiento'],
 }
