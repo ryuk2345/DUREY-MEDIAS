@@ -110,44 +110,11 @@ export default function DisenosPage() {
   const cargarDatos = async () => {
     setLoading(true)
     try {
-      // 1. Obtener usuario actual
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: perfil } = await supabase.from('usuarios').select('*').eq('auth_id', user.id).single()
-        setCurrentUser(perfil || null)
-      }
-
-      // 2. Marcas (Ordenadas alfabéticamente A-Z)
-      const { data: marcasData } = await supabase
-        .from('marcas_maquinas')
-        .select('*')
-        .order('nombre', { ascending: true })
-      if (marcasData) setMarcas(marcasData)
-
-      // 3. Máquinas tejedoras
-      let loadedMaquinas: any[] = []
-      const { data: maquinasData, error: maqErr } = await supabase
-        .from('maquinas')
-        .select('*, marca:marcas_maquinas(nombre)')
-        .order('codigo')
-
-      if (!maqErr && maquinasData && maquinasData.length > 0) {
-        loadedMaquinas = maquinasData
-      } else {
-        const { data: maquinasSimple } = await supabase
-          .from('maquinas')
-          .select('*')
-          .order('codigo')
-        if (maquinasSimple && maquinasSimple.length > 0) {
-          loadedMaquinas = maquinasSimple
-        }
-      }
-      setMaquinas(loadedMaquinas)
-
-      // 4. Diseños con asignaciones
-      const { data: disenosData, error: dErr } = await supabase
-        .from('disenos')
-        .select(`
+      // 1. Cargar entidades principales en paralelo sin interdependencias
+      const [marcasRes, maquinasRes, disenosRes] = await Promise.all([
+        supabase.from('marcas_maquinas').select('*').order('nombre', { ascending: true }),
+        supabase.from('maquinas').select('*, marca:marcas_maquinas(nombre)').order('codigo'),
+        supabase.from('disenos').select(`
           *,
           marca:marcas_maquinas(id, nombre),
           disenador:usuarios(id, nombre),
@@ -157,21 +124,48 @@ export default function DisenosPage() {
             activo,
             maquina:maquinas(id, codigo, marca_id, marca:marcas_maquinas(nombre))
           )
-        `)
-        .order('created_at', { ascending: false })
+        `).order('created_at', { ascending: false })
+      ])
 
-      if (!dErr && disenosData) {
-        setDisenos(disenosData as any)
+      // Procesar Marcas
+      let marcasList: Marca[] = marcasRes.data || []
+      if (marcasList.length === 0) {
+        const { data: mSimple } = await supabase.from('marcas_maquinas').select('*')
+        if (mSimple && mSimple.length > 0) marcasList = mSimple
+      }
+      setMarcas(marcasList)
+
+      // Procesar Máquinas
+      let maquinasList: Maquina[] = maquinasRes.data || []
+      if (maquinasList.length === 0) {
+        const { data: maqSimple } = await supabase.from('maquinas').select('*').order('codigo')
+        if (maqSimple && maqSimple.length > 0) maquinasList = maqSimple
+      }
+      setMaquinas(maquinasList)
+
+      // Procesar Diseños
+      if (!disenosRes.error && disenosRes.data) {
+        setDisenos(disenosRes.data as any)
       } else {
-        // Fallback local en caso de tabla no creada en entorno dev
         const local = localStorage.getItem('durey_disenos_fallback')
         if (local) {
           try { setDisenos(JSON.parse(local)) } catch (e) {}
         }
       }
+
+      // 2. Obtener usuario actual en bloque aislado (no interrumpe la carga de datos)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: perfil } = await supabase.from('usuarios').select('*').eq('auth_id', user.id).single()
+          setCurrentUser(perfil || null)
+        }
+      } catch (authErr) {
+        console.warn('Sesión no disponible:', authErr)
+      }
+
     } catch (err) {
-      console.error('Error cargando diseños:', err)
-      toast.error('Error al sincronizar diseños')
+      console.error('Error cargando datos en diseños:', err)
     } finally {
       setLoading(false)
     }
