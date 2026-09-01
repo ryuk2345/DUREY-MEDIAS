@@ -51,24 +51,6 @@ interface Marca {
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 // 5MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
 
-const DEFAULT_MARCAS: Marca[] = [
-  { id: 'm1', nombre: 'Angies' },
-  { id: 'm2', nombre: 'Chinas Azules' },
-  { id: 'm3', nombre: 'Chinas Verdes' },
-  { id: 'm4', nombre: 'Rosso Speed' },
-  { id: 'm5', nombre: 'Jacquard BK' },
-  { id: 'm6', nombre: 'Durey' },
-]
-
-const DEFAULT_MAQUINAS: Maquina[] = [
-  { id: 'maq1', codigo: 'M01', tipo: 'tejedora', marca_id: 'm1', estado: 'activa' },
-  { id: 'maq2', codigo: 'M02', tipo: 'tejedora', marca_id: 'm1', estado: 'activa' },
-  { id: 'maq3', codigo: 'M03', tipo: 'tejedora', marca_id: 'm2', estado: 'activa' },
-  { id: 'maq4', codigo: 'M04', tipo: 'tejedora', marca_id: 'm1', estado: 'activa' },
-  { id: 'maq5', codigo: 'M05', tipo: 'remalladora', marca_id: 'm3', estado: 'activa' },
-  { id: 'maq6', codigo: 'M06', tipo: 'remalladora', marca_id: 'm3', estado: 'activa' },
-]
-
 function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID()
@@ -93,8 +75,8 @@ export default function DisenosPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [disenos, setDisenos] = useState<Diseno[]>([])
-  const [maquinas, setMaquinas] = useState<Maquina[]>(DEFAULT_MAQUINAS)
-  const [marcas, setMarcas] = useState<Marca[]>(DEFAULT_MARCAS)
+  const [maquinas, setMaquinas] = useState<Maquina[]>([])
+  const [marcas, setMarcas] = useState<Marca[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
 
   // Filtros
@@ -155,13 +137,11 @@ export default function DisenosPage() {
         `).order('created_at', { ascending: false })
       ])
 
-      // Procesar Marcas
-      let marcasList: Marca[] = (marcasRes.data && marcasRes.data.length > 0) ? marcasRes.data : DEFAULT_MARCAS
-      setMarcas(marcasList)
+      // Procesar Marcas Reales
+      setMarcas(marcasRes.data || [])
 
-      // Procesar Máquinas
-      let maquinasList: Maquina[] = (maquinasRes.data && maquinasRes.data.length > 0) ? maquinasRes.data : DEFAULT_MAQUINAS
-      setMaquinas(maquinasList)
+      // Procesar Máquinas Reales
+      setMaquinas(maquinasRes.data || [])
 
       // Procesar Diseños (Combinación garantizada sin pérdida)
       let dbDisenos: Diseno[] = []

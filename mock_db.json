@@ -10,22 +10,8 @@
       "auth_id": "65a2de1b-03f2-4b95-82c2-cc2e3ffc30bb"
     }
   ],
-  "marcas_maquinas": [
-    { "id": "m1", "nombre": "Angies" },
-    { "id": "m2", "nombre": "Chinas Azules" },
-    { "id": "m3", "nombre": "Chinas Verdes" },
-    { "id": "m4", "nombre": "Rosso Speed" },
-    { "id": "m5", "nombre": "Jacquard BK" },
-    { "id": "m6", "nombre": "Durey" }
-  ],
-  "maquinas": [
-    { "id": "maq1", "codigo": "M01", "tipo": "tejedora", "marca_id": "m1", "anio": 2024, "caracteristicas": "Tejido Fino", "estado": "activa", "eficiencia": 98, "detalle_estado": "EFICIENCIA: 98%", "marca": { "nombre": "Angies" } },
-    { "id": "maq2", "codigo": "M02", "tipo": "tejedora", "marca_id": "m1", "anio": 2024, "caracteristicas": "Tejido Grueso", "estado": "activa", "eficiencia": 95, "detalle_estado": "EFICIENCIA: 95%", "marca": { "nombre": "Angies" } },
-    { "id": "maq3", "codigo": "M03", "tipo": "tejedora", "marca_id": "m2", "anio": 2023, "caracteristicas": "Tejido Deportivo", "estado": "activa", "eficiencia": 90, "detalle_estado": "EFICIENCIA: 90%", "marca": { "nombre": "Chinas Azules" } },
-    { "id": "maq4", "codigo": "M05", "tipo": "remalladora", "marca_id": "m3", "anio": 2024, "caracteristicas": "Remallado Rápido", "estado": "activa", "eficiencia": 92, "detalle_estado": "OPERATIVA", "marca": { "nombre": "Chinas Verdes" } },
-    { "id": "maq5", "codigo": "M06", "tipo": "remalladora", "marca_id": "m3", "anio": 2024, "caracteristicas": "Remallado Estándar", "estado": "activa", "eficiencia": 90, "detalle_estado": "OPERATIVA", "marca": { "nombre": "Chinas Verdes" } },
-    { "id": "maq6", "codigo": "M04", "tipo": "tejedora", "marca_id": "m1", "anio": 2026, "caracteristicas": "Tejido Grueso", "estado": "activa", "eficiencia": 98, "detalle_estado": "OPERATIVA", "marca": { "nombre": "Angies" } }
-  ],
+  "marcas_maquinas": [],
+  "maquinas": [],
   "ubicaciones": [],
   "catalogo_medias": [],
   "turnos_produccion": [],

@@ -210,21 +210,13 @@ export async function getMockDb() {
       }
     }
 
-    // Auto-migrar claves faltantes o tablas vacías en el caché
+    // Auto-migrar claves faltantes en el caché
     let changed = false;
     for (const key of Object.keys(SEMILLAS)) {
       if (!parsed[key]) {
-        parsed[key] = (SEMILLAS as any)[key] || [];
+        parsed[key] = [];
         changed = true;
       }
-    }
-    if (!parsed.marcas_maquinas || parsed.marcas_maquinas.length === 0) {
-      parsed.marcas_maquinas = [...SEMILLAS.marcas_maquinas];
-      changed = true;
-    }
-    if (!parsed.maquinas || parsed.maquinas.length === 0) {
-      parsed.maquinas = [...SEMILLAS.maquinas];
-      changed = true;
     }
     if (!parsed.disenos) {
       parsed.disenos = [];
