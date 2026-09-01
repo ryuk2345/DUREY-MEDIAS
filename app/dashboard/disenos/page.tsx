@@ -495,9 +495,28 @@ export default function DisenosPage() {
       console.warn('Error en eliminación backend:', e)
     }
 
+    // Limpiar de estado React
     const updated = disenos.filter(item => item.id !== d.id && item.codigo !== d.codigo)
     setDisenos(updated)
+
+    // Limpiar de fallbacks en localStorage
     localStorage.setItem('durey_disenos_fallback', JSON.stringify(updated))
+
+    // Limpiar de mockDb en browser
+    try {
+      const mockStr = localStorage.getItem('durey_mock_db')
+      if (mockStr) {
+        const parsed = JSON.parse(mockStr)
+        if (parsed.disenos) {
+          parsed.disenos = parsed.disenos.filter((item: any) => item.id !== d.id && item.codigo !== d.codigo)
+        }
+        if (parsed.disenos_maquinas) {
+          parsed.disenos_maquinas = parsed.disenos_maquinas.filter((item: any) => item.diseno_id !== d.id)
+        }
+        localStorage.setItem('durey_mock_db', JSON.stringify(parsed))
+      }
+    } catch (err) {}
+
     toast.success('Diseño eliminado correctamente')
   }
 
