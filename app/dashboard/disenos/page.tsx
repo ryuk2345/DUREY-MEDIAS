@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import CustomSelect from '@/components/ui/CustomSelect'
 import {
   Palette, Plus, Search, Filter, Cpu, Tag, Image as ImageIcon,
   CheckCircle2, XCircle, Clock, AlertTriangle, Layers, Trash2,
@@ -619,30 +620,30 @@ export default function DisenosPage() {
 
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
             {/* Filtro Estado */}
-            <select
+            <CustomSelect
               value={selectedEstadoFilter}
-              onChange={e => setSelectedEstadoFilter(e.target.value)}
-              className="input-dark py-2 px-3 text-xs"
-            >
-              <option value="todos">Todos los Estados</option>
-              <option value="en_muestra">En Muestra</option>
-              <option value="aprobada">Aprobada</option>
-              <option value="en_produccion">En Producción</option>
-              <option value="rechazada">Rechazada</option>
-              <option value="archivada">Archivada</option>
-            </select>
+              onChange={val => setSelectedEstadoFilter(val)}
+              options={[
+                { value: 'todos', label: 'Todos los Estados' },
+                { value: 'en_muestra', label: 'En Muestra' },
+                { value: 'aprobada', label: 'Aprobada' },
+                { value: 'en_produccion', label: 'En Producción' },
+                { value: 'rechazada', label: 'Rechazada' },
+                { value: 'archivada', label: 'Archivada' }
+              ]}
+              triggerClassName="py-2 px-3 text-xs"
+            />
 
             {/* Filtro Marca */}
-            <select
+            <CustomSelect
               value={selectedMarcaFilter}
-              onChange={e => setSelectedMarcaFilter(e.target.value)}
-              className="input-dark py-2 px-3 text-xs"
-            >
-              <option value="todos">Todas las Marcas</option>
-              {marcas.map(m => (
-                <option key={m.id} value={m.id}>{m.nombre}</option>
-              ))}
-            </select>
+              onChange={val => setSelectedMarcaFilter(val)}
+              options={[
+                { value: 'todos', label: 'Todas las Marcas' },
+                ...marcas.map(m => ({ value: m.id, label: m.nombre }))
+              ]}
+              triggerClassName="py-2 px-3 text-xs"
+            />
           </div>
         </div>
 
@@ -859,16 +860,15 @@ export default function DisenosPage() {
                 </div>
                 <div>
                   <label className="block text-slate-300 font-bold mb-1">🏢 Marca Asociada</label>
-                  <select 
+                  <CustomSelect 
                     value={createForm.marca_id}
-                    onChange={e => setCreateForm(prev => ({ ...prev, marca_id: e.target.value }))}
-                    className="input-dark w-full"
-                  >
-                    <option value="">Seleccionar marca...</option>
-                    {marcas.map(m => (
-                      <option key={m.id} value={m.id}>{m.nombre}</option>
-                    ))}
-                  </select>
+                    onChange={val => setCreateForm(prev => ({ ...prev, marca_id: val }))}
+                    options={[
+                      { value: '', label: 'Seleccionar marca...' },
+                      ...marcas.map(m => ({ value: m.id, label: m.nombre }))
+                    ]}
+                    placeholder="Seleccionar marca..."
+                  />
                 </div>
               </div>
 
@@ -1177,3 +1177,6 @@ export default function DisenosPage() {
     </>
   )
 }
+
+
+

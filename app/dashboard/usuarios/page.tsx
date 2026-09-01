@@ -10,6 +10,7 @@ import {
   Calendar, RotateCcw, Award, Clock, Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface Usuario {
   id: string
@@ -381,16 +382,15 @@ export default function UsuariosPage() {
             <div className="flex items-center gap-2 bg-slate-900/60 p-1 rounded-2xl border border-white/[0.06] text-xs w-full md:w-auto">
               <Filter className="w-3.5 h-3.5 text-slate-400 ml-3" />
               <span className="text-slate-400 font-semibold pr-1">Rol:</span>
-              <select
+              <CustomSelect
                 value={selectedRolFilter}
-                onChange={e => setSelectedRolFilter(e.target.value)}
-                className="bg-transparent text-white font-medium focus:outline-none pr-3 cursor-pointer py-1.5"
-              >
-                <option value="todos" className="bg-slate-900 text-white">Todos los roles ({usuarios.length})</option>
-                {ROLES_LISTA.map(r => (
-                  <option key={r.id} value={r.id} className="bg-slate-900 text-white">{r.label}</option>
-                ))}
-              </select>
+                onChange={val => setSelectedRolFilter(val)}
+                options={[
+                  { value: 'todos', label: `Todos los roles (${usuarios.length})` },
+                  ...ROLES_LISTA.map(r => ({ value: r.id, label: r.label }))
+                ]}
+                triggerClassName="bg-transparent border-none text-white font-medium py-1.5"
+              />
             </div>
           </div>
 
@@ -540,32 +540,33 @@ export default function UsuariosPage() {
                           </div>
                         </td>
                         <td className="p-4">
-                          <select
+                          <CustomSelect
                             value={asig?.area || ''}
-                            onChange={e => handleGuardarAsignacion(op.id, e.target.value, asig?.turno || 'dia')}
-                            className="input-dark text-xs py-1.5 px-3 max-w-[200px] font-bold"
-                          >
-                            <option value="">✕ Sin Asignar (Libre)</option>
-                            <option value="tejido">Tejido (Circulares)</option>
-                            <option value="enlace">Enlace (Remallado)</option>
-                            <option value="volteado">Volteado (Turning)</option>
-                            <option value="planchado">Planchado (Hormado)</option>
-                            <option value="preparado">Preparado (Empaque)</option>
-                            <option value="almacen">Almacén (Despacho)</option>
-                          </select>
+                            onChange={val => handleGuardarAsignacion(op.id, val, asig?.turno || 'dia')}
+                            options={[
+                              { value: '', label: '✕ Sin Asignar (Libre)' },
+                              { value: 'tejido', label: 'Tejido (Circulares)' },
+                              { value: 'enlace', label: 'Enlace (Remallado)' },
+                              { value: 'planchado', label: 'Planchado (Hormado)' },
+                              { value: 'preparado', label: 'Preparado (Empaque)' },
+                              { value: 'almacen', label: 'Almacén (Despacho)' }
+                            ]}
+                            triggerClassName="text-xs py-1.5 px-3 max-w-[200px] font-bold"
+                          />
                         </td>
                         <td className="p-4">
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-slate-500" />
-                            <select
+                            <CustomSelect
                               value={asig?.turno || 'dia'}
-                              onChange={e => handleGuardarAsignacion(op.id, asig?.area || 'tejido', e.target.value)}
-                              className="input-dark text-xs py-1 px-3 font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                              onChange={val => handleGuardarAsignacion(op.id, asig?.area || 'tejido', val)}
+                              options={[
+                                { value: 'dia', label: 'Día (Mañana)' },
+                                { value: 'noche', label: 'Noche (Velada)' }
+                              ]}
                               disabled={!asig?.area}
-                            >
-                              <option value="dia">Día (Mañana)</option>
-                              <option value="noche">Noche (Velada)</option>
-                            </select>
+                              triggerClassName="text-xs py-1 px-3 font-semibold min-w-[140px]"
+                            />
                           </div>
                         </td>
                         <td className="p-4 text-right">
@@ -673,15 +674,12 @@ export default function UsuariosPage() {
 
               <div>
                 <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Rol de Sistema</label>
-                <select
+                <CustomSelect
                   value={form.rol}
-                  onChange={e => setForm({ ...form, rol: e.target.value })}
-                  className="input-dark text-xs w-full font-medium"
-                >
-                  {ROLES_LISTA.map(r => (
-                    <option key={r.id} value={r.id}>{r.label}</option>
-                  ))}
-                </select>
+                  onChange={val => setForm({ ...form, rol: val })}
+                  options={ROLES_LISTA.map(r => ({ value: r.id, label: r.label }))}
+                  triggerClassName="text-xs font-medium"
+                />
               </div>
 
               {!editUser && (

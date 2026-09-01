@@ -18,6 +18,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface Marca { id: string; nombre: string }
 interface Maquina {
@@ -532,17 +533,15 @@ export default function MaquinasPage() {
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                       SELECCIONAR MÁQUINA
                     </label>
-                    <select
+                    <CustomSelect
                       value={reporteForm.maquina_id}
-                      onChange={e => setReporteForm({ ...reporteForm, maquina_id: e.target.value })}
-                      className="input-dark text-xs font-bold w-full"
-                    >
-                      {maquinas.map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.codigo} ({m.marca?.nombre || m.tipo}) — {m.estado.toUpperCase()}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={val => setReporteForm({ ...reporteForm, maquina_id: val })}
+                      options={maquinas.map(m => ({
+                        value: m.id,
+                        label: `${m.codigo} (${m.marca?.nombre || m.tipo}) — ${m.estado.toUpperCase()}`
+                      }))}
+                      triggerClassName="text-xs font-bold"
+                    />
                   </div>
 
                   {/* TIPO DE AVERÍA (4 BOTONES) */}
@@ -587,18 +586,18 @@ export default function MaquinasPage() {
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                       ASIGNAR TÉCNICO ESPECIALISTA
                     </label>
-                    <select
+                    <CustomSelect
                       value={reporteForm.tecnico_asignado}
-                      onChange={e => setReporteForm({ ...reporteForm, tecnico_asignado: e.target.value })}
-                      className="input-dark text-xs font-semibold w-full text-cyan-300 border-cyan-500/30"
-                    >
-                      <option value="">Sin asignación inmediata</option>
-                      {tecnicos.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.nombre} ({t.especialidad || 'Mantenimiento General'})
-                        </option>
-                      ))}
-                    </select>
+                      onChange={val => setReporteForm({ ...reporteForm, tecnico_asignado: val })}
+                      options={[
+                        { value: '', label: 'Sin asignación inmediata' },
+                        ...tecnicos.map(t => ({
+                          value: t.id,
+                          label: `${t.nombre} (${t.especialidad || 'Mantenimiento General'})`
+                        }))
+                      ]}
+                      triggerClassName="text-xs font-semibold text-cyan-300 border-cyan-500/30"
+                    />
                   </div>
 
                   <button
@@ -805,18 +804,29 @@ export default function MaquinasPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo</label>
-                  <select value={maquinaForm.tipo} onChange={e => setMaquinaForm({ ...maquinaForm, tipo: e.target.value })} className="input-dark w-full font-bold">
-                    <option value="tejedora">Tejedora</option>
-                    <option value="remalladora">Remalladora</option>
-                    <option value="planchadora">Planchadora</option>
-                  </select>
+                  <CustomSelect
+                    value={maquinaForm.tipo}
+                    onChange={val => setMaquinaForm({ ...maquinaForm, tipo: val })}
+                    options={[
+                      { value: 'tejedora', label: 'Tejedora' },
+                      { value: 'remalladora', label: 'Remalladora' },
+                      { value: 'planchadora', label: 'Planchadora' }
+                    ]}
+                    triggerClassName="font-bold"
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Marca *</label>
-                  <select value={maquinaForm.marca_id} onChange={e => setMaquinaForm({ ...maquinaForm, marca_id: e.target.value })} className="input-dark w-full font-bold">
-                    <option value="">Selecciona...</option>
-                    {marcas.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={maquinaForm.marca_id}
+                    onChange={val => setMaquinaForm({ ...maquinaForm, marca_id: val })}
+                    options={[
+                      { value: '', label: 'Selecciona...' },
+                      ...marcas.map(m => ({ value: m.id, label: m.nombre }))
+                    ]}
+                    placeholder="Selecciona..."
+                    triggerClassName="font-bold"
+                  />
                 </div>
               </div>
               <div>

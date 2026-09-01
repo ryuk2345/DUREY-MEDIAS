@@ -7,6 +7,7 @@ import { generarCodigoMedia, generarSkuMedia, formatearMoneda } from '@/lib/util
 import { Plus, Search, Edit2, Power, AlertTriangle, X, Loader2, Cog, Package, Barcode, Printer, QrCode, Sparkles, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import QRCode from 'qrcode'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface CatalogoMedia {
   id: string
@@ -245,15 +246,17 @@ export default function CatalogoPage() {
             className="input-dark pl-10 text-xs font-semibold"
           />
         </div>
-        <select
+        <CustomSelect
           value={filtroEstado}
-          onChange={e => setFiltroEstado(e.target.value as any)}
-          className="input-dark text-xs font-bold text-slate-300 w-44"
-        >
-          <option value="todos">Todos los Estados</option>
-          <option value="activo">Solo Activos</option>
-          <option value="inactivo">Solo Inactivos</option>
-        </select>
+          onChange={val => setFiltroEstado(val as any)}
+          options={[
+            { value: 'todos', label: 'Todos los Estados' },
+            { value: 'activo', label: 'Solo Activos' },
+            { value: 'inactivo', label: 'Solo Inactivos' }
+          ]}
+          className="w-44"
+          triggerClassName="text-xs font-bold text-slate-300"
+        />
       </div>
 
       {/* Tabla */}
@@ -392,18 +395,30 @@ export default function CatalogoPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Modelo *</label>
-                  <select value={form.modelo} onChange={e => setForm({ ...form, modelo: e.target.value })} className="input-dark w-full font-semibold">
-                    <option value="">Seleccionar...</option>
-                    {MODELOS.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={form.modelo}
+                    onChange={val => setForm({ ...form, modelo: val })}
+                    options={[
+                      { value: '', label: 'Seleccionar...' },
+                      ...MODELOS.map(m => ({ value: m, label: m }))
+                    ]}
+                    placeholder="Seleccionar..."
+                    triggerClassName="font-semibold"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Público *</label>
-                  <select value={form.publico} onChange={e => setForm({ ...form, publico: e.target.value })} className="input-dark w-full font-semibold">
-                    <option value="">Seleccionar...</option>
-                    {PUBLICOS.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={form.publico}
+                    onChange={val => setForm({ ...form, publico: val })}
+                    options={[
+                      { value: '', label: 'Seleccionar...' },
+                      ...PUBLICOS.map(p => ({ value: p, label: p }))
+                    ]}
+                    placeholder="Seleccionar..."
+                    triggerClassName="font-semibold"
+                  />
                 </div>
               </div>
 
