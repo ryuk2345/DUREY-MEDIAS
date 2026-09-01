@@ -11,13 +11,14 @@ import {
   Package, Warehouse, ShoppingCart, Truck, Wrench,
   BarChart3, LogOut, ChevronRight, Cpu, Users, Menu, X,
   ClipboardList, Database, RotateCcw, Palette, UserCheck,
-  DollarSign, TrendingUp
+  DollarSign, TrendingUp, CalendarDays
 } from 'lucide-react'
 import StockNotification from './StockNotification'
 
 const MODULO_CONFIG: Record<string, { label: string; icon: React.ReactNode; href: string; color: string }> = {
   admin:        { label: 'Dashboard',    icon: <LayoutDashboard className="w-5 h-5" />, href: '/dashboard/admin',         color: 'text-violet-400' },
   usuarios:     { label: 'Personal',     icon: <Users className="w-5 h-5" />,           href: '/dashboard/usuarios',      color: 'text-indigo-400' },
+  calendario:   { label: 'Calendario',   icon: <CalendarDays className="w-5 h-5" />,     href: '/dashboard/calendario',    color: 'text-sky-400' },
   catalogo:     { label: 'Catálogo',     icon: <Cog className="w-5 h-5" />,             href: '/dashboard/catalogo',      color: 'text-slate-400' },
   maquinas:     { label: 'Máquinas',     icon: <Cpu className="w-5 h-5" />,             href: '/dashboard/maquinas',      color: 'text-sky-400' },
   disenos:      { label: 'Diseños',      icon: <Palette className="w-5 h-5" />,         href: '/dashboard/disenos',       color: 'text-fuchsia-400' },

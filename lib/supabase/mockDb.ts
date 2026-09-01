@@ -147,7 +147,31 @@ const SEMILLAS = {
   guias_remision: [],
   movimientos_stock: [],
   disenos: [],
-  disenos_maquinas: []
+  disenos_maquinas: [],
+  eventos_calendario: [
+    {
+      id: 'ev1',
+      titulo: 'Reunión de Coordinación de Producción',
+      descripcion: 'Revisión semanal de metas de tejido y remallado.',
+      fecha: new Date().toISOString().split('T')[0],
+      hora: '09:00',
+      visibilidad: 'compartido',
+      color: 'sky',
+      creado_por: '1',
+      creado_por_nombre: 'Admin General'
+    },
+    {
+      id: 'ev2',
+      titulo: 'Mantenimiento Preventivo Máquinas M01 y M02',
+      descripcion: 'Revisión técnica periódica y calibración de agujas.',
+      fecha: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
+      hora: '14:30',
+      visibilidad: 'compartido',
+      color: 'amber',
+      creado_por: '2',
+      creado_por_nombre: 'Supervisor Durey'
+    }
+  ]
 };
 
 // Singleton en el servidor para almacenar en memoria durante ejecución

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Sidebar from '@/components/layout/Sidebar'
 import { cookies } from 'next/headers'
 import StockNotification from '@/components/layout/StockNotification'
+import EventNotificationBanner from '@/components/layout/EventNotificationBanner'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -94,6 +95,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="fixed top-4 right-6 z-40 hidden md:block">
           <StockNotification userRol={userRol} />
         </div>
+
+        {/* Modal Alert for Calendar Events (Today & Next 3 Days) */}
+        <EventNotificationBanner userRol={userRol} />
         
         <div className="p-4 sm:p-6 max-w-7xl mx-auto">
           {children}
