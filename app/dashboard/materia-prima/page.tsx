@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { 
   Database, Plus, Check, X, RefreshCw, Truck, FileText, AlertTriangle, 
   TrendingUp, TrendingDown, CreditCard, DollarSign, BarChart3, Wrench, Info, Scale, ShoppingCart, Trash2, PackageCheck,
-  Building2, Phone, MessageCircle, User, ExternalLink
+  Building2, Phone, MessageCircle, User, ExternalLink, Edit2
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
@@ -114,6 +114,7 @@ export default function MateriaPrimaPage() {
   const [selectedCompra, setSelectedCompra] = useState<Compra | null>(null)
   
   const [showAddHiloModal, setShowAddHiloModal] = useState(false)
+  const [editingHilo, setEditingHilo] = useState<MateriaPrima | null>(null)
   const [showAddRepuestoModal, setShowAddRepuestoModal] = useState(false)
   const [showAddEgresoModal, setShowAddEgresoModal] = useState(false)
   const [showPayCuotaModal, setShowPayCuotaModal] = useState(false)
@@ -301,7 +302,7 @@ export default function MateriaPrimaPage() {
     localStorage.setItem(key, JSON.stringify(data))
   }
 
-  // ── AÑADIR NUEVO HILO / ALGODÓN / MATERIA PRIMA ─────────────────────────
+  // ── REGISTRAR / EDITAR HILO O MATERIA PRIMA ───────────────────────────────
   const handleAddHilo = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!hiloForm.material || !hiloForm.color) {
@@ -310,39 +311,93 @@ export default function MateriaPrimaPage() {
     }
 
     setSaving(true)
-    const newHilo = {
-      id: Math.random().toString(),
-      material: hiloForm.material.trim(),
-      color: hiloForm.color.trim(),
-      stock_kg: parseFloat(hiloForm.stock_kg || '0'),
-      tipo_empaque: hiloForm.tipo_empaque || 'cono',
-      created_at: new Date().toISOString()
-    }
 
     try {
-      if (!usingFallback) {
-        const { error } = await supabase.from('materia_prima').insert({
-          material: newHilo.material,
-          color: newHilo.color,
-          stock_kg: newHilo.stock_kg,
-          tipo_empaque: newHilo.tipo_empaque
-        })
-        if (error) throw error
-      } else {
-        const list = [...stockHilos, newHilo]
+      if (editingHilo) {
+        if (!usingFallback) {
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editingHilo.id)
+          if (isUuid) {
+            const { error } = await supabase.from('materia_prima').update({
+              material: hiloForm.material.trim(),
+              color: hiloForm.color.trim(),
+              stock_kg: parseFloat(hiloForm.stock_kg || '0'),
+              tipo_empaque: hiloForm.tipo_empaque || 'cono'
+            }).eq('id', editingHilo.id)
+            if (error) throw error
+          } else {
+            const { error } = await supabase.from('materia_prima').update({
+              material: hiloForm.material.trim(),
+              color: hiloForm.color.trim(),
+              stock_kg: parseFloat(hiloForm.stock_kg || '0'),
+              tipo_empaque: hiloForm.tipo_empaque || 'cono'
+            }).eq('material', editingHilo.material)
+            if (error) throw error
+          }
+        }
+        const list = stockHilos.map(x => x.id === editingHilo.id ? {
+          ...x,
+          material: hiloForm.material.trim(),
+          color: hiloForm.color.trim(),
+          stock_kg: parseFloat(hiloForm.stock_kg || '0'),
+          tipo_empaque: hiloForm.tipo_empaque || 'cono'
+        } : x)
+        setStockHilos(list)
         saveToLocal('durey_materia_prima', list)
+
+        toast.success('✏️ Insumo actualizado correctamente')
+      } else {
+        const newHilo = {
+          id: Math.random().toString(),
+          material: hiloForm.material.trim(),
+          color: hiloForm.color.trim(),
+          stock_kg: parseFloat(hiloForm.stock_kg || '0'),
+          tipo_empaque: hiloForm.tipo_empaque || 'cono',
+          created_at: new Date().toISOString()
+        }
+
+        if (!usingFallback) {
+          const { error } = await supabase.from('materia_prima').insert({
+            material: newHilo.material,
+            color: newHilo.color,
+            stock_kg: newHilo.stock_kg,
+            tipo_empaque: newHilo.tipo_empaque
+          })
+          if (error) throw error
+        } else {
+          const list = [...stockHilos, newHilo]
+          saveToLocal('durey_materia_prima', list)
+        }
+
+        const empaqueName = newHilo.tipo_empaque === 'caja' ? '📦 Caja' : newHilo.tipo_empaque === 'bolsa' ? '🛍️ Bolsa' : '🧵 Cono'
+        toast.success(`${empaqueName} registrado exitosamente en el almacén`)
       }
 
-      const empaqueName = newHilo.tipo_empaque === 'caja' ? '📦 Caja' : newHilo.tipo_empaque === 'bolsa' ? '🛍️ Bolsa' : '🧵 Cono'
-      toast.success(`${empaqueName} registrado exitosamente en el almacén`)
       setShowAddHiloModal(false)
+      setEditingHilo(null)
       setHiloForm({ material: '', color: '', stock_kg: '', tipo_empaque: 'cono' })
       cargarDatos()
     } catch (err: any) {
-      toast.error(`Error al registrar insumo: ${err.message}`)
+      toast.error(`Error al guardar insumo: ${err.message}`)
     } finally {
       setSaving(false)
     }
+  }
+
+  const abrirCrearHiloModal = () => {
+    setEditingHilo(null)
+    setHiloForm({ material: '', color: '', stock_kg: '', tipo_empaque: 'cono' })
+    setShowAddHiloModal(true)
+  }
+
+  const abrirEditarHiloModal = (hilo: MateriaPrima) => {
+    setEditingHilo(hilo)
+    setHiloForm({
+      material: hilo.material,
+      color: hilo.color,
+      stock_kg: String(hilo.stock_kg),
+      tipo_empaque: hilo.tipo_empaque || 'cono'
+    })
+    setShowAddHiloModal(true)
   }
 
   // Eliminar hilo / materia prima
@@ -1211,7 +1266,7 @@ export default function MateriaPrimaPage() {
 
                 <button
                   type="button"
-                  onClick={() => setShowAddHiloModal(true)}
+                  onClick={abrirCrearHiloModal}
                   className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-600/10"
                 >
                   <Plus className="w-3.5 h-3.5" /> Registrar Insumo
@@ -1278,7 +1333,15 @@ export default function MateriaPrimaPage() {
                                     )}
                                   </td>
                                   <td className="p-4 text-center">
-                                    <div className="flex items-center justify-center gap-2">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => abrirEditarHiloModal(hilo)}
+                                        className="p-1.5 rounded-lg hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-300 transition-colors"
+                                        title="Editar Insumo (Nombre/Datos)"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -1373,7 +1436,15 @@ export default function MateriaPrimaPage() {
                                     )}
                                   </td>
                                   <td className="p-4 text-center">
-                                    <div className="flex items-center justify-center gap-2">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => abrirEditarHiloModal(hilo)}
+                                        className="p-1.5 rounded-lg hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-300 transition-colors"
+                                        title="Editar Insumo (Nombre/Datos)"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -1468,7 +1539,15 @@ export default function MateriaPrimaPage() {
                                     )}
                                   </td>
                                   <td className="p-4 text-center">
-                                    <div className="flex items-center justify-center gap-2">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => abrirEditarHiloModal(hilo)}
+                                        className="p-1.5 rounded-lg hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-300 transition-colors"
+                                        title="Editar Insumo (Nombre/Datos)"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -2101,15 +2180,20 @@ export default function MateriaPrimaPage() {
     </div>
 
     {/* ── MODALES DEL SISTEMA (RENDERIZADOS FUERA DEL CONTENEDOR CON TRANSFORM) ── */}
-    {/* ── MODAL: AÑADIR HILO ──────────────────────────────────────────────── */}
+    {/* ── MODAL: AÑADIR / EDITAR HILO ─────────────────────────────────────── */}
     {showAddHiloModal && (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
           <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">🧶 Registrar Nueva Fibra / Hilo</h2>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                {editingHilo ? '✏️ Editar Fibra / Insumo' : '🧶 Registrar Nueva Fibra / Hilo'}
+              </h2>
               <button 
                 type="button"
-                onClick={() => setShowAddHiloModal(false)} 
+                onClick={() => {
+                  setShowAddHiloModal(false)
+                  setEditingHilo(null)
+                }} 
                 className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
               >
                 <X className="w-5 h-5" />
@@ -2168,7 +2252,7 @@ export default function MateriaPrimaPage() {
 
               <div>
                 <label className="block text-slate-300 font-bold mb-1">
-                  ⚖️ Stock Inicial ({hiloForm.tipo_empaque === 'caja' ? 'Cajas' : hiloForm.tipo_empaque === 'bolsa' ? 'Bolsas' : 'Conos / Kg'})
+                  ⚖️ {editingHilo ? 'Stock Actual' : 'Stock Inicial'} ({hiloForm.tipo_empaque === 'caja' ? 'Cajas' : hiloForm.tipo_empaque === 'bolsa' ? 'Bolsas' : 'Conos / Kg'})
                 </label>
                 <input 
                   type="number" 
@@ -2176,14 +2260,17 @@ export default function MateriaPrimaPage() {
                   value={hiloForm.stock_kg} 
                   onChange={e => setHiloForm(prev => ({ ...prev, stock_kg: e.target.value }))}
                   placeholder={hiloForm.tipo_empaque === 'caja' ? 'Ej: 10 cajas' : hiloForm.tipo_empaque === 'bolsa' ? 'Ej: 8 bolsas' : 'Ej: 50 conos'} 
-                  className="input-dark w-full text-sm py-2.5 font-bold"
+                  className="input-dark w-full text-sm py-2.5 font-bold font-mono"
                 />
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-4 flex-shrink-0">
                 <button 
                   type="button"
-                  onClick={() => setShowAddHiloModal(false)} 
+                  onClick={() => {
+                    setShowAddHiloModal(false)
+                    setEditingHilo(null)
+                  }} 
                   className="btn-secondary flex-1 justify-center py-2.5"
                 >
                   Cancelar
@@ -2193,7 +2280,7 @@ export default function MateriaPrimaPage() {
                   disabled={saving} 
                   className="btn-primary flex-1 justify-center py-2.5 bg-emerald-600 border-none font-bold text-white shadow-lg shadow-emerald-600/20"
                 >
-                  {saving ? 'Agregando...' : 'Agregar Insumo'}
+                  {saving ? 'Guardando...' : editingHilo ? 'Guardar Cambios' : 'Agregar Insumo'}
                 </button>
               </div>
             </form>
