@@ -10,7 +10,7 @@ import {
   Shirt, LayoutDashboard, Cog, Layers, Scissors, Wind,
   Package, Warehouse, ShoppingCart, Truck, Wrench,
   BarChart3, LogOut, ChevronRight, Cpu, Users, Menu, X,
-  ClipboardList, Database, RotateCcw
+  ClipboardList, Database, RotateCcw, Palette
 } from 'lucide-react'
 import StockNotification from './StockNotification'
 
@@ -19,6 +19,7 @@ const MODULO_CONFIG: Record<string, { label: string; icon: React.ReactNode; href
   usuarios:     { label: 'Personal',     icon: <Users className="w-5 h-5" />,           href: '/dashboard/usuarios',      color: 'text-indigo-400' },
   catalogo:     { label: 'Catálogo',     icon: <Cog className="w-5 h-5" />,             href: '/dashboard/catalogo',      color: 'text-slate-400' },
   maquinas:     { label: 'Máquinas',     icon: <Cpu className="w-5 h-5" />,             href: '/dashboard/maquinas',      color: 'text-sky-400' },
+  disenos:      { label: 'Diseños',      icon: <Palette className="w-5 h-5" />,         href: '/dashboard/disenos',       color: 'text-fuchsia-400' },
   produccion:   { label: 'Tejido',       icon: <Layers className="w-5 h-5" />,          href: '/dashboard/produccion',    color: 'text-violet-400' },
   remallado:    { label: 'Remallado',    icon: <Scissors className="w-5 h-5" />,        href: '/dashboard/remallado',     color: 'text-orange-400' },
   volteado:     { label: 'Volteado',     icon: <RotateCcw className="w-5 h-5" />,       href: '/dashboard/volteado',      color: 'text-indigo-300' },

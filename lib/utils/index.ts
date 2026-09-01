@@ -67,6 +67,7 @@ export const ROLES_LABELS: Record<string, string> = {
   // Roles activos (post-migración 007)
   admin: 'Administrador General',
   supervisor: 'Supervisor de Producción',
+  disenador: 'Diseñador Textil',
   operador: 'Operador de Producción',
   vendedora: 'Asesora de Ventas',
   tecnico: 'Técnico de Mantenimiento',
@@ -81,18 +82,20 @@ export const ROLES_LABELS: Record<string, string> = {
 
 export const MODULOS_POR_ROL: Record<string, string[]> = {
   // Roles activos
-  admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'ventas', 'despacho', 'mantenimiento', 'materia_prima', 'reportes'],
-  supervisor: ['usuarios', 'catalogo', 'maquinas', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'despacho', 'materia_prima', 'reportes'],
+  admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'disenos', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'ventas', 'despacho', 'mantenimiento', 'materia_prima', 'reportes'],
+  supervisor: ['usuarios', 'catalogo', 'maquinas', 'disenos', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'despacho', 'materia_prima', 'reportes'],
+  disenador: ['disenos', 'catalogo', 'maquinas'],
   // 'operador' accede a todos los módulos de planta; asignaciones_turno filtra el contexto real
-  operador: ['produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'mantenimiento'],
+  operador: ['produccion', 'remallado', 'disenos', 'planchado', 'preparado', 'almacen', 'mantenimiento'],
   vendedora: ['ventas'],
   tecnico: ['mantenimiento'],
   // Legacy — para usuarios que aún no fueron migrados
-  tejedor: ['produccion', 'mantenimiento'],
+  tejedor: ['produccion', 'disenos', 'mantenimiento'],
   remalladora: ['remallado', 'mantenimiento'],
   volteador: ['volteado'],
   planchador: ['planchado'],
   preparador: ['preparado'],
   almacenero: ['almacen', 'despacho'],
 }
+
 
