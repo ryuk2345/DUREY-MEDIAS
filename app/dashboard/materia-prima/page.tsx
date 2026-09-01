@@ -353,7 +353,12 @@ export default function MateriaPrimaPage() {
 
     try {
       if (!usingFallback) {
-        const { error } = await supabase.from('proveedores').insert(newProv)
+        const { error } = await supabase.from('proveedores').insert({
+          nombre: newProv.nombre,
+          ruc: newProv.ruc || null,
+          contacto: newProv.contacto || null,
+          telefono: newProv.telefono || null
+        })
         if (error) throw error
       } else {
         const list = [...proveedores, newProv]
