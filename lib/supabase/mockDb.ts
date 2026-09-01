@@ -766,7 +766,13 @@ export function createMockClient() {
           if (!db.disenos) db.disenos = [];
           if (!db.disenos_maquinas) db.disenos_maquinas = [];
 
-          const disenoId = 'dis-' + Math.random().toString(36).substring(2, 11);
+          const disenoId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = (Math.random() * 16) | 0;
+                return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+              });
+
           const nuevoDiseno = {
             id: disenoId,
             codigo: p_codigo,
@@ -787,8 +793,14 @@ export function createMockClient() {
 
           if (p_maquina_ids && Array.isArray(p_maquina_ids)) {
             for (const mId of p_maquina_ids) {
+              const dmId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                    const r = (Math.random() * 16) | 0;
+                    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+                  });
               db.disenos_maquinas.push({
-                id: 'dm-' + Math.random().toString(36).substring(2, 11),
+                id: dmId,
                 diseno_id: disenoId,
                 maquina_id: mId,
                 activo: true,
@@ -823,8 +835,14 @@ export function createMockClient() {
             if (existing) {
               existing.activo = true;
             } else {
+              const dmId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                    const r = (Math.random() * 16) | 0;
+                    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+                  });
               db.disenos_maquinas.push({
-                id: 'dm-' + Math.random().toString(36).substring(2, 11),
+                id: dmId,
                 diseno_id: p_diseno_id,
                 maquina_id: mId,
                 activo: true,

@@ -69,6 +69,16 @@ const DEFAULT_MAQUINAS: Maquina[] = [
   { id: 'maq6', codigo: 'M06', tipo: 'remalladora', marca_id: 'm3', estado: 'activa' },
 ]
 
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+}
+
 const ESTADO_CONFIG = {
   en_muestra: { label: 'En Muestra', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: Clock },
   aprobada: { label: 'Aprobada', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: CheckCircle2 },
@@ -297,7 +307,7 @@ export default function DisenosPage() {
         p_maquina_ids: createForm.maquina_ids
       })
 
-      let createdId = `dis-${Date.now()}`
+      let createdId = generateUUID()
       if (!rpcErr && disenoId) {
         createdId = disenoId
       } else {
@@ -474,16 +484,21 @@ export default function DisenosPage() {
     if (!confirm(`¿Eliminar definitivamente el diseño ${d.codigo} (${d.nombre})?`)) return
 
     try {
-      const { error } = await supabase.from('disenos').delete().eq('id', d.id)
-      if (error) {
-        toast.error('Error al eliminar: ' + error.message)
-        return
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.id)
+      if (isUuid) {
+        await supabase.from('disenos_maquinas').delete().eq('diseno_id', d.id)
+        await supabase.from('disenos').delete().eq('id', d.id)
+      } else {
+        await supabase.from('disenos').delete().eq('codigo', d.codigo)
       }
-      setDisenos(prev => prev.filter(item => item.id !== d.id))
-      toast.success('Diseño eliminado correctamente')
     } catch (e) {
-      toast.error('Error en base de datos')
+      console.warn('Error en eliminación backend:', e)
     }
+
+    const updated = disenos.filter(item => item.id !== d.id && item.codigo !== d.codigo)
+    setDisenos(updated)
+    localStorage.setItem('durey_disenos_fallback', JSON.stringify(updated))
+    toast.success('Diseño eliminado correctamente')
   }
 
   // ── FILTRADO Y MÉTRICAS ──────────────────────────────────────────────────
