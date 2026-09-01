@@ -153,20 +153,30 @@ export default function DisenosPage() {
       let maquinasList: Maquina[] = (maquinasRes.data && maquinasRes.data.length > 0) ? maquinasRes.data : DEFAULT_MAQUINAS
       setMaquinas(maquinasList)
 
-      // Procesar Diseños
-      let disenosList: Diseno[] = []
-      if (!disenosRes.error && disenosRes.data && disenosRes.data.length > 0) {
-        disenosList = disenosRes.data as any
-      } else {
-        const local = localStorage.getItem('durey_disenos_fallback')
-        if (local) {
-          try {
-            const parsed = JSON.parse(local)
-            if (Array.isArray(parsed) && parsed.length > 0) disenosList = parsed
-          } catch (e) {}
-        }
+      // Procesar Diseños (Combinación garantizada sin pérdida)
+      let dbDisenos: Diseno[] = []
+      if (!disenosRes.error && disenosRes.data && Array.isArray(disenosRes.data)) {
+        dbDisenos = disenosRes.data as any
       }
-      setDisenos(disenosList)
+
+      let localDisenos: Diseno[] = []
+      const local = localStorage.getItem('durey_disenos_fallback')
+      if (local) {
+        try {
+          const parsed = JSON.parse(local)
+          if (Array.isArray(parsed)) localDisenos = parsed
+        } catch (e) {}
+      }
+
+      const mapa = new Map<string, Diseno>()
+      localDisenos.forEach(d => { if (d.codigo || d.id) mapa.set(d.id || d.codigo, d) })
+      dbDisenos.forEach(d => { if (d.codigo || d.id) mapa.set(d.id || d.codigo, d) })
+      const mergedDisenos = Array.from(mapa.values())
+
+      setDisenos(mergedDisenos)
+      if (mergedDisenos.length > 0) {
+        localStorage.setItem('durey_disenos_fallback', JSON.stringify(mergedDisenos))
+      }
 
       // 2. Obtener usuario actual en bloque aislado (no interrumpe la carga de datos)
       try {
@@ -287,14 +297,11 @@ export default function DisenosPage() {
         p_maquina_ids: createForm.maquina_ids
       })
 
+      let createdId = `dis-${Date.now()}`
       if (!rpcErr && disenoId) {
-        toast.success('✅ Diseño y orden de muestra registrados correctamente')
-        setShowCreateModal(false)
-        await cargarDatos()
+        createdId = disenoId
       } else {
-        // Fallback directo a tablas si la función RPC aún no está creada en DB
-        console.warn('RPC no disponible, insertando directo:', rpcErr)
-        let createdId = `dis-${Date.now()}`
+        // Fallback directo a tablas
         try {
           const { data: insData } = await supabase.from('disenos').insert({
             codigo: createForm.codigo.trim(),
@@ -323,37 +330,39 @@ export default function DisenosPage() {
         } catch (dbErr) {
           console.warn('Inserción directa falló:', dbErr)
         }
-
-        const newDiseno: Diseno = {
-          id: createdId,
-          codigo: createForm.codigo.trim(),
-          nombre: createForm.nombre.trim(),
-          foto_url: fotoUrl,
-          color_muestra: createForm.color_muestra.trim(),
-          marca_id: createForm.marca_id || null,
-          disenador_id: currentUser?.id || null,
-          orden_muestra: createForm.orden_muestra.trim(),
-          cantidad_muestra: parseInt(createForm.cantidad_muestra) || 1,
-          estado: 'en_muestra',
-          observaciones: createForm.observaciones.trim() || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          marca: marcas.find(m => m.id === createForm.marca_id) || null,
-          disenador: currentUser || null,
-          asignaciones: createForm.maquina_ids.map(mId => ({
-            id: `asig-${Date.now()}-${mId}`,
-            maquina_id: mId,
-            activo: true,
-            maquina: maquinas.find(m => m.id === mId) as any
-          }))
-        }
-        const updated = [newDiseno, ...disenos]
-        setDisenos(updated)
-        localStorage.setItem('durey_disenos_fallback', JSON.stringify(updated))
-        toast.success('✅ Diseño y orden de muestra registrados correctamente')
-        setShowCreateModal(false)
-        await cargarDatos()
       }
+
+      const newDiseno: Diseno = {
+        id: createdId,
+        codigo: createForm.codigo.trim(),
+        nombre: createForm.nombre.trim(),
+        foto_url: fotoUrl,
+        color_muestra: createForm.color_muestra.trim(),
+        marca_id: createForm.marca_id || null,
+        disenador_id: currentUser?.id || null,
+        orden_muestra: createForm.orden_muestra.trim(),
+        cantidad_muestra: parseInt(createForm.cantidad_muestra) || 1,
+        estado: 'en_muestra',
+        observaciones: createForm.observaciones.trim() || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        marca: marcas.find(m => m.id === createForm.marca_id) || null,
+        disenador: currentUser || null,
+        asignaciones: createForm.maquina_ids.map(mId => ({
+          id: `asig-${Date.now()}-${mId}`,
+          maquina_id: mId,
+          activo: true,
+          maquina: maquinas.find(m => m.id === mId) as any
+        }))
+      }
+
+      const updated = [newDiseno, ...disenos.filter(d => d.id !== createdId && d.codigo !== newDiseno.codigo)]
+      setDisenos(updated)
+      localStorage.setItem('durey_disenos_fallback', JSON.stringify(updated))
+
+      toast.success('✅ Diseño y orden de muestra registrados correctamente')
+      setShowCreateModal(false)
+      await cargarDatos()
     } catch (err: any) {
       toast.error('Error al registrar diseño: ' + (err.message || 'Error de red'))
     } finally {
