@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { listarUsuarios, actualizarEstadoUsuario } from '@/lib/api/usuarios'
 import {
   Scissors, Send, ArrowRightLeft, Loader2, X,
   AlertTriangle, CheckCircle2, Package, User, Cpu,
@@ -97,10 +98,11 @@ export default function RemalladoMonitorPage() {
     }
 
     const hoy = new Date().toISOString().split('T')[0]
-    const [espRes, asigRes] = await Promise.all([
-      supabase.from('usuarios').select('id, nombre, estado').in('rol', ['remalladora', 'remallador']).eq('activo', true).order('nombre'),
+    const [remalladoresData, asigRes] = await Promise.all([
+      listarUsuarios({ roles: ['remalladora', 'remallador'], campos: 'id,nombre,estado' }),
       supabase.from('asignaciones_turno').select('operador_id, operador:usuarios(id, nombre, estado)').eq('area', 'enlace').eq('fecha', hoy)
     ])
+    const espRes = { data: remalladoresData, error: null }
 
     const mapaRemalladoras = new Map<string, { id: string; nombre: string; estado?: string }>()
     if (espRes.data) {
@@ -209,7 +211,7 @@ export default function RemalladoMonitorPage() {
     if (loteErr) { toast.error('Error al iniciar lote de remallado'); return }
 
     // 2. Marcar máquina y operadora como ocupadas
-    await supabase.from('usuarios').update({ estado: 'ocupada' }).eq('id', remalladora_id)
+    await actualizarEstadoUsuario(remalladora_id, 'ocupada').catch(() => {})
     await supabase.from('maquinas').update({ estado: 'ocupada' }).eq('id', maquina_id)
 
     toast.success('✅ Asignación iniciada. Máquina en marcha.')
@@ -302,7 +304,7 @@ export default function RemalladoMonitorPage() {
       estado: 'en_proceso',
     })
 
-    await supabase.from('usuarios').update({ estado: 'ocupada' }).eq('id', remalladora_destino_id)
+    await actualizarEstadoUsuario(remalladora_destino_id, 'ocupada').catch(() => {})
     await supabase.from('maquinas').update({ estado: 'ocupada' }).eq('id', maquina_destino_id)
 
     toast.success(`Traspaso exitoso: ${docsTraspaso} docenas transferidas`)

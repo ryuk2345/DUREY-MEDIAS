@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatearFecha } from '@/lib/utils'
+import { listarUsuarios, actualizarEstadoUsuario } from '@/lib/api/usuarios'
 import {
   Layers, Plus, Search, CheckCircle, Clock, ChevronDown, X,
   Loader2, AlertTriangle, Cpu, Play, Pause, Activity, User, Wrench,
@@ -98,10 +99,12 @@ export default function ProduccionTejidoPage() {
     }
 
     const hoy = new Date().toISOString().split('T')[0]
-    const [espRes, asigRes] = await Promise.all([
-      supabase.from('usuarios').select('id, nombre, estado').eq('rol', 'tejedor').eq('activo', true).order('nombre'),
+    const [tejedoresData, asigRes] = await Promise.all([
+      listarUsuarios({ rol: 'tejedor', campos: 'id,nombre,estado' }),
       supabase.from('asignaciones_turno').select('operador_id, operador:usuarios(id, nombre, estado)').eq('area', 'tejido').eq('fecha', hoy)
     ])
+    // Adapter: listarUsuarios retorna array directo (no { data, error })
+    const espRes = { data: tejedoresData, error: null }
 
     const mapaTejedores = new Map<string, { id: string; nombre: string; estado?: string }>()
     if (espRes.data) {
@@ -366,8 +369,9 @@ export default function ProduccionTejidoPage() {
     }
 
     // 4. Marcar al tejedor como ocupado
-    const { error: tejErr } = await supabase.from('usuarios').update({ estado: 'ocupada' }).eq('id', tejedor_id)
-    if (tejErr) {
+    try {
+      await actualizarEstadoUsuario(tejedor_id, 'ocupada')
+    } catch (tejErr: any) {
       toast.error(`Error al actualizar estado de operario tejedor: ${tejErr.message}`)
       return
     }
@@ -430,7 +434,7 @@ export default function ProduccionTejidoPage() {
 
     // Liberar al tejedor
     if (turnoSeleccionado.tejedor_id) {
-      await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', turnoSeleccionado.tejedor_id)
+      await actualizarEstadoUsuario(turnoSeleccionado.tejedor_id, 'disponible').catch(() => {})
     }
 
     toast.success('🎉 Producción registrada correctamente.')

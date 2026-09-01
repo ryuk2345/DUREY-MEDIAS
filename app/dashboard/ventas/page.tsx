@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { listarUsuarios } from '@/lib/api/usuarios'
 import {
   ShoppingCart, Plus, Search, CreditCard, Banknote,
   Loader2, X, Check, AlertCircle, Upload, DollarSign,
@@ -128,7 +129,7 @@ export default function VentasPage() {
     const hoy = new Date().toISOString().split('T')[0]
     const [cli, vend, cat, ven, deu, caj, paq] = await Promise.all([
       supabase.from('clientes').select('*').order('nombre'),
-      supabase.from('usuarios').select('id, nombre').eq('rol', 'vendedora').eq('activo', true).order('nombre'),
+      listarUsuarios({ rol: 'vendedora', campos: 'id,nombre' }),
       supabase.from('catalogo_medias').select('id, codigo, modelo, publico').eq('estado', 'activo').order('codigo'),
       supabase.from('ventas').select(`
         id, codigo_venta, total_soles, tipo_pago, estado, fecha,
@@ -144,14 +145,14 @@ export default function VentasPage() {
     ])
 
     if (cli.error) toast.error(`Error al cargar clientes: ${cli.error.message}`)
-    if (vend.error) toast.error(`Error al cargar vendedoras: ${vend.error.message}`)
+    if (vend instanceof Error) toast.error(`Error al cargar vendedoras: ${vend.message}`)
     if (cat.error) toast.error(`Error al cargar catálogo: ${cat.error.message}`)
     if (ven.error) toast.error(`Error al cargar ventas: ${ven.error.message}`)
     if (deu.error) toast.error(`Error al cargar deudas: ${deu.error.message}`)
     if (paq.error) toast.error(`Error al cargar stock: ${paq.error.message}`)
 
     setClientes(cli.data ?? [])
-    setVendedoras(vend.data ?? [])
+    setVendedoras(Array.isArray(vend) ? vend : [])
     setCatalogo(cat.data ?? [])
     setVentas((ven.data ?? []) as unknown as Venta[])
     setDeudas((deu.data ?? []) as unknown as Deuda[])
@@ -166,8 +167,9 @@ export default function VentasPage() {
     }
     setStockPorMedia(stockMap)
 
-    if (vend.data && vend.data.length > 0 && !vendedoraSeleccionadaId) {
-      setVendedoraSeleccionadaId(vend.data[0].id)
+    const vendArr = Array.isArray(vend) ? vend : []
+    if (vendArr.length > 0 && !vendedoraSeleccionadaId) {
+      setVendedoraSeleccionadaId(vendArr[0].id)
     }
 
     setLoading(false)

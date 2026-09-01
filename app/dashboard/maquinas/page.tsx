@@ -4,6 +4,7 @@
 // Maquinas Page - Control Center with ConfirmDialog
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { listarUsuarios, actualizarEstadoUsuario } from '@/lib/api/usuarios'
 import {
   Cpu, Plus, Search, Trash2, Edit2, Loader2, X, Check,
   AlertTriangle, CheckCircle, Wrench, PauseCircle, Clock,
@@ -99,7 +100,7 @@ export default function MaquinasPage() {
     const [maq, mar, tec, av] = await Promise.all([
       supabase.from('maquinas').select('*, marca:marcas_maquinas(nombre)').order('codigo'),
       supabase.from('marcas_maquinas').select('*').order('nombre'),
-      supabase.from('usuarios').select('*').eq('rol', 'tecnico').order('nombre'),
+      listarUsuarios({ rol: 'tecnico', campos: '*', activo: 'all' }),
       supabase.from('averias_maquinas').select(`
         *, maquina:maquinas(codigo, tipo)
       `).order('fecha_reporte', { ascending: false }).limit(10)
@@ -111,8 +112,8 @@ export default function MaquinasPage() {
     if (mar.error) {
       toast.error(`Error cargando marcas: ${mar.error.message || mar.error.details}`)
     }
-    if (tec.error) {
-      toast.error(`Error cargando técnicos: ${tec.error.message || tec.error.details}`)
+    if (tec instanceof Error) {
+      toast.error(`Error cargando técnicos: ${tec.message}`)
     }
     if (av.error) {
       toast.error(`Error cargando averías: ${av.error.message || av.error.details}`)
@@ -121,7 +122,7 @@ export default function MaquinasPage() {
     const maqData = (maq.data ?? []) as unknown as Maquina[]
     setMaquinas(maqData)
     setMarcas(mar.data ?? [])
-    setTecnicos((tec.data ?? []) as unknown as Tecnico[])
+    setTecnicos((Array.isArray(tec) ? tec : []) as unknown as Tecnico[])
     setAveriasTimeline((av.data ?? []) as unknown as AveriaTimeline[])
 
     if (maqData.length > 0 && !reporteForm.maquina_id) {
@@ -244,8 +245,9 @@ export default function MaquinasPage() {
       
       // Liberar al tejedor
       if (tejedorId) {
-        const { error: errorTejedor } = await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', tejedorId)
-        if (errorTejedor) {
+        try {
+          await actualizarEstadoUsuario(tejedorId, 'disponible')
+        } catch (errorTejedor: any) {
           toast.error(`Error al liberar tejedor: ${errorTejedor.message}`)
           setEnviandoReporte(false)
           return

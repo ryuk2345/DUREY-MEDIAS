@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { listarUsuarios } from '@/lib/api/usuarios'
 import {
   Wind, Plus, Calendar, CheckCircle2, Loader2, X, User, Printer,
   Sparkles, Trash2, Edit3, FileText, CheckSquare, Shirt, Save, Layers,
@@ -96,10 +97,11 @@ export default function PlanchadoPage() {
     if (cat.error) toast.error(`Error al cargar catálogo de medias: ${cat.error.message}`)
 
     const hoy = new Date().toISOString().split('T')[0]
-    const [espRes, asigRes] = await Promise.all([
-      supabase.from('usuarios').select('id, nombre').eq('rol', 'planchador').eq('activo', true).order('nombre'),
+    const [planchadoresData, asigRes] = await Promise.all([
+      listarUsuarios({ rol: 'planchador', campos: 'id,nombre' }),
       supabase.from('asignaciones_turno').select('operador_id, operador:usuarios(id, nombre)').eq('area', 'planchado').eq('fecha', hoy)
     ])
+    const espRes = { data: planchadoresData, error: null }
 
     const mapaPlanchadores = new Map<string, { id: string; nombre: string }>()
     if (espRes.data) {
