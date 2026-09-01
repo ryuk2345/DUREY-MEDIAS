@@ -117,8 +117,11 @@ export default function DisenosPage() {
         setCurrentUser(perfil || null)
       }
 
-      // 2. Marcas
-      const { data: marcasData } = await supabase.from('marcas_maquinas').select('*').order('nombre')
+      // 2. Marcas (Ordenadas alfabéticamente A-Z)
+      const { data: marcasData } = await supabase
+        .from('marcas_maquinas')
+        .select('*')
+        .order('nombre', { ascending: true })
       if (marcasData) setMarcas(marcasData)
 
       // 3. Máquinas tejedoras
