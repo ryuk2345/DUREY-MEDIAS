@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { generarCodigoPaquete, getSemanaAnio, getDiaSemana } from '@/lib/utils'
 import { convertirDocenasAPares } from '@/lib/domain/packaging'
 import QRCode from 'qrcode'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface Preparador { id: string; nombre: string }
 interface StockEmpacar { id: string; docenas: number; catalogo_media_id: string; catalogo_media: { id: string; sku?: string; codigo: string; talla: string; publico: string } }
@@ -549,17 +550,16 @@ export default function PreparadoPage() {
                   {/* Selector de SKU de media */}
                   <div className="mb-3">
                     <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">SKU / Media a Embolsar</label>
-                    <select
+                    <CustomSelect
                       value={mediaManualPorPreparador[prep.id] || mediaAsignadaObj?.id || ''}
-                      onChange={e => setMediaManualPorPreparador(prev => ({ ...prev, [prep.id]: e.target.value }))}
-                      className="input-dark text-xs font-mono font-bold w-full text-emerald-300 border-emerald-500/30"
-                    >
-                      {catalogo.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.sku ? `[${c.sku}] ` : ''}{c.codigo} ({c.publico})
-                        </option>
-                      ))}
-                    </select>
+                      onChange={val => setMediaManualPorPreparador(prev => ({ ...prev, [prep.id]: val }))}
+                      options={catalogo.map(c => ({
+                        value: c.id,
+                        label: `${c.sku ? `[${c.sku}] ` : ''}${c.codigo} (${c.publico})`
+                      }))}
+                      triggerClassName="text-xs font-mono font-bold text-emerald-300 border-emerald-500/30"
+                      placeholder="Seleccionar SKU..."
+                    />
                   </div>
 
                   {/* Input de docenas empacadas */}
@@ -676,18 +676,18 @@ export default function PreparadoPage() {
 
                 <div className="mt-2">
                   <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">📍 Salón Físico Destino para Almacenar</label>
-                  <select
+                  <CustomSelect
                     value={sacoMaestroActual.salon_destino_id}
-                    onChange={e => {
-                      const ub = ubicaciones.find(u => u.id === e.target.value)
-                      setSacoMaestroActual(prev => prev ? ({ ...prev, salon_destino_id: e.target.value, salon_destino_nombre: ub?.nombre || 'Salón A' }) : null)
+                    onChange={val => {
+                      const ub = ubicaciones.find(u => u.id === val)
+                      setSacoMaestroActual(prev => prev ? ({ ...prev, salon_destino_id: val, salon_destino_nombre: ub?.nombre || 'Salón A' }) : null)
                     }}
-                    className="input-dark text-xs font-bold text-center w-full border-emerald-500/30 text-emerald-300"
-                  >
-                    {ubicaciones.map(u => (
-                      <option key={u.id} value={u.id}>📍 {u.nombre}</option>
-                    ))}
-                  </select>
+                    options={ubicaciones.map(u => ({
+                      value: u.id,
+                      label: `📍 ${u.nombre}`
+                    }))}
+                    triggerClassName="text-xs font-bold text-center border-emerald-500/30 text-emerald-300"
+                  />
                 </div>
               </div>
 

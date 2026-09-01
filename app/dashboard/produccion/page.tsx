@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 
 interface Marca { id: string; nombre: string }
@@ -491,30 +492,30 @@ export default function ProduccionTejidoPage() {
         <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="flex items-center gap-2 bg-slate-900/60 p-1 rounded-2xl border border-white/[0.06] text-xs">
             <span className="text-slate-400 font-semibold px-3 py-1">Marca:</span>
-            <select
+            <CustomSelect
               value={selectedMarcaFilter}
-              onChange={e => setSelectedMarcaFilter(e.target.value)}
-              className="bg-transparent text-white font-medium focus:outline-none pr-2 cursor-pointer"
-            >
-              <option value="todas" className="bg-slate-900 text-white">Todas las marcas ({marcas.length})</option>
-              {marcas.map(m => (
-                <option key={m.id} value={m.id} className="bg-slate-900 text-white">{m.nombre}</option>
-              ))}
-            </select>
+              onChange={val => setSelectedMarcaFilter(val)}
+              options={[
+                { value: 'todas', label: `Todas las marcas (${marcas.length})` },
+                ...marcas.map(m => ({ value: m.id, label: m.nombre }))
+              ]}
+              triggerClassName="bg-transparent border-none text-xs py-1"
+            />
           </div>
 
           <div className="flex items-center gap-2 bg-slate-900/60 p-1 rounded-2xl border border-white/[0.06] text-xs">
             <span className="text-slate-400 font-semibold px-3 py-1">Estado:</span>
-            <select
+            <CustomSelect
               value={selectedEstadoFilter}
-              onChange={e => setSelectedEstadoFilter(e.target.value)}
-              className="bg-transparent text-white font-medium focus:outline-none pr-2 cursor-pointer"
-            >
-              <option value="todos" className="bg-slate-900 text-white">Todos los estados</option>
-              <option value="en_marcha" className="bg-slate-900 text-white">En Marcha</option>
-              <option value="disponibles" className="bg-slate-900 text-white">Libres</option>
-              <option value="mantenimiento" className="bg-slate-900 text-white">Mantenimiento</option>
-            </select>
+              onChange={val => setSelectedEstadoFilter(val)}
+              options={[
+                { value: 'todos', label: 'Todos los estados' },
+                { value: 'en_marcha', label: 'En Marcha' },
+                { value: 'disponibles', label: 'Libres' },
+                { value: 'mantenimiento', label: 'Mantenimiento' }
+              ]}
+              triggerClassName="bg-transparent border-none text-xs py-1"
+            />
           </div>
         </div>
       </div>
@@ -645,16 +646,16 @@ export default function ProduccionTejidoPage() {
                 <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
                   Marca de Máquina
                 </label>
-                <select
+                <CustomSelect
                   value={cargaForm.marca_id}
-                  onChange={e => handleMarcaChange(e.target.value)}
-                  className="input-dark text-xs w-full font-medium"
-                >
-                  <option value="">Seleccionar marca de máquina...</option>
-                  {marcas.map(m => (
-                    <option key={m.id} value={m.id}>{m.nombre}</option>
-                  ))}
-                </select>
+                  onChange={val => handleMarcaChange(val)}
+                  options={[
+                    { value: '', label: 'Seleccionar marca de máquina...' },
+                    ...marcas.map(m => ({ value: m.id, label: m.nombre }))
+                  ]}
+                  triggerClassName="text-xs font-medium"
+                  placeholder="Seleccionar marca de máquina..."
+                />
               </div>
 
               {/* 2. Selector de Operador de Turno (Tejedor) */}
@@ -662,47 +663,47 @@ export default function ProduccionTejidoPage() {
                 <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
                   Operador de Turno (Encargado)
                 </label>
-                <select
+                <CustomSelect
                   value={cargaForm.tejedor_id}
-                  onChange={e => setCargaForm({ ...cargaForm, tejedor_id: e.target.value })}
-                  className="input-dark text-xs w-full font-medium"
-                >
-                  {tejedores.length === 0 ? (
-                    <option value="" disabled>⚠️ No hay tejedores asignados a esta área hoy — pide al supervisor que complete el Calendario de Turnos</option>
-                  ) : (
-                    <>
-                      <option value="">Seleccionar tejedor...</option>
-                      {tejedores.map(t => (
-                        <option key={t.id} value={t.id}>{t.nombre}</option>
-                      ))}
-                    </>
-                  )}
-                </select>
+                  onChange={val => setCargaForm({ ...cargaForm, tejedor_id: val })}
+                  options={
+                    tejedores.length === 0
+                      ? [{ value: '', label: '⚠️ No hay tejedores asignados a esta área hoy — pide al supervisor que complete el Calendario de Turnos', disabled: true }]
+                      : [
+                          { value: '', label: 'Seleccionar tejedor...' },
+                          ...tejedores.map(t => ({ value: t.id, label: t.nombre }))
+                        ]
+                  }
+                  triggerClassName="text-xs font-medium"
+                  placeholder="Seleccionar tejedor..."
+                />
               </div>
 
               {/* 3. Horario y Duración */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Horario</label>
-                  <select
+                  <CustomSelect
                     value={cargaForm.horario}
-                    onChange={e => setCargaForm({ ...cargaForm, horario: e.target.value })}
-                    className="input-dark text-xs w-full"
-                  >
-                    <option value="dia">☀ Día</option>
-                    <option value="noche">🌙 Noche</option>
-                  </select>
+                    onChange={val => setCargaForm({ ...cargaForm, horario: val })}
+                    options={[
+                      { value: 'dia', label: '☀ Día' },
+                      { value: 'noche', label: '🌙 Noche' }
+                    ]}
+                    triggerClassName="text-xs"
+                  />
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Duración</label>
-                  <select
+                  <CustomSelect
                     value={cargaForm.duracion_horas}
-                    onChange={e => setCargaForm({ ...cargaForm, duracion_horas: e.target.value })}
-                    className="input-dark text-xs w-full"
-                  >
-                    <option value="8">8 horas</option>
-                    <option value="12">12 horas</option>
-                  </select>
+                    onChange={val => setCargaForm({ ...cargaForm, duracion_horas: val })}
+                    options={[
+                      { value: '8', label: '8 horas' },
+                      { value: '12', label: '12 horas' }
+                    ]}
+                    triggerClassName="text-xs"
+                  />
                 </div>
               </div>
 
@@ -754,16 +755,16 @@ export default function ProduccionTejidoPage() {
                           </div>
 
                           {isSelected && (
-                            <select
+                            <CustomSelect
                               value={selectedMediaId}
-                              onChange={e => updateMediaParaMaquina(m.id, e.target.value)}
-                              className="input-dark text-[11px] py-1.5 w-full font-mono mt-1"
-                            >
-                              <option value="">Seleccionar código de media...</option>
-                              {catalogo.map(c => (
-                                <option key={c.id} value={c.id}>{c.codigo}</option>
-                              ))}
-                            </select>
+                              onChange={val => updateMediaParaMaquina(m.id, val)}
+                              options={[
+                                { value: '', label: 'Seleccionar código de media...' },
+                                ...catalogo.map(c => ({ value: c.id, label: c.codigo }))
+                              ]}
+                              triggerClassName="text-[11px] py-1.5 font-mono mt-1"
+                              placeholder="Seleccionar código de media..."
+                            />
                           )}
                         </div>
                       )

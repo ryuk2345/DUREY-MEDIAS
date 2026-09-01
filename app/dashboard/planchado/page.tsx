@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getSemanaAnio, getDiaSemana } from '@/lib/utils'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 interface Planchador { id: string; nombre: string }
 interface StockPlanchar {
@@ -607,15 +608,15 @@ export default function PlanchadoPage() {
 
           <div className="flex items-center gap-2 bg-slate-900/60 p-1.5 rounded-2xl border border-white/[0.06] text-xs">
             <span className="text-slate-400 font-semibold px-2">Día:</span>
-            <select
+            <CustomSelect
               value={diaSeleccionado}
-              onChange={e => setDiaSeleccionado(e.target.value)}
-              className="bg-transparent text-white font-black capitalize focus:outline-none cursor-pointer py-1 pr-2"
-            >
-              {DIAS.map(d => (
-                <option key={d} value={d} className="bg-slate-900 text-white capitalize">{d}</option>
-              ))}
-            </select>
+              onChange={val => setDiaSeleccionado(val)}
+              options={DIAS.map(d => ({
+                value: d,
+                label: <span className="capitalize">{d}</span>
+              }))}
+              triggerClassName="bg-transparent border-none text-white font-black capitalize py-1 text-xs"
+            />
           </div>
         </div>
       </div>
@@ -785,16 +786,16 @@ export default function PlanchadoPage() {
 
                     {/* Selector rápido si se quiere agregar una media adicional */}
                     <div className="mb-3">
-                      <select
+                      <CustomSelect
                         value={mediaManualPorPlanchador[p.id] || ''}
-                        onChange={e => setMediaManualPorPlanchador(prev => ({ ...prev, [p.id]: e.target.value }))}
-                        className="input-dark text-[11px] py-1.5 w-full font-mono text-slate-300"
-                      >
-                        <option value="">+ Añadir/Seleccionar media del catálogo...</option>
-                        {catalogo.map(c => (
-                          <option key={c.id} value={c.id}>{c.codigo}</option>
-                        ))}
-                      </select>
+                        onChange={val => setMediaManualPorPlanchador(prev => ({ ...prev, [p.id]: val }))}
+                        options={[
+                          { value: '', label: '+ Añadir/Seleccionar media del catálogo...' },
+                          ...catalogo.map(c => ({ value: c.id, label: c.codigo }))
+                        ]}
+                        triggerClassName="text-[11px] py-1.5 font-mono text-slate-300"
+                        placeholder="+ Añadir/Seleccionar media del catálogo..."
+                      />
                     </div>
 
                     {/* Inputs de producción directos por cada media para planchar */}
@@ -885,67 +886,66 @@ export default function PlanchadoPage() {
 
               <div>
                 <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Planchador</label>
-                <select
+                <CustomSelect
                   value={cronoForm.planchador_id}
-                  onChange={e => setCronoForm({ ...cronoForm, planchador_id: e.target.value })}
-                  className="input-dark text-xs w-full font-medium"
-                >
-                  {planchadores.length === 0 ? (
-                    <option value="" disabled>⚠️ No hay planchadores asignados hoy</option>
-                  ) : (
-                    planchadores.map(p => (
-                      <option key={p.id} value={p.id}>{p.nombre}</option>
-                    ))
-                  )}
-                </select>
+                  onChange={val => setCronoForm({ ...cronoForm, planchador_id: val })}
+                  options={
+                    planchadores.length === 0
+                      ? [{ value: '', label: '⚠️ No hay planchadores asignados hoy', disabled: true }]
+                      : planchadores.map(p => ({ value: p.id, label: p.nombre }))
+                  }
+                  triggerClassName="text-xs font-medium"
+                  placeholder="Seleccionar planchador..."
+                />
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Día de la Semana</label>
-                <select
+                <CustomSelect
                   value={cronoForm.dia_semana}
-                  onChange={e => setCronoForm({ ...cronoForm, dia_semana: e.target.value })}
-                  className="input-dark text-xs w-full capitalize font-medium"
-                >
-                  {DIAS.map(d => (
-                    <option key={d} value={d} className="capitalize">{d}</option>
-                  ))}
-                </select>
+                  onChange={val => setCronoForm({ ...cronoForm, dia_semana: val })}
+                  options={DIAS.map(d => ({
+                    value: d,
+                    label: <span className="capitalize">{d}</span>
+                  }))}
+                  triggerClassName="text-xs capitalize font-medium"
+                />
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Modo de Criterio</label>
-                <select
+                <CustomSelect
                   value={cronoForm.criterio}
-                  onChange={e => {
-                    const nuevoCrit = e.target.value
+                  onChange={val => {
+                    const nuevoCrit = val
                     let defaultVal = ''
                     if (nuevoCrit === 'media') defaultVal = catalogo[0]?.codigo || ''
                     if (nuevoCrit === 'talla') defaultVal = 'única'
                     if (nuevoCrit === 'publico') defaultVal = 'Dama'
                     setCronoForm({ ...cronoForm, criterio: nuevoCrit, valor_criterio: defaultVal })
                   }}
-                  className="input-dark text-xs w-full font-medium"
-                >
-                  <option value="media">Código Específico del Catálogo</option>
-                  <option value="talla">Por Talla (ej. 10-13, 5, Única)</option>
-                  <option value="publico">Por Público (Dama, Hombre, Niño)</option>
-                </select>
+                  options={[
+                    { value: 'media', label: 'Código Específico del Catálogo' },
+                    { value: 'talla', label: 'Por Talla (ej. 10-13, 5, Única)' },
+                    { value: 'publico', label: 'Por Público (Dama, Hombre, Niño)' }
+                  ]}
+                  triggerClassName="text-xs font-medium"
+                />
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Valor Asignado</label>
                 {cronoForm.criterio === 'media' ? (
-                  <select
+                  <CustomSelect
                     value={cronoForm.valor_criterio}
-                    onChange={e => setCronoForm({ ...cronoForm, valor_criterio: e.target.value })}
-                    className="input-dark text-xs w-full font-mono font-medium"
-                  >
-                    <option value="">Seleccionar media...</option>
-                    {catalogo.map(c => (
-                      <option key={c.id} value={c.codigo}>{c.codigo}</option>
-                    ))}
-                  </select>
+                    onChange={val => setCronoForm({ ...cronoForm, valor_criterio: val })}
+                    options={[
+                      { value: '', label: 'Seleccionar media...' },
+                      ...catalogo.map(c => ({ value: c.codigo, label: c.codigo }))
+                    ]}
+                    triggerClassName="text-xs font-mono font-medium"
+                    placeholder="Seleccionar media..."
+                  />
                 ) : (
                   <input
                     type="text"

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
+import CustomSelect from '@/components/ui/CustomSelect'
 
 
 interface LoteRemallado {
@@ -364,16 +365,17 @@ export default function RemalladoMonitorPage() {
 
         <div className="flex items-center gap-2 bg-slate-900/60 p-1 rounded-2xl border border-white/[0.06] text-xs">
           <span className="text-slate-400 font-semibold px-3 py-1">Estado:</span>
-          <select
+          <CustomSelect
             value={selectedEstadoFilter}
-            onChange={e => setSelectedEstadoFilter(e.target.value)}
-            className="bg-transparent text-white font-medium focus:outline-none pr-2 cursor-pointer"
-          >
-            <option value="todos" className="bg-slate-900 text-white">Todos los estados</option>
-            <option value="en_marcha" className="bg-slate-900 text-white">En Marcha</option>
-            <option value="disponibles" className="bg-slate-900 text-white">Libres</option>
-            <option value="mantenimiento" className="bg-slate-900 text-white">Mantenimiento</option>
-          </select>
+            onChange={val => setSelectedEstadoFilter(val)}
+            options={[
+              { value: 'todos', label: 'Todos los estados' },
+              { value: 'en_marcha', label: 'En Marcha' },
+              { value: 'disponibles', label: 'Libres' },
+              { value: 'mantenimiento', label: 'Mantenimiento' }
+            ]}
+            triggerClassName="bg-transparent border-none text-xs py-1"
+          />
         </div>
       </div>
 
@@ -501,16 +503,16 @@ export default function RemalladoMonitorPage() {
                 <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
                   Máquina Remalladora Libre ({maquinasLibres.length})
                 </label>
-                <select
+                <CustomSelect
                   value={cargaForm.maquina_id}
-                  onChange={e => setCargaForm({ ...cargaForm, maquina_id: e.target.value })}
-                  className="input-dark text-xs w-full font-medium"
-                >
-                  <option value="">Seleccionar máquina remalladora...</option>
-                  {maquinasLibres.map(m => (
-                    <option key={m.id} value={m.id}>{m.codigo} — Libre</option>
-                  ))}
-                </select>
+                  onChange={val => setCargaForm({ ...cargaForm, maquina_id: val })}
+                  options={[
+                    { value: '', label: 'Seleccionar máquina remalladora...' },
+                    ...maquinasLibres.map(m => ({ value: m.id, label: `${m.codigo} — Libre` }))
+                  ]}
+                  triggerClassName="text-xs font-medium"
+                  placeholder="Seleccionar máquina remalladora..."
+                />
               </div>
 
               {/* 2. Selección de Operadora Remalladora */}
@@ -518,22 +520,20 @@ export default function RemalladoMonitorPage() {
                 <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
                   Operadora Remalladora ({remalladorasDisponibles.length} disponibles)
                 </label>
-                <select
+                <CustomSelect
                   value={cargaForm.remalladora_id}
-                  onChange={e => setCargaForm({ ...cargaForm, remalladora_id: e.target.value })}
-                  className="input-dark text-xs w-full font-medium"
-                >
-                  {remalladorasDisponibles.length === 0 ? (
-                    <option value="" disabled>⚠️ No hay remalladoras asignadas a esta área hoy — pide al supervisor que complete el Calendario de Turnos</option>
-                  ) : (
-                    <>
-                      <option value="">Seleccionar remalladora...</option>
-                      {remalladorasDisponibles.map(r => (
-                        <option key={r.id} value={r.id}>{r.nombre}</option>
-                      ))}
-                    </>
-                  )}
-                </select>
+                  onChange={val => setCargaForm({ ...cargaForm, remalladora_id: val })}
+                  options={
+                    remalladorasDisponibles.length === 0
+                      ? [{ value: '', label: '⚠️ No hay remalladoras asignadas a esta área hoy — pide al supervisor que complete el Calendario de Turnos', disabled: true }]
+                      : [
+                          { value: '', label: 'Seleccionar remalladora...' },
+                          ...remalladorasDisponibles.map(r => ({ value: r.id, label: r.nombre }))
+                        ]
+                  }
+                  triggerClassName="text-xs font-medium"
+                  placeholder="Seleccionar remalladora..."
+                />
               </div>
 
               {/* 3. Selección de Tipo de Media (Catálogo) */}
@@ -541,16 +541,16 @@ export default function RemalladoMonitorPage() {
                 <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
                   Tipo de Media a Remallar (Catálogo)
                 </label>
-                <select
+                <CustomSelect
                   value={cargaForm.catalogo_media_id}
-                  onChange={e => setCargaForm({ ...cargaForm, catalogo_media_id: e.target.value })}
-                  className="input-dark text-xs w-full font-mono font-medium"
-                >
-                  <option value="">Seleccionar código de media...</option>
-                  {catalogo.map(c => (
-                    <option key={c.id} value={c.id}>{c.codigo}</option>
-                  ))}
-                </select>
+                  onChange={val => setCargaForm({ ...cargaForm, catalogo_media_id: val })}
+                  options={[
+                    { value: '', label: 'Seleccionar código de media...' },
+                    ...catalogo.map(c => ({ value: c.id, label: c.codigo }))
+                  ]}
+                  triggerClassName="text-xs font-mono font-medium"
+                  placeholder="Seleccionar código de media..."
+                />
               </div>
 
               {/* 4. Cantidad de Docenas y Horario */}
@@ -567,14 +567,15 @@ export default function RemalladoMonitorPage() {
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Horario</label>
-                  <select
+                  <CustomSelect
                     value={cargaForm.horario}
-                    onChange={e => setCargaForm({ ...cargaForm, horario: e.target.value })}
-                    className="input-dark text-xs w-full"
-                  >
-                    <option value="dia">☀ Día</option>
-                    <option value="noche">🌙 Noche</option>
-                  </select>
+                    onChange={val => setCargaForm({ ...cargaForm, horario: val })}
+                    options={[
+                      { value: 'dia', label: '☀ Día' },
+                      { value: 'noche', label: '🌙 Noche' }
+                    ]}
+                    triggerClassName="text-xs"
+                  />
                 </div>
               </div>
 
@@ -704,52 +705,51 @@ export default function RemalladoMonitorPage() {
             <div className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Lote de Origen</label>
-                <select
+                <CustomSelect
                   value={traspasoForm.lote_origen_id}
-                  onChange={e => setTraspasoForm({ ...traspasoForm, lote_origen_id: e.target.value })}
-                  className="input-dark text-xs w-full"
-                >
-                  <option value="">Seleccionar lote activo...</option>
-                  {lotes.map(l => (
-                    <option key={l.id} value={l.id}>
-                      {l.remalladora?.nombre} ({l.maquina_remalladora?.codigo}) — {l.catalogo_media?.codigo} ({l.docenas_pendientes} pend.)
-                    </option>
-                  ))}
-                </select>
+                  onChange={val => setTraspasoForm({ ...traspasoForm, lote_origen_id: val })}
+                  options={[
+                    { value: '', label: 'Seleccionar lote activo...' },
+                    ...lotes.map(l => ({
+                      value: l.id,
+                      label: `${l.remalladora?.nombre} (${l.maquina_remalladora?.codigo}) — ${l.catalogo_media?.codigo} (${l.docenas_pendientes} pend.)`
+                    }))
+                  ]}
+                  triggerClassName="text-xs"
+                  placeholder="Seleccionar lote activo..."
+                />
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Remalladora Destino (disponible)</label>
-                <select
+                <CustomSelect
                   value={traspasoForm.remalladora_destino_id}
-                  onChange={e => setTraspasoForm({ ...traspasoForm, remalladora_destino_id: e.target.value })}
-                  className="input-dark text-xs w-full"
-                >
-                  {remalladorasDisponibles.length === 0 ? (
-                    <option value="" disabled>⚠️ No hay remalladoras asignadas hoy</option>
-                  ) : (
-                    <>
-                      <option value="">Seleccionar remalladora libre...</option>
-                      {remalladorasDisponibles.map(r => (
-                        <option key={r.id} value={r.id}>{r.nombre}</option>
-                      ))}
-                    </>
-                  )}
-                </select>
+                  onChange={val => setTraspasoForm({ ...traspasoForm, remalladora_destino_id: val })}
+                  options={
+                    remalladorasDisponibles.length === 0
+                      ? [{ value: '', label: '⚠️ No hay remalladoras asignadas hoy', disabled: true }]
+                      : [
+                          { value: '', label: 'Seleccionar remalladora libre...' },
+                          ...remalladorasDisponibles.map(r => ({ value: r.id, label: r.nombre }))
+                        ]
+                  }
+                  triggerClassName="text-xs"
+                  placeholder="Seleccionar remalladora libre..."
+                />
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Máquina Destino (libre)</label>
-                <select
+                <CustomSelect
                   value={traspasoForm.maquina_destino_id}
-                  onChange={e => setTraspasoForm({ ...traspasoForm, maquina_destino_id: e.target.value })}
-                  className="input-dark text-xs w-full"
-                >
-                  <option value="">Seleccionar máquina libre...</option>
-                  {maquinasLibres.map(m => (
-                    <option key={m.id} value={m.id}>{m.codigo}</option>
-                  ))}
-                </select>
+                  onChange={val => setTraspasoForm({ ...traspasoForm, maquina_destino_id: val })}
+                  options={[
+                    { value: '', label: 'Seleccionar máquina libre...' },
+                    ...maquinasLibres.map(m => ({ value: m.id, label: m.codigo }))
+                  ]}
+                  triggerClassName="text-xs"
+                  placeholder="Seleccionar máquina libre..."
+                />
               </div>
 
               <div>
