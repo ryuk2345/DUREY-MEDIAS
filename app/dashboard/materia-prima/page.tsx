@@ -1931,9 +1931,9 @@ export default function MateriaPrimaPage() {
 
       {/* ── MODAL: AÑADIR HILO ──────────────────────────────────────────────── */}
       {showAddHiloModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">🧶 Registrar Nueva Fibra / Hilo</h2>
               <button 
                 type="button"
@@ -1944,7 +1944,7 @@ export default function MateriaPrimaPage() {
               </button>
             </div>
 
-            <form onSubmit={handleAddHilo} className="space-y-4 text-xs">
+            <form onSubmit={handleAddHilo} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
               <div>
                 <label className="block text-slate-300 font-bold mb-1">🧵 Fibra / Material</label>
                 <input 
@@ -2008,7 +2008,7 @@ export default function MateriaPrimaPage() {
                 />
               </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-4 flex-shrink-0">
                 <button 
                   type="button"
                   onClick={() => setShowAddHiloModal(false)} 
@@ -2019,9 +2019,9 @@ export default function MateriaPrimaPage() {
                 <button 
                   type="submit" 
                   disabled={saving} 
-                  className="btn-primary flex-1 justify-center py-2.5 bg-emerald-600 border-none font-bold text-white"
+                  className="btn-primary flex-1 justify-center py-2.5 bg-emerald-600 border-none font-bold text-white shadow-lg shadow-emerald-600/20"
                 >
-                  {saving ? 'Agregando...' : 'Agregar Hilo'}
+                  {saving ? 'Agregando...' : 'Agregar Insumo'}
                 </button>
               </div>
             </form>
@@ -2363,9 +2363,9 @@ export default function MateriaPrimaPage() {
 
       {/* ── MODAL: REGISTRAR COMPRA DE MATERIA PRIMA ─────────────────────────── */}
       {showCompraModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">📦 Adquisición de Materia Prima</h2>
               <button 
                 type="button"
@@ -2376,7 +2376,7 @@ export default function MateriaPrimaPage() {
               </button>
             </div>
 
-            <form onSubmit={handleRegistrarCompra} className="space-y-4 text-xs">
+            <form onSubmit={handleRegistrarCompra} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
               <div>
                 <label className="block text-slate-300 font-bold mb-1">🏢 Proveedor</label>
                 <select 
@@ -2414,13 +2414,13 @@ export default function MateriaPrimaPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">⚖️ Cantidad (Kg)</label>
+                  <label className="block text-slate-300 font-bold mb-1">⚖️ Cantidad</label>
                   <input 
                     type="number" 
                     step="0.001" 
                     value={compraForm.cantidad_kg} 
                     onChange={e => setCompraForm(prev => ({ ...prev, cantidad_kg: e.target.value }))}
-                    placeholder="Ej. 150.0" 
+                    placeholder="Ej. 150" 
                     className="input-dark w-full"
                     required 
                   />
@@ -2479,7 +2479,7 @@ export default function MateriaPrimaPage() {
                 </div>
               )}
 
-              <div className="flex gap-3 mt-6">
+              <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-4 flex-shrink-0">
                 <button 
                   type="button"
                   onClick={() => setShowCompraModal(false)} 
@@ -2490,7 +2490,7 @@ export default function MateriaPrimaPage() {
                 <button 
                   type="submit" 
                   disabled={saving} 
-                  className="btn-primary flex-1 justify-center py-2.5 bg-emerald-600 border-none font-bold text-white"
+                  className="btn-primary flex-1 justify-center py-2.5 bg-emerald-600 border-none font-bold text-white shadow-lg shadow-emerald-600/20"
                 >
                   {saving ? 'Registrando...' : 'Registrar Compra'}
                 </button>
