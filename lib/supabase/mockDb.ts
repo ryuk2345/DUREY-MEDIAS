@@ -192,19 +192,53 @@ export async function getMockDb() {
   } else {
     // Cliente (Browser)
     let localContent = localStorage.getItem('durey_mock_db');
-    if (!localContent) {
-      // Si no hay local, llamamos al API para obtener el JSON del servidor
+    let parsed: any = null;
+    if (localContent) {
       try {
-        const res = await fetch('/api/mock-db');
-        const serverDb = await res.json();
-        localStorage.setItem('durey_mock_db', JSON.stringify(serverDb));
-        return serverDb;
+        parsed = JSON.parse(localContent);
       } catch (e) {
-        localStorage.setItem('durey_mock_db', JSON.stringify(SEMILLAS));
-        return { ...SEMILLAS };
+        parsed = null;
       }
     }
-    return JSON.parse(localContent);
+
+    if (!parsed) {
+      try {
+        const res = await fetch('/api/mock-db');
+        parsed = await res.json();
+      } catch (e) {
+        parsed = { ...SEMILLAS };
+      }
+    }
+
+    // Auto-migrar claves faltantes o tablas vacías en el caché
+    let changed = false;
+    for (const key of Object.keys(SEMILLAS)) {
+      if (!parsed[key]) {
+        parsed[key] = (SEMILLAS as any)[key] || [];
+        changed = true;
+      }
+    }
+    if (!parsed.marcas_maquinas || parsed.marcas_maquinas.length === 0) {
+      parsed.marcas_maquinas = [...SEMILLAS.marcas_maquinas];
+      changed = true;
+    }
+    if (!parsed.maquinas || parsed.maquinas.length === 0) {
+      parsed.maquinas = [...SEMILLAS.maquinas];
+      changed = true;
+    }
+    if (!parsed.disenos) {
+      parsed.disenos = [];
+      changed = true;
+    }
+    if (!parsed.disenos_maquinas) {
+      parsed.disenos_maquinas = [];
+      changed = true;
+    }
+
+    if (changed) {
+      localStorage.setItem('durey_mock_db', JSON.stringify(parsed));
+    }
+    return parsed;
   }
 }
 
