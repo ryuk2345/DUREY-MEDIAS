@@ -903,7 +903,8 @@ export default function MateriaPrimaPage() {
   }, [balanceCompleto])
 
   return (
-    <div className="space-y-6 animate-fadeInUp pb-12">
+    <>
+      <div className="space-y-6 animate-fadeInUp pb-12">
       {/* Fallback Banner */}
       {usingFallback && (
         <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold flex items-center gap-2">
@@ -1928,10 +1929,12 @@ export default function MateriaPrimaPage() {
           )}
         </>
       )}
+    </div>
 
-      {/* ── MODAL: AÑADIR HILO ──────────────────────────────────────────────── */}
-      {showAddHiloModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fadeIn">
+    {/* ── MODALES DEL SISTEMA (RENDERIZADOS FUERA DEL CONTENEDOR CON TRANSFORM) ── */}
+    {/* ── MODAL: AÑADIR HILO ──────────────────────────────────────────────── */}
+    {showAddHiloModal && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
           <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">🧶 Registrar Nueva Fibra / Hilo</h2>
@@ -2031,9 +2034,9 @@ export default function MateriaPrimaPage() {
 
       {/* ── MODAL: REGISTRAR PROVEEDOR ──────────────────────────────────────── */}
       {showAddProveedorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">🏢 Registrar Proveedor</h2>
               <button 
                 type="button"
@@ -2114,9 +2117,9 @@ export default function MateriaPrimaPage() {
 
       {/* ── MODAL: AÑADIR REPUESTO ─────────────────────────────────────────── */}
       {showAddRepuestoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">🔧 Añadir Nuevo Repuesto</h2>
               <button 
                 type="button"
@@ -2188,9 +2191,9 @@ export default function MateriaPrimaPage() {
 
       {/* ── MODAL: AJUSTAR STOCK DE REPUESTO ─────────────────────────────────── */}
       {showAdjustRepuestoModal && selectedRepuesto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">🔧 Ajustar Inventario de Repuesto</h2>
               <button 
                 type="button"
@@ -2284,9 +2287,9 @@ export default function MateriaPrimaPage() {
 
       {/* ── MODAL: AÑADIR EGRESO ADICIONAL ──────────────────────────────────── */}
       {showAddEgresoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">💸 Registrar Gasto de Fábrica</h2>
               <button 
                 type="button"
@@ -2363,7 +2366,7 @@ export default function MateriaPrimaPage() {
 
       {/* ── MODAL: REGISTRAR COMPRA DE MATERIA PRIMA ─────────────────────────── */}
       {showCompraModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
           <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">📦 Adquisición de Materia Prima</h2>
@@ -2502,9 +2505,9 @@ export default function MateriaPrimaPage() {
 
       {/* ── MODAL: QC INSPECCIÓN ────────────────────────────────────────────── */}
       {showQcModal && selectedCompra && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">🔬 Control de Calidad e Inspección</h2>
               <button 
                 type="button"
@@ -2584,9 +2587,9 @@ export default function MateriaPrimaPage() {
 
       {/* ── MODAL: LIQUIDAR CUOTA DE COMPRA ─────────────────────────────────── */}
       {showPayCuotaModal && selectedCuota && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">💵 Asentar Pago de Cuota</h2>
               <button 
                 type="button"
@@ -2648,6 +2651,6 @@ export default function MateriaPrimaPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
