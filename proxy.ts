@@ -4,27 +4,29 @@ import { createServerClient } from '@supabase/ssr'
 // Rutas accesibles por rol (en el dashboard)
 const ROLE_ROUTES: Record<string, string[]> = {
   admin: [
-    '/admin', '/usuarios', '/catalogo', '/maquinas', '/produccion', 
-    '/remallado', '/planchado', '/preparado', '/almacen', '/ventas', 
-    '/despacho', '/mantenimiento', '/reportes',
-    '/materia-prima'
+    '/admin', '/usuarios', '/catalogo', '/maquinas', '/disenos', '/produccion', 
+    '/remallado', '/planchado', '/preparado', '/almacen', '/ventas', '/clientes',
+    '/despacho', '/mantenimiento', '/reportes', '/materia-prima',
+    '/egresos', '/balance'
   ],
   supervisor: [
-    '/usuarios', '/catalogo', '/maquinas', '/produccion', '/remallado', 
-    '/planchado', '/preparado', '/almacen', '/despacho', '/reportes',
-    '/materia-prima'
+    '/usuarios', '/catalogo', '/maquinas', '/disenos', '/produccion', '/remallado', 
+    '/planchado', '/preparado', '/almacen', '/ventas', '/clientes', '/despacho', 
+    '/mantenimiento', '/reportes', '/materia-prima'
   ],
   operador: [
-    '/produccion', '/remallado', '/planchado', '/preparado', '/almacen', 
+    '/produccion', '/remallado', '/disenos', '/planchado', '/preparado', '/almacen', 
     '/mantenimiento'
   ],
-  tejedor: ['/produccion', '/mantenimiento'],
+  disenador: ['/disenos', '/catalogo', '/maquinas'],
+  tejedor: ['/produccion', '/disenos', '/mantenimiento'],
   remalladora: ['/remallado', '/mantenimiento'],
-  planchador: ['/planchado'],
+  remallador: ['/remallado', '/mantenimiento'],
+  planchador: ['/planchado', '/mantenimiento'],
   preparador: ['/preparado'],
-  almacenero: ['/almacen', '/despacho'],
-  vendedora: ['/ventas'],
-  tecnico: ['/mantenimiento'],
+  almacenero: ['/almacen', '/despacho', '/materia-prima'],
+  vendedora: ['/ventas', '/clientes', '/catalogo', '/despacho'],
+  tecnico: ['/maquinas', '/mantenimiento'],
 }
 
 function normalizeRole(rawRole: string | undefined | null): string {

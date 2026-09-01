@@ -90,7 +90,7 @@ interface Movimiento {
 }
 
 export default function MateriaPrimaPage() {
-  const [activeTab, setActiveTab] = useState<'hilos' | 'repuestos' | 'proveedores' | 'egresos' | 'balance'>('hilos')
+  const [activeTab, setActiveTab] = useState<'hilos' | 'repuestos' | 'proveedores'>('hilos')
   const [empaqueTab, setEmpaqueTab] = useState<'todos' | 'bolsas' | 'conos' | 'cajas'>('todos')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1073,15 +1073,7 @@ export default function MateriaPrimaPage() {
             </button>
           )}
 
-          {activeTab === 'egresos' && (
-            <button 
-              type="button"
-              onClick={() => setShowAddEgresoModal(true)} 
-              className="btn-primary text-xs py-2.5 px-4 rounded-2xl bg-red-600 hover:bg-red-500 border-none flex items-center gap-1.5 font-bold shadow-lg"
-            >
-              + Registrar Egreso
-            </button>
-          )}
+
 
           <button 
             type="button"
@@ -1122,24 +1114,6 @@ export default function MateriaPrimaPage() {
           }`}
         >
           📅 Cuentas por Pagar (Proveedores)
-        </button>
-        <button 
-          type="button"
-          onClick={() => setActiveTab('egresos')} 
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'egresos' ? 'bg-red-600 text-white' : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          💸 Egresos
-        </button>
-        <button 
-          type="button"
-          onClick={() => setActiveTab('balance')} 
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-            activeTab === 'balance' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          📈 Balance Ventas vs Egresos
         </button>
       </div>
 
@@ -1958,224 +1932,6 @@ export default function MateriaPrimaPage() {
 
             </div>
           )}
-
-          {/* TAB 4: EGRESOS GENERALES */}
-          {activeTab === 'egresos' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
-              
-              {/* Listado de Gastos */}
-              <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-4 lg:col-span-2">
-                <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                  💸 Gastos y Egresos Mapeados (Bolsas, Repuestos, Servicios, etc.)
-                </h2>
-
-                <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-white/[0.03] text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                      <tr>
-                        <th className="p-4">Fecha</th>
-                        <th className="p-4">Detalle / Concepto</th>
-                        <th className="p-4">Categoría</th>
-                        <th className="p-4 text-right">Monto Gastado</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/[0.04] text-slate-300">
-                      {/* Egresos adicionales */}
-                      {egresosAdicionales.map((e) => (
-                        <tr key={e.id} className="hover:bg-white/[0.01] transition-colors">
-                          <td className="p-4 font-mono text-slate-400">{e.fecha}</td>
-                          <td className="p-4 font-bold text-white">{e.concepto}</td>
-                          <td className="p-4 capitalize">
-                            <span className={`badge py-1 px-2.5 font-bold text-[9px] ${
-                              e.categoria === 'planilla' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' :
-                              e.categoria === 'servicios' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
-                              e.categoria === 'empaque' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
-                              e.categoria === 'repuestos' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' :
-                              'bg-slate-800 text-slate-300 border-white/5'
-                            }`}>
-                              {e.categoria}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right font-mono font-bold text-red-300">S/ {Number(e.monto).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                      
-                      {/* Compras de materias primas liquidadas */}
-                      {compras.filter(c => c.estado === 'recibida').map((c) => (
-                        <tr key={c.id} className="hover:bg-white/[0.01] transition-colors">
-                          <td className="p-4 font-mono text-slate-400">{c.fecha}</td>
-                          <td className="p-4 font-bold text-white">Materia Prima: {c.materia_prima?.material} {c.materia_prima?.color}</td>
-                          <td className="p-4">
-                            <span className="badge bg-emerald-500/10 text-emerald-300 border-emerald-500/20 py-1 px-2.5">
-                              materia prima
-                            </span>
-                          </td>
-                          <td className="p-4 text-right font-mono font-bold text-red-300">S/ {Number(c.costo_total).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Estadísticas de Outlays */}
-              <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl flex flex-col justify-between">
-                <div className="space-y-4">
-                  <h2 className="text-sm font-bold text-white tracking-tight">Clasificación de Gastos en Planta</h2>
-                  
-                  <div className="space-y-4 text-xs">
-                    <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/[0.05] flex justify-between items-center">
-                      <div>
-                        <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Materia Prima (Fibras / Hilos)</p>
-                        <h3 className="text-lg font-black text-white mt-1">S/ {egresosData.compras.toFixed(2)}</h3>
-                      </div>
-                      <Database className="w-7 h-7 text-emerald-400 opacity-60" />
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/[0.05] flex justify-between items-center">
-                      <div>
-                        <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Repuestos y Mantenimiento</p>
-                        <h3 className="text-lg font-black text-white mt-1">
-                          S/ {(egresosData.repairs + egresosAdicionales.filter(e => e.categoria === 'repuestos').reduce((s, e) => s + e.monto, 0)).toFixed(2)}
-                        </h3>
-                      </div>
-                      <Wrench className="w-7 h-7 text-cyan-400 opacity-60" />
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/[0.05] flex justify-between items-center">
-                      <div>
-                        <p className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Empaque (Bolsas/Etiquetas)</p>
-                        <h3 className="text-lg font-black text-white mt-1">
-                          S/ {egresosAdicionales.filter(e => e.categoria === 'empaque').reduce((s, e) => s + e.monto, 0).toFixed(2)}
-                        </h3>
-                      </div>
-                      <FileText className="w-7 h-7 text-emerald-400 opacity-60" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-white/[0.08] mt-6">
-                  <p className="text-[10px] text-slate-500 font-bold uppercase">Gasto Total Acumulado</p>
-                  <h2 className="text-2xl font-black text-red-400 font-mono mt-1">S/ {egresosData.totalEgresos.toFixed(2)}</h2>
-                </div>
-              </div>
-
-            </div>
-          )}
-
-          {/* TAB 5: BALANCE E INGRESOS VS GASTOS (MÁRGENES) */}
-          {activeTab === 'balance' && (
-            <div className="space-y-6 animate-fadeIn">
-              
-              {/* KPIs Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                
-                {/* Ingresos por Ventas */}
-                <div className="glass rounded-3xl border border-white/[0.08] p-5 shadow-xl flex items-center justify-between">
-                  <div>
-                    <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Ingresos Recaudados</p>
-                    <h2 className="text-2xl font-black text-emerald-400 mt-2 font-mono">S/ {balanceCompleto.revenue.toFixed(2)}</h2>
-                    <p className="text-[10px] text-slate-500 mt-1">Cobros de ventas validadas</p>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                    <DollarSign className="w-7 h-7" />
-                  </div>
-                </div>
-
-                {/* Egresos */}
-                <div className="glass rounded-3xl border border-white/[0.08] p-5 shadow-xl flex items-center justify-between">
-                  <div>
-                    <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Gastos / Egresos</p>
-                    <h2 className="text-2xl font-black text-red-400 mt-2 font-mono">S/ {balanceCompleto.expenses.toFixed(2)}</h2>
-                    <p className="text-[10px] text-slate-500 mt-1">Compras + Fijos + Repuestos</p>
-                  </div>
-                  <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
-                    <CreditCard className="w-7 h-7" />
-                  </div>
-                </div>
-
-                {/* Utilidad */}
-                <div className="glass rounded-3xl border border-white/[0.08] p-5 shadow-xl flex items-center justify-between">
-                  <div>
-                    <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Utilidad Neta</p>
-                    <h2 className={`text-2xl font-black mt-2 font-mono ${
-                      balanceCompleto.profit >= 0 ? 'text-cyan-400' : 'text-rose-400'
-                    }`}>
-                      S/ {balanceCompleto.profit.toFixed(2)}
-                    </h2>
-                    <p className="text-[10px] text-slate-500 mt-1">Ingresos menos egresos</p>
-                  </div>
-                  <div className={`p-3 rounded-2xl ${
-                    balanceCompleto.profit >= 0 ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-400' : 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
-                  }`}>
-                    <TrendingUp className="w-7 h-7" />
-                  </div>
-                </div>
-
-                {/* Margen de Utilidad */}
-                <div className="glass rounded-3xl border border-white/[0.08] p-5 shadow-xl flex items-center justify-between">
-                  <div>
-                    <p className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Margen de Utilidad</p>
-                    <h2 className={`text-2xl font-black mt-2 font-mono ${
-                      balanceCompleto.margin >= 0 ? 'text-cyan-400' : 'text-rose-400'
-                    }`}>
-                      {balanceCompleto.margin.toFixed(1)} %
-                    </h2>
-                    <p className="text-[10px] text-slate-500 mt-1">Porcentaje de rentabilidad</p>
-                  </div>
-                  <div className={`p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400`}>
-                    <BarChart3 className="w-7 h-7" />
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Margen Gauge Progress */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-4">
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">Margen de Rentabilidad de Fábrica</h3>
-                  <div className="space-y-2 pt-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-400">Eficiencia Financiera:</span>
-                      <span className="font-bold text-white">{balanceCompleto.margin.toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full h-3 rounded-full bg-white/5 overflow-hidden border border-white/10">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          balanceCompleto.margin >= 40 ? 'bg-emerald-500' : 
-                          balanceCompleto.margin >= 20 ? 'bg-cyan-500' : 
-                          balanceCompleto.margin >= 0 ? 'bg-amber-500' : 'bg-red-500'
-                        }`} 
-                        style={{ width: `${Math.max(0, balanceCompleto.margin)}%` }}
-                      />
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-2">Un margen superior al 30% representa niveles de rentabilidad altamente óptimos en la manufactura de medias.</p>
-                  </div>
-                </div>
-
-                {/* Chart comparison */}
-                <div className="lg:col-span-2 glass rounded-3xl border border-white/[0.08] p-6 shadow-xl">
-                  <h2 className="text-sm font-bold text-white tracking-tight mb-4">📊 Rentabilidad: Ingresos vs Egresos Totales</h2>
-                  <div className="w-full h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
-                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                        <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
-                        <Tooltip 
-                          contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px' }}
-                          labelStyle={{ color: '#fff', fontWeight: 'bold' }}
-                        />
-                        <Legend verticalAlign="top" height={36} />
-                        <Bar dataKey="Ingresos" fill="#10b981" radius={[10, 10, 0, 0]} barSize={80} />
-                        <Bar dataKey="Egresos" fill="#ef4444" radius={[10, 10, 0, 0]} barSize={80} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )}
         </>
       )}
     </div>
@@ -2535,86 +2291,6 @@ export default function MateriaPrimaPage() {
                   }`}
                 >
                   {saving ? 'Procesando...' : 'Confirmar Ajuste'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL: AÑADIR EGRESO ADICIONAL ──────────────────────────────────── */}
-      {showAddEgresoModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">💸 Registrar Gasto de Fábrica</h2>
-              <button 
-                type="button"
-                onClick={() => setShowAddEgresoModal(false)} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddEgreso} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">📝 Concepto / Detalle del Gasto</label>
-                <input 
-                  type="text" 
-                  value={egresoForm.concepto} 
-                  onChange={e => setEgresoForm(prev => ({ ...prev, concepto: e.target.value }))}
-                  placeholder="Ej: Bolsas de empaque, Repuestos M10, Luz, Alquiler" 
-                  className="input-dark w-full text-sm py-2.5 font-bold"
-                  required 
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">💵 Monto (S/)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={egresoForm.monto} 
-                    onChange={e => setEgresoForm(prev => ({ ...prev, monto: e.target.value }))}
-                    placeholder="Ej: 350.00" 
-                    className="input-dark w-full text-sm py-2.5 font-bold"
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">🏷️ Categoría de Gasto</label>
-                  <CustomSelect 
-                    value={egresoForm.categoria}
-                    onChange={val => setEgresoForm(prev => ({ ...prev, categoria: val }))}
-                    options={[
-                      { value: 'empaque', label: 'Insumos Empaque (Bolsas/Etiquetas)' },
-                      { value: 'repuestos', label: 'Repuestos de Maquinaria' },
-                      { value: 'planilla', label: 'Planillas Personal' },
-                      { value: 'servicios', label: 'Servicios Básicos (Luz/Agua)' },
-                      { value: 'alquiler', label: 'Alquiler de Local' },
-                      { value: 'otros', label: 'Otros Gastos' }
-                    ]}
-                    triggerClassName="text-sm py-2.5 font-bold"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button 
-                  type="button"
-                  onClick={() => setShowAddEgresoModal(false)} 
-                  className="btn-secondary flex-1 justify-center py-2.5"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={saving} 
-                  className="btn-primary flex-1 justify-center py-2.5 bg-red-600 border-none font-bold text-white"
-                >
-                  {saving ? 'Registrando...' : 'Registrar Gasto'}
                 </button>
               </div>
             </form>
