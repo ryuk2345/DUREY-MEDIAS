@@ -1,17 +1,12 @@
 -- ==============================================================================
--- Migración 014: ROLLBACK DE EMERGENCIA - Restaurar Acceso a 'usuarios'
--- Deshabilita RLS y concede permisos totales a anon, authenticated, service_role
+-- Migración 015: ROLLBACK INMEDIATO DE RLS EN 'usuarios'
+-- Restaura la operación normal y desbloquea Producción (Tejedores) y Ventas
 -- ==============================================================================
 
 BEGIN;
 
--- 1. Deshabilitar RLS en la tabla usuarios para desbloquear flujos de producción y ventas
 ALTER TABLE IF EXISTS public.usuarios DISABLE ROW LEVEL SECURITY;
-
--- 2. Conceder todos los privilegios a los roles de Supabase
 GRANT ALL ON TABLE public.usuarios TO anon, authenticated, service_role;
-
--- 3. Limpiar políticas temporales
 DROP POLICY IF EXISTS "permitir_authenticated_usuarios" ON public.usuarios;
 
 COMMIT;
