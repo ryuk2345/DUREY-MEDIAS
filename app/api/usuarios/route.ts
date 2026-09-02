@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(request: Request) {
   try {
@@ -15,35 +17,37 @@ export async function POST(request: Request) {
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
     if (!supabaseUrl) {
-      return NextResponse.json({ 
-        error: 'La URL de Supabase no está configurada en las variables de entorno.' 
+      return NextResponse.json({
+        error: 'La URL de Supabase no está configurada en las variables de entorno.'
       }, { status: 500 })
     }
 
-    // 1. Si está configurada la Service Role Key, creamos en Auth + DB de forma administrativa
+    // Hashear la contraseña (o usar 'durey2026' como temporal si no se proveyó)
+    const passwordPlano = (password || 'durey2026').trim()
+    const password_hash = await bcrypt.hash(passwordPlano, 12)
+    const debe_cambiar_password = !password || password.trim() === 'durey2026'
+
+    // 1. Modo con Service Role Key: crear en Auth + tabla pública
     if (supabaseServiceKey) {
       const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
+        auth: { autoRefreshToken: false, persistSession: false }
       })
 
-      // Crear en Supabase Auth
       const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: email.trim(),
-        password: (password || 'durey2026').trim(),
+        password: passwordPlano,
         email_confirm: true
       })
 
       if (authError || !authData?.user) {
-        // Si el correo ya existe en Auth, intentamos registrarlo/vincularlo en la tabla pública
         if (authError?.message?.includes('already registered') || authError?.message?.includes('already been registered')) {
           const { error: dbInsertErr } = await supabaseAdmin.from('usuarios').insert({
             nombre: nombre.trim(),
             email: email.trim().toLowerCase(),
             rol,
-            activo: activo ?? true
+            activo: activo ?? true,
+            password_hash,
+            debe_cambiar_password
           })
           if (!dbInsertErr) {
             return NextResponse.json({ success: true, message: 'Usuario vinculado a cuenta existente' })
@@ -54,16 +58,15 @@ export async function POST(request: Request) {
 
       const authUserId = authData.user.id
 
-      // Insertar en la tabla pública "usuarios"
-      const { error: dbError } = await supabaseAdmin
-        .from('usuarios')
-        .insert({
-          auth_id: authUserId,
-          nombre: nombre.trim(),
-          email: email.trim().toLowerCase(),
-          rol,
-          activo: activo ?? true
-        })
+      const { error: dbError } = await supabaseAdmin.from('usuarios').insert({
+        auth_id: authUserId,
+        nombre: nombre.trim(),
+        email: email.trim().toLowerCase(),
+        rol,
+        activo: activo ?? true,
+        password_hash,
+        debe_cambiar_password
+      })
 
       if (dbError) {
         await supabaseAdmin.auth.admin.deleteUser(authUserId)
@@ -73,32 +76,65 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, userId: authUserId })
     }
 
-    // 2. Modo Resiliente (Sin Service Role Key): Insertar directamente en la tabla pública "usuarios"
+    // 2. Modo Resiliente (sin Service Role Key): insertar directamente en tabla pública
     const clientKey = supabaseAnonKey || 'placeholder'
     const supabaseClient = createClient(supabaseUrl, clientKey)
 
-    const { error: dbError } = await supabaseClient
-      .from('usuarios')
-      .insert({
-        nombre: nombre.trim(),
-        email: email.trim().toLowerCase(),
-        rol,
-        activo: activo ?? true
-      })
+    const { error: dbError } = await supabaseClient.from('usuarios').insert({
+      nombre: nombre.trim(),
+      email: email.trim().toLowerCase(),
+      rol,
+      activo: activo ?? true,
+      password_hash,
+      debe_cambiar_password
+    })
 
     if (dbError) {
       return NextResponse.json({ error: `Error en Base de Datos: ${dbError.message}` }, { status: 400 })
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: '🎉 Usuario registrado correctamente en el sistema.' 
+    return NextResponse.json({
+      success: true,
+      message: '🎉 Usuario registrado correctamente en el sistema.'
     })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'Error interno del servidor' }, { status: 500 })
   }
 }
 
+// ── PATCH: Asignar o resetear contraseña (solo Admin) ────────────────────────
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json()
+    const { userId, nuevaPassword } = body
+
+    if (!userId || !nuevaPassword) {
+      return NextResponse.json({ error: 'userId y nuevaPassword son requeridos' }, { status: 400 })
+    }
+    if (nuevaPassword.length < 8) {
+      return NextResponse.json({ error: 'La contraseña debe tener al menos 8 caracteres' }, { status: 400 })
+    }
+
+    const password_hash = await bcrypt.hash(nuevaPassword.trim(), 12)
+    const debe_cambiar_password = nuevaPassword.trim() === 'durey2026'
+
+    const supabase = createAdminClient()
+    const { error } = await supabase
+      .from('usuarios')
+      .update({ password_hash, debe_cambiar_password })
+      .eq('id', userId)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || 'Error interno del servidor' }, { status: 500 })
+  }
+}
+
+// ── DELETE: Eliminar usuario ──────────────────────────────────────────────────
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -122,22 +158,14 @@ export async function DELETE(request: Request) {
       if (email) {
         const { data: usersData } = await supabaseAdmin.auth.admin.listUsers()
         const user = (usersData?.users as any[])?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
-        if (user) {
-          await supabaseAdmin.auth.admin.deleteUser(user.id)
-        }
+        if (user) await supabaseAdmin.auth.admin.deleteUser(user.id)
       }
-      if (id) {
-        await supabaseAdmin.from('usuarios').delete().eq('id', id)
-      } else if (email) {
-        await supabaseAdmin.from('usuarios').delete().eq('email', email.toLowerCase())
-      }
+      if (id) await supabaseAdmin.from('usuarios').delete().eq('id', id)
+      else if (email) await supabaseAdmin.from('usuarios').delete().eq('email', email.toLowerCase())
     } else {
       const supabaseClient = createClient(supabaseUrl, supabaseAnonKey || 'placeholder')
-      if (id) {
-        await supabaseClient.from('usuarios').delete().eq('id', id)
-      } else if (email) {
-        await supabaseClient.from('usuarios').delete().eq('email', email.toLowerCase())
-      }
+      if (id) await supabaseClient.from('usuarios').delete().eq('id', id)
+      else if (email) await supabaseClient.from('usuarios').delete().eq('email', email.toLowerCase())
     }
 
     return NextResponse.json({ success: true, message: 'Usuario eliminado correctamente' })
@@ -145,5 +173,3 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: e.message || 'Error al eliminar usuario' }, { status: 500 })
   }
 }
-
-

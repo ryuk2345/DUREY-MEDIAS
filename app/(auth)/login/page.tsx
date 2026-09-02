@@ -54,7 +54,7 @@ export default function LoginPage() {
         return
       }
 
-      const { user, access_token } = data
+      const { user, access_token, debe_cambiar_password } = data
 
       // 2. Inyectar el JWT en el cliente de Supabase para que las peticiones lleven Authorization: Bearer <jwt>
       if (access_token) {
@@ -73,6 +73,13 @@ export default function LoginPage() {
         } catch (sessionEx) {
           console.warn('Nota: Sincronización de sesión Supabase en progreso:', sessionEx)
         }
+      }
+
+      // 3. Si el usuario debe cambiar contraseña, redirigir antes del dashboard
+      if (debe_cambiar_password) {
+        toast.info(`Hola ${user.nombre}, debes crear tu contraseña personal antes de continuar.`, { duration: 4000 })
+        router.push('/cambiar-password')
+        return
       }
 
       toast.success(`Bienvenido a DUREY, ${user.nombre}`, { icon: '👋' })

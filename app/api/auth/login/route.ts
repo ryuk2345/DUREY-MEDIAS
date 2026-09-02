@@ -1,18 +1,7 @@
 import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
 import { generateSupabaseJWT } from '@/lib/auth/jwt'
 import { createAdminClient } from '@/lib/supabase/admin'
-
-const ACUENTAS_RAPIDAS_MOCK = [
-  { rol: 'admin', nombre: 'Administrador General', email: 'admin@durey.com', pass: 'durey2026', id: '1' },
-  { rol: 'supervisor', nombre: 'Supervisor Durey', email: 'supervisor@durey.com', pass: 'durey2026', id: '2' },
-  { rol: 'operador', nombre: 'Carlos Operador', email: 'operador@durey.com', pass: 'durey2026', id: '3' },
-  { rol: 'vendedora', nombre: 'Sofia Vendedora', email: 'vendedora@durey.com', pass: 'durey2026', id: '8' },
-  { rol: 'tecnico', nombre: 'Pedro Técnico', email: 'tecnico@durey.com', pass: 'durey2026', id: '9' },
-  { rol: 'almacenero', nombre: 'Juan Almacenero', email: 'almacenero@durey.com', pass: 'durey2026', id: '7' },
-  { rol: 'tejedor', nombre: 'Tejedor Operario', email: 'tejedor@durey.com', pass: 'durey2026', id: '3' },
-  { rol: 'planchador', nombre: 'Carlos Planchador', email: 'planchador@durey.com', pass: 'durey2026', id: '5' },
-  { rol: 'preparador', nombre: 'Lucia Preparadora', email: 'preparador@durey.com', pass: 'durey2026', id: '6' }
-]
 
 export async function POST(req: Request) {
   try {
@@ -28,70 +17,68 @@ export async function POST(req: Request) {
     const normalizedEmail = email.trim().toLowerCase()
     const supabase = createAdminClient()
 
-    let matchedUser = {
-      id: '',
-      email: normalizedEmail,
-      rol: 'vendedora',
-      nombre: normalizedEmail.split('@')[0]
+    // Consultar usuario incluyendo hash y flag de cambio obligatorio
+    const { data: usuario, error } = await supabase
+      .from('usuarios')
+      .select('id, nombre, email, rol, activo, password_hash, debe_cambiar_password')
+      .eq('email', normalizedEmail)
+      .single()
+
+    if (error || !usuario) {
+      return NextResponse.json(
+        { error: 'Credenciales inválidas o usuario no registrado' },
+        { status: 401 }
+      )
     }
 
-    // 1. Verificar si coincide con cuentas mock predeterminadas
-    const mockAcc = ACUENTAS_RAPIDAS_MOCK.find(a => a.email.toLowerCase() === normalizedEmail)
-    if (mockAcc && password === mockAcc.pass) {
-      matchedUser = {
-        id: mockAcc.id,
-        email: mockAcc.email,
-        rol: mockAcc.rol,
-        nombre: mockAcc.nombre
-      }
-    } else {
-      // 2. Consultar en la base de datos SQL usuarios
-      const { data: usuario, error } = await supabase
-        .from('usuarios')
-        .select('id, nombre, email, rol, activo')
-        .eq('email', normalizedEmail)
-        .single()
-
-      if (error || !usuario) {
-        return NextResponse.json(
-          { error: 'Credenciales inválidas o usuario no registrado' },
-          { status: 401 }
-        )
-      }
-
-      if (!usuario.activo) {
-        return NextResponse.json(
-          { error: 'Esta cuenta ha sido desactivada por el Administrador' },
-          { status: 403 }
-        )
-      }
-
-      matchedUser = {
-        id: usuario.id,
-        email: usuario.email,
-        rol: usuario.rol || 'vendedora',
-        nombre: usuario.nombre || normalizedEmail.split('@')[0]
-      }
+    if (!usuario.activo) {
+      return NextResponse.json(
+        { error: 'Esta cuenta ha sido desactivada por el Administrador' },
+        { status: 403 }
+      )
     }
 
-    // 3. Generar el JWT firmado compatible con Supabase PostgREST
+    // Verificar que el usuario tiene contraseña asignada
+    if (!usuario.password_hash) {
+      return NextResponse.json(
+        { error: 'Tu cuenta aún no tiene contraseña configurada. Contacta al Administrador.' },
+        { status: 401 }
+      )
+    }
+
+    // Comparar contraseña contra el hash almacenado
+    const passwordValido = await bcrypt.compare(password, usuario.password_hash)
+    if (!passwordValido) {
+      return NextResponse.json(
+        { error: 'Credenciales inválidas o usuario no registrado' },
+        { status: 401 }
+      )
+    }
+
+    const matchedUser = {
+      id: usuario.id,
+      email: usuario.email,
+      rol: usuario.rol || 'vendedora',
+      nombre: usuario.nombre || normalizedEmail.split('@')[0]
+    }
+
+    // Generar JWT firmado compatible con Supabase PostgREST
     const access_token = generateSupabaseJWT(matchedUser)
 
-    // 4. Construir la respuesta con cookies de sesión Next.js
     const response = NextResponse.json({
       success: true,
       access_token,
-      user: matchedUser
+      user: matchedUser,
+      debe_cambiar_password: usuario.debe_cambiar_password ?? false
     })
 
-    // Guardar cookies para el middleware de Next.js
+    // Guardar cookies de sesión para Next.js
     const oneWeek = 60 * 60 * 24 * 7
     response.cookies.set('durey_user_role', matchedUser.rol, { path: '/', maxAge: oneWeek })
     response.cookies.set('durey_user_name', encodeURIComponent(matchedUser.nombre), { path: '/', maxAge: oneWeek })
     response.cookies.set('durey_user_id', matchedUser.id, { path: '/', maxAge: oneWeek })
     response.cookies.set('durey_user_logged', 'true', { path: '/', maxAge: oneWeek })
 
-    // Payload de sesión para mock/server
     const mockPayload = encodeURIComponent(JSON.stringify(matchedUser))
     response.cookies.set('durey_mock_session', mockPayload, { path: '/', maxAge: oneWeek })
 

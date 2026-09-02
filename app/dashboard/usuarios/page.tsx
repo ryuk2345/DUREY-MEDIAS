@@ -61,6 +61,12 @@ export default function UsuariosPage() {
   const [editUser, setEditUser] = useState<Usuario | null>(null)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
 
+  // Modal: Asignar/Resetear contraseña (Admin)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [selectedUserForPassword, setSelectedUserForPassword] = useState<Usuario | null>(null)
+  const [passwordForm, setPasswordForm] = useState({ nueva: '', confirmar: '' })
+  const [savingPassword, setSavingPassword] = useState(false)
+
   // Formulario
   const [form, setForm] = useState({
     nombre: '',
@@ -231,6 +237,44 @@ export default function UsuariosPage() {
 
     setShowModal(false)
     cargarUsuarios()
+  }
+
+  // Asignar/Resetear contraseña (Admin)
+  const abrirPasswordModal = (u: Usuario) => {
+    setSelectedUserForPassword(u)
+    setPasswordForm({ nueva: '', confirmar: '' })
+    setShowPasswordModal(true)
+  }
+
+  const guardarPassword = async () => {
+    if (!selectedUserForPassword) return
+    if (passwordForm.nueva.length < 8) {
+      toast.error('La contraseña debe tener al menos 8 caracteres')
+      return
+    }
+    if (passwordForm.nueva !== passwordForm.confirmar) {
+      toast.error('Las contraseñas no coinciden')
+      return
+    }
+    setSavingPassword(true)
+    try {
+      const res = await fetch('/api/usuarios', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedUserForPassword.id, nuevaPassword: passwordForm.nueva })
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        toast.error(data.error || 'Error al asignar contraseña')
+        return
+      }
+      toast.success(`🔑 Contraseña asignada a ${selectedUserForPassword.nombre}`)
+      setShowPasswordModal(false)
+    } catch (e: any) {
+      toast.error('Error de conexión: ' + e.message)
+    } finally {
+      setSavingPassword(false)
+    }
   }
 
   // Activar/Desactivar
@@ -459,6 +503,13 @@ export default function UsuariosPage() {
                               title="Editar usuario"
                             >
                               <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => abrirPasswordModal(u)}
+                              className="p-2 rounded-xl text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                              title="Asignar / Resetear contraseña"
+                            >
+                              <Lock className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => toggleActivo(u)}
@@ -729,6 +780,71 @@ export default function UsuariosPage() {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: ASIGNAR / RESETEAR CONTRASEÑA ─────────────────────────────── */}
+      {showPasswordModal && selectedUserForPassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="glass rounded-3xl w-full max-w-sm p-7 shadow-2xl border border-amber-500/20 animate-fadeInUp">
+            <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2.5">
+                <Lock className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h2 className="text-base font-bold text-white">Asignar Contraseña</h2>
+                  <p className="text-[11px] text-amber-400">{selectedUserForPassword.nombre}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowPasswordModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Nueva Contraseña</label>
+                <input
+                  type="password"
+                  placeholder="Mínimo 8 caracteres"
+                  value={passwordForm.nueva}
+                  onChange={e => setPasswordForm({ ...passwordForm, nueva: e.target.value })}
+                  className="input-dark text-xs w-full font-mono"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Confirmar Contraseña</label>
+                <input
+                  type="password"
+                  placeholder="Repite la contraseña"
+                  value={passwordForm.confirmar}
+                  onChange={e => setPasswordForm({ ...passwordForm, confirmar: e.target.value })}
+                  className={`input-dark text-xs w-full font-mono ${
+                    passwordForm.confirmar && passwordForm.confirmar !== passwordForm.nueva ? 'border-red-500/60' : ''
+                  }`}
+                />
+                {passwordForm.confirmar && passwordForm.confirmar !== passwordForm.nueva && (
+                  <p className="text-red-400 text-[10px] mt-1">Las contraseñas no coinciden</p>
+                )}
+              </div>
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-300">
+                ⚠️ Si usas <span className="font-mono font-bold">durey2026</span>, el usuario deberá cambiarla en su primer login.
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowPasswordModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
+                Cancelar
+              </button>
+              <button
+                onClick={guardarPassword}
+                disabled={savingPassword || passwordForm.nueva.length < 8 || passwordForm.nueva !== passwordForm.confirmar}
+                className="btn-primary flex-1 justify-center py-2 text-xs bg-amber-600 hover:bg-amber-500 border-none shadow-lg shadow-amber-600/20 disabled:opacity-50"
+              >
+                {savingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                {savingPassword ? 'Guardando...' : 'Asignar'}
+              </button>
+            </div>
           </div>
         </div>
       )}
