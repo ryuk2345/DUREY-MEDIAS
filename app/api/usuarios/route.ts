@@ -8,6 +8,8 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { nombre, email, rol, password, activo } = body
 
+    console.log('📡 [BACKEND /api/usuarios POST] Datos recibidos:', { nombre, email, rol, activo, rolType: typeof rol, rolLength: rol?.length })
+
     if (!nombre || !email || !rol) {
       return NextResponse.json({ error: 'Faltan campos obligatorios (nombre, email, rol)' }, { status: 400 })
     }

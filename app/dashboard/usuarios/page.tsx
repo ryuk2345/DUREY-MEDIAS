@@ -207,16 +207,19 @@ export default function UsuariosPage() {
         }
 
         try {
+          const payload = {
+            nombre: form.nombre.trim(),
+            email: form.email.trim(),
+            rol: form.rol,
+            password: form.password,
+            activo: form.activo
+          }
+          console.log('🚀 [FRONTEND SUBMIT] Enviando a /api/usuarios:', payload)
+
           const res = await fetch('/api/usuarios', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              nombre: form.nombre.trim(),
-              email: form.email.trim(),
-              rol: form.rol,
-              password: form.password,
-              activo: form.activo
-            })
+            body: JSON.stringify(payload)
           })
 
           const data = await res.json()
