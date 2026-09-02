@@ -140,11 +140,19 @@ export default function CatalogoPage() {
 
     if (editando) {
       const { error } = await supabase.from('catalogo_medias').update(payload).eq('id', editando.id)
-      if (error) { toast.error('Error al actualizar'); return }
+      if (error) { 
+        toast.error(`Error al actualizar: ${error.message}`)
+        console.error('Error al actualizar catálogo:', error)
+        return 
+      }
       toast.success('Producto actualizado con su SKU escaneable')
     } else {
       const { error } = await supabase.from('catalogo_medias').insert({ ...payload, estado: 'activo' })
-      if (error) { toast.error(error.message.includes('unique') ? 'Ya existe un producto con ese SKU o código' : 'Error al guardar'); return }
+      if (error) { 
+        toast.error(`Error al guardar: ${error.message}`)
+        console.error('Error al insertar catálogo:', error)
+        return 
+      }
       toast.success('Nuevo producto registrado con su SKU escaneable')
     }
     setShowModal(false)
