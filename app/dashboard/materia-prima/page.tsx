@@ -117,6 +117,7 @@ export default function MateriaPrimaPage() {
   const [showAddHiloModal, setShowAddHiloModal] = useState(false)
   const [editingHilo, setEditingHilo] = useState<MateriaPrima | null>(null)
   const [showAddRepuestoModal, setShowAddRepuestoModal] = useState(false)
+  const [editingRepuesto, setEditingRepuesto] = useState<Repuesto | null>(null)
   const [showAddEgresoModal, setShowAddEgresoModal] = useState(false)
   const [showPayCuotaModal, setShowPayCuotaModal] = useState(false)
   const [selectedCuota, setSelectedCuota] = useState<CuotaCompra | null>(null)
@@ -603,6 +604,66 @@ export default function MateriaPrimaPage() {
       cargarDatos()
     } catch (err: any) {
       toast.error(`Error al ajustar repuesto: ${err.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── ELIMINAR REPUESTO ────────────────────────────────────────────────────
+  const handleEliminarRepuesto = async (rep: Repuesto) => {
+    if (!confirm(`¿Estás seguro de eliminar el repuesto "${rep.nombre}"? Esta acción no se puede deshacer.`)) return
+    try {
+      if (!usingFallback) {
+        const { error } = await supabase.from('repuestos').delete().eq('id', rep.id)
+        if (error) throw error
+      } else {
+        const list = repuestos.filter(r => r.id !== rep.id)
+        saveToLocal('durey_repuestos', list)
+      }
+      toast.success('Repuesto eliminado correctamente')
+      cargarDatos()
+    } catch (err: any) {
+      toast.error(`Error al eliminar repuesto: ${err.message}`)
+    }
+  }
+
+  // ── EDITAR REPUESTO ──────────────────────────────────────────────────────
+  const abrirEditarRepuesto = (rep: Repuesto) => {
+    setEditingRepuesto(rep)
+    setRepuestoForm({
+      nombre: rep.nombre,
+      stock_actual: String(rep.stock_actual),
+      costo_unitario: String(rep.costo_unitario)
+    })
+    setShowAddRepuestoModal(true)
+  }
+
+  const handleGuardarEdicionRepuesto = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingRepuesto || !repuestoForm.nombre || !repuestoForm.costo_unitario) {
+      toast.error('Nombre y costo unitario son obligatorios')
+      return
+    }
+    setSaving(true)
+    try {
+      const updatedData = {
+        nombre: repuestoForm.nombre.trim(),
+        costo_unitario: parseFloat(repuestoForm.costo_unitario)
+      }
+      if (!usingFallback) {
+        const { error } = await supabase.from('repuestos').update(updatedData).eq('id', editingRepuesto.id)
+        if (error) throw error
+      } else {
+        const list = repuestos.map(r => r.id === editingRepuesto.id ? { ...r, ...updatedData } : r)
+        saveToLocal('durey_repuestos', list)
+      }
+      toast.success('✏️ Repuesto actualizado correctamente')
+      setShowAddRepuestoModal(false)
+      setEditingRepuesto(null)
+      setRepuestoForm({ nombre: '', stock_actual: '', costo_unitario: '' })
+      cargarDatos()
+    } catch (err: any) {
+      toast.error(`Error al editar repuesto: ${err.message}`)
     } finally {
       setSaving(false)
     }
@@ -1714,13 +1775,31 @@ export default function MateriaPrimaPage() {
                             )}
                           </td>
                           <td className="p-4 text-center">
-                            <button 
-                              type="button"
-                              onClick={() => abrirModalAjusteRepuesto(rep)}
-                              className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-bold"
-                            >
-                              Ingreso / Salida
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              <button 
+                                type="button"
+                                onClick={() => abrirModalAjusteRepuesto(rep)}
+                                className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-bold"
+                              >
+                                Ingreso / Salida
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => abrirEditarRepuesto(rep)}
+                                className="p-1.5 rounded-xl text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+                                title="Editar nombre y costo"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleEliminarRepuesto(rep)}
+                                className="p-1.5 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                title="Eliminar repuesto"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -2133,7 +2212,9 @@ export default function MateriaPrimaPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
           <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">🔧 Añadir Nuevo Repuesto</h2>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                {editingRepuesto ? '✏️ Editar Repuesto' : '🔧 Añadir Nuevo Repuesto'}
+              </h2>
               <button 
                 type="button"
                 onClick={() => setShowAddRepuestoModal(false)} 
@@ -2143,7 +2224,7 @@ export default function MateriaPrimaPage() {
               </button>
             </div>
 
-            <form onSubmit={handleAddRepuesto} className="space-y-4 text-xs">
+            <form onSubmit={editingRepuesto ? handleGuardarEdicionRepuesto : handleAddRepuesto} className="space-y-4 text-xs">
               <div>
                 <label className="block text-slate-300 font-bold mb-1">🔧 Nombre del Repuesto</label>
                 <input 
@@ -2158,13 +2239,16 @@ export default function MateriaPrimaPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-300 font-bold mb-1">🔢 Stock Inicial</label>
+                  <label className="block text-slate-300 font-bold mb-1">🔢 Stock Inicial
+                    {editingRepuesto && <span className="text-slate-500 font-normal ml-1">(usa Ingreso/Salida para cambiar el stock)</span>}
+                  </label>
                   <input 
                     type="number" 
                     value={repuestoForm.stock_actual} 
                     onChange={e => setRepuestoForm(prev => ({ ...prev, stock_actual: e.target.value }))}
                     placeholder="Ej: 10" 
                     className="input-dark w-full text-sm py-2.5 font-bold"
+                    disabled={!!editingRepuesto}
                   />
                 </div>
                 <div>
@@ -2184,7 +2268,11 @@ export default function MateriaPrimaPage() {
               <div className="flex gap-3 mt-6">
                 <button 
                   type="button"
-                  onClick={() => setShowAddRepuestoModal(false)} 
+                  onClick={() => {
+                    setShowAddRepuestoModal(false)
+                    setEditingRepuesto(null)
+                    setRepuestoForm({ nombre: '', stock_actual: '', costo_unitario: '' })
+                  }} 
                   className="btn-secondary flex-1 justify-center py-2.5"
                 >
                   Cancelar
@@ -2194,7 +2282,7 @@ export default function MateriaPrimaPage() {
                   disabled={saving} 
                   className="btn-primary flex-1 justify-center py-2.5 bg-cyan-600 border-none font-bold text-white"
                 >
-                  {saving ? 'Registrando...' : 'Registrar Repuesto'}
+                  {saving ? 'Guardando...' : editingRepuesto ? 'Guardar Cambios' : 'Registrar Repuesto'}
                 </button>
               </div>
             </form>
