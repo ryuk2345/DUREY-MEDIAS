@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearFecha } from '@/lib/utils'
+import Modal from '@/components/ui/Modal'
 
 interface Volteador { id: string; nombre: string }
 interface StockVoltear { id: string; docenas: number; catalogo_media: { id: string; sku?: string; codigo: string; talla: string; publico: string } }
@@ -617,73 +618,65 @@ export default function VolteadoPage() {
       </div>
 
       {/* ── MODAL: REPORTAR LOTE (OPERARIO) ─────────────────────────────────── */}
-      {showReportarModal && selectedLote && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.08]">
-              <h2 className="text-md font-bold text-white flex items-center gap-2 uppercase tracking-wide">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" /> Registrar Producción y Mermas
-              </h2>
-              <button onClick={() => setShowReportarModal(false)} className="p-1 rounded-lg hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="mb-4 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04] text-xs">
-              <p className="text-slate-400">Modelo: <strong className="text-white">{selectedLote.catalogo_media?.modelo} • Talla {selectedLote.catalogo_media?.talla}</strong></p>
-              <p className="text-slate-400 mt-1">Pendiente: <strong className="text-emerald-400">{selectedLote.docenas_pendientes} docenas</strong></p>
-            </div>
-
-            <form onSubmit={handleReportarLote} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1 uppercase">Docenas Volteadas Correctamente</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  max={selectedLote.docenas_pendientes}
-                  placeholder={`Máx: ${selectedLote.docenas_pendientes}`}
-                  value={reporteForm.docenas_volteadas}
-                  onChange={e => setReporteForm(f => ({ ...f, docenas_volteadas: e.target.value }))}
-                  className="input-dark w-full font-mono font-bold"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1 uppercase flex items-center gap-1.5">
-                  Mermas / Defectos Detectados (Cantidad en Pares)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="Ej: 5"
-                  value={reporteForm.pares_defectuosos}
-                  onChange={e => setReporteForm(f => ({ ...f, pares_defectuosos: e.target.value }))}
-                  className="input-dark w-full font-mono font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1 uppercase">Comentarios y Observaciones</label>
-                <textarea
-                  placeholder="Opcional. Ej: Hilo flojo en lote original o aguja picada."
-                  value={reporteForm.comentarios}
-                  onChange={e => setReporteForm(f => ({ ...f, comentarios: e.target.value }))}
-                  className="input-dark w-full min-h-[60px]"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.08]">
-                <button type="button" onClick={() => setShowReportarModal(false)} className="btn-secondary px-4 py-2 rounded-xl">Cancelar</button>
-                <button type="submit" disabled={saving} className="btn-primary px-6 py-2 rounded-xl bg-emerald-600 border-none font-bold">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Registrar'}
-                </button>
-              </div>
-            </form>
-          </div>
+      <Modal
+        open={Boolean(showReportarModal && selectedLote)}
+        onClose={() => setShowReportarModal(false)}
+        title="Registrar Producción y Mermas"
+        maxWidth="md"
+      >
+        <div className="mb-4 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04] text-xs">
+          <p className="text-slate-400">Modelo: <strong className="text-white">{selectedLote?.catalogo_media?.modelo} • Talla {selectedLote?.catalogo_media?.talla}</strong></p>
+          <p className="text-slate-400 mt-1">Pendiente: <strong className="text-emerald-400">{selectedLote?.docenas_pendientes} docenas</strong></p>
         </div>
-      )}
+
+        <form onSubmit={handleReportarLote} className="space-y-4 text-xs">
+          <div>
+            <label className="block text-slate-400 font-semibold mb-1 uppercase">Docenas Volteadas Correctamente</label>
+            <input
+              type="number"
+              step="0.1"
+              min="0.1"
+              max={selectedLote?.docenas_pendientes}
+              placeholder={`Máx: ${selectedLote?.docenas_pendientes}`}
+              value={reporteForm.docenas_volteadas}
+              onChange={e => setReporteForm(f => ({ ...f, docenas_volteadas: e.target.value }))}
+              className="input-dark w-full font-mono font-bold"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-400 font-semibold mb-1 uppercase flex items-center gap-1.5">
+              Mermas / Defectos Detectados (Cantidad en Pares)
+            </label>
+            <input
+              type="number"
+              min="0"
+              placeholder="Ej: 5"
+              value={reporteForm.pares_defectuosos}
+              onChange={e => setReporteForm(f => ({ ...f, pares_defectuosos: e.target.value }))}
+              className="input-dark w-full font-mono font-bold"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-400 font-semibold mb-1 uppercase">Comentarios y Observaciones</label>
+            <textarea
+              placeholder="Opcional. Ej: Hilo flojo en lote original o aguja picada."
+              value={reporteForm.comentarios}
+              onChange={e => setReporteForm(f => ({ ...f, comentarios: e.target.value }))}
+              className="input-dark w-full min-h-[60px]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.08]">
+            <button type="button" onClick={() => setShowReportarModal(false)} className="btn-secondary px-4 py-2 rounded-xl">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary px-6 py-2 rounded-xl bg-emerald-600 border-none font-bold">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Registrar'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

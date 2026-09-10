@@ -242,7 +242,8 @@ export default function CatalogoPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fadeInUp pb-12">
+    <>
+      <div className="space-y-6 animate-fadeInUp pb-12">
       {/* Header */}
       <div className="flex items-center justify-between glass p-6 rounded-3xl border border-white/[0.08]">
         <div className="flex items-center gap-3">
@@ -385,17 +386,18 @@ export default function CatalogoPage() {
           </div>
         )}
       </div>
+    </div>
 
       {/* Modal Nuevo / Editar Producto */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-lg p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.08]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn overflow-y-auto">
+          <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-lg p-6 sm:p-7 shadow-2xl animate-fadeInUp max-h-[90vh] flex flex-col my-auto">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08] shrink-0">
               <h2 className="text-lg font-bold text-white">{editando ? 'Editar Producto del Catálogo' : 'Nuevo Producto en Catálogo'}</h2>
-              <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+              <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5"><X className="w-5 h-5" /></button>
             </div>
 
-            <div className="space-y-4 text-xs">
+            <div className="space-y-4 text-xs overflow-y-auto pr-1">
               {/* CÓDIGO INTERNO PERSONALIZABLE / VARIABLE */}
               <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-cyan-500/30 space-y-2">
                 <div className="flex items-center justify-between">
@@ -535,7 +537,7 @@ export default function CatalogoPage() {
               )}
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div className="flex gap-3 mt-6 pt-3 border-t border-white/[0.06] shrink-0">
               <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">Cancelar</button>
               <button onClick={guardar} className="btn-primary flex-1 justify-center py-2 text-xs bg-cyan-600 border-none font-bold shadow-lg shadow-cyan-600/20">
                 <Check className="w-4 h-4" /> Guardar Producto
@@ -547,8 +549,8 @@ export default function CatalogoPage() {
 
       {/* Modal Impresión de Etiqueta Barcode SKU */}
       {showPrintModal && mediaBarcodeImprimir && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-sm p-7 shadow-2xl border border-emerald-500/30 text-center space-y-4 animate-fadeInUp">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn overflow-y-auto">
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl w-full max-w-sm p-7 shadow-2xl text-center space-y-4 animate-fadeInUp my-auto">
             <h2 className="text-lg font-bold text-white">Etiqueta Barcode SKU</h2>
             <p className="text-xs text-slate-400">{mediaBarcodeImprimir.modelo} {mediaBarcodeImprimir.publico} ({mediaBarcodeImprimir.talla})</p>
 
@@ -571,8 +573,8 @@ export default function CatalogoPage() {
 
       {/* ── MODAL: NUEVO MODELO ─────────────────────────────────────────────── */}
       {showModeloModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-sm p-7 shadow-2xl border border-cyan-500/30 animate-fadeInUp">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn overflow-y-auto">
+          <div className="bg-slate-900 border border-cyan-500/30 rounded-3xl w-full max-w-sm p-7 shadow-2xl animate-fadeInUp my-auto">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-white">Nuevo Modelo de Media</h2>
               <button type="button" onClick={() => setShowModeloModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
@@ -603,7 +605,7 @@ export default function CatalogoPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
 

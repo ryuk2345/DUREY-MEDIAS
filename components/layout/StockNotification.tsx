@@ -26,28 +26,56 @@ interface StockNotificationProps {
   userRol: string
 }
 
+// Cache en memoria a nivel de módulo para evitar consultas simultáneas o duplicadas
+interface StockCache {
+  lowProducts: LowStockProduct[]
+  lowMaterials: LowStockMaterial[]
+  timestamp: number
+}
+let memoryStockCache: StockCache | null = null
+let inFlightStockPromise: Promise<StockCache> | null = null
+
 export default function StockNotification({ userRol }: StockNotificationProps) {
-  const supabase = createClient()
   const isAuthorized = userRol === 'supervisor' || userRol === 'admin'
 
   const [isOpen, setIsOpen] = useState(false)
-  const [lowProducts, setLowProducts] = useState<LowStockProduct[]>([])
-  const [lowMaterials, setLowMaterials] = useState<LowStockMaterial[]>([])
+  const [lowProducts, setLowProducts] = useState<LowStockProduct[]>(() => memoryStockCache?.lowProducts || [])
+  const [lowMaterials, setLowMaterials] = useState<LowStockMaterial[]>(() => memoryStockCache?.lowMaterials || [])
   const [loading, setLoading] = useState(false)
 
-  const checkStock = useCallback(async () => {
+  const checkStock = useCallback(async (force = false) => {
     if (!isAuthorized) return
+
+    // Reutilizar cache reciente si tiene menos de 60 segundos
+    const now = Date.now()
+    if (!force && memoryStockCache && now - memoryStockCache.timestamp < 60000) {
+      setLowProducts(memoryStockCache.lowProducts)
+      setLowMaterials(memoryStockCache.lowMaterials)
+      return
+    }
+
+    // Si ya hay una consulta en vuelo, compartir la misma promesa para evitar duplicar requests
+    if (inFlightStockPromise) {
+      try {
+        const result = await inFlightStockPromise
+        setLowProducts(result.lowProducts)
+        setLowMaterials(result.lowMaterials)
+      } catch (e) {}
+      return
+    }
+
     setLoading(true)
-    try {
-      // 1. Materia prima con stock crítico según su tipo de empaque
+    inFlightStockPromise = (async () => {
+      const supabase = createClient()
+      // 1. Materia prima con stock crítico: solo traer registros con stock_kg <= 10
       const { data: rawData } = await supabase
         .from('materia_prima')
         .select('id, material, color, stock_kg, tipo_empaque')
+        .lte('stock_kg', 10)
 
       const lowMats: LowStockMaterial[] = []
       const criticalMatsToToast: LowStockMaterial[] = []
 
-      // Obtener los IDs previamente alertados para control de cruce de umbral
       const notifiedSet = new Set<string>(
         JSON.parse(typeof window !== 'undefined' ? (sessionStorage.getItem('durey_notified_low_mats') || '[]') : '[]')
       )
@@ -57,7 +85,6 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
         const empaque = (m.tipo_empaque || 'cono') as 'bolsa' | 'cono' | 'caja'
         const stock = Number(m.stock_kg ?? 0)
 
-        // Umbrales específicos solicitados:
         // Cajas: <= 4 | Bolsas: <= 4 | Conos: <= 10
         const isLow = empaque === 'caja' ? stock <= 4 : empaque === 'bolsa' ? stock <= 4 : stock <= 10
 
@@ -71,14 +98,12 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
           }
           lowMats.push(item)
 
-          // Disparar solo cuando cruza el umbral por primera vez hacia abajo
           if (!notifiedSet.has(m.id)) {
             notifiedSet.add(m.id)
             criticalMatsToToast.push(item)
             stateChanged = true
           }
         } else {
-          // Si fue reabastecido y superó el umbral, limpiar de los alertados
           if (notifiedSet.has(m.id)) {
             notifiedSet.delete(m.id)
             stateChanged = true
@@ -121,20 +146,31 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
         }
       })
 
-      setLowProducts(lowMedias)
-      setLowMaterials(lowMats)
+      const cacheResult: StockCache = {
+        lowProducts: lowMedias,
+        lowMaterials: lowMats,
+        timestamp: Date.now()
+      }
+      memoryStockCache = cacheResult
+      return cacheResult
+    })()
+
+    try {
+      const result = await inFlightStockPromise
+      setLowProducts(result.lowProducts)
+      setLowMaterials(result.lowMaterials)
     } catch (error) {
       console.error('Error checking low stock:', error)
     } finally {
+      inFlightStockPromise = null
       setLoading(false)
     }
-  }, [isAuthorized, supabase])
+  }, [isAuthorized])
 
   useEffect(() => {
     if (isAuthorized) {
       checkStock()
-      // Verificar cada 60 segundos
-      const interval = setInterval(checkStock, 60000)
+      const interval = setInterval(() => checkStock(true), 60000)
       return () => clearInterval(interval)
     }
   }, [isAuthorized, checkStock])

@@ -51,6 +51,14 @@ export default function Sidebar({ userRol, userName }: SidebarProps) {
 
   // Mobile drawer open/close state
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   // Close drawer on route change
   useEffect(() => { setMobileOpen(false) }, [pathname])
@@ -70,7 +78,10 @@ export default function Sidebar({ userRol, userName }: SidebarProps) {
   }, [mobileOpen])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch (e) {}
     document.cookie = 'durey_mock_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     document.cookie = 'durey_demo_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     document.cookie = 'durey_demo_name=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
@@ -182,7 +193,7 @@ export default function Sidebar({ userRol, userName }: SidebarProps) {
           <p className="font-bold text-white text-base leading-none">DUREY</p>
         </div>
         <div className="flex items-center gap-2">
-          <StockNotification userRol={userRol} />
+          {isMobile && <StockNotification userRol={userRol} />}
           <button
             onClick={() => setMobileOpen(true)}
             className="p-2 rounded-xl hover:bg-white/10 text-slate-300 transition-colors"

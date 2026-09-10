@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 import { getSemanaAnio, getDiaSemana } from '@/lib/utils'
 import CustomSelect from '@/components/ui/CustomSelect'
+import Modal from '@/components/ui/Modal'
 
 interface Planchador { id: string; nombre: string }
 interface StockPlanchar {
@@ -866,112 +867,102 @@ export default function PlanchadoPage() {
       </div>
 
       {/* ── MODAL: ASIGNACIÓN DE CELDA (ASIGNAR MEDIA A PLANCHADOR/DÍA) ───────── */}
-      {showCronoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-red-400" />
-                <h2 className="text-lg font-bold text-white">
-                  {cronoForm.id ? 'Modificar Asignación' : 'Asignar a Planchador'}
-                </h2>
-              </div>
-              <button onClick={() => setShowCronoModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={showCronoModal}
+        onClose={() => setShowCronoModal(false)}
+        title={cronoForm.id ? 'Modificar Asignación' : 'Asignar a Planchador'}
+        maxWidth="md"
+        footer={
+          <>
+            <button onClick={() => setShowCronoModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
+              Cancelar
+            </button>
+            <button onClick={guardarAsignacion} className="btn-primary flex-1 justify-center py-2 text-xs bg-red-600 hover:bg-red-500 border-none shadow-lg shadow-red-600/20">
+              <CheckCircle2 className="w-4 h-4" />
+              Guardar Asignación
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300">
+            Programando para la <strong>Semana N° {semanaSeleccionada} ({anioSeleccionado})</strong>
+          </div>
 
-            <div className="space-y-4 text-xs">
-              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300">
-                Programando para la <strong>Semana N° {semanaSeleccionada} ({anioSeleccionado})</strong>
-              </div>
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Planchador</label>
+            <CustomSelect
+              value={cronoForm.planchador_id}
+              onChange={val => setCronoForm({ ...cronoForm, planchador_id: val })}
+              options={
+                planchadores.length === 0
+                  ? [{ value: '', label: '⚠️ No hay planchadores asignados hoy', disabled: true }]
+                  : planchadores.map(p => ({ value: p.id, label: p.nombre }))
+              }
+              triggerClassName="text-xs font-medium"
+              placeholder="Seleccionar planchador..."
+            />
+          </div>
 
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Planchador</label>
-                <CustomSelect
-                  value={cronoForm.planchador_id}
-                  onChange={val => setCronoForm({ ...cronoForm, planchador_id: val })}
-                  options={
-                    planchadores.length === 0
-                      ? [{ value: '', label: '⚠️ No hay planchadores asignados hoy', disabled: true }]
-                      : planchadores.map(p => ({ value: p.id, label: p.nombre }))
-                  }
-                  triggerClassName="text-xs font-medium"
-                  placeholder="Seleccionar planchador..."
-                />
-              </div>
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Día de la Semana</label>
+            <CustomSelect
+              value={cronoForm.dia_semana}
+              onChange={val => setCronoForm({ ...cronoForm, dia_semana: val })}
+              options={DIAS.map(d => ({
+                value: d,
+                label: <span className="capitalize">{d}</span>
+              }))}
+              triggerClassName="text-xs capitalize font-medium"
+            />
+          </div>
 
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Día de la Semana</label>
-                <CustomSelect
-                  value={cronoForm.dia_semana}
-                  onChange={val => setCronoForm({ ...cronoForm, dia_semana: val })}
-                  options={DIAS.map(d => ({
-                    value: d,
-                    label: <span className="capitalize">{d}</span>
-                  }))}
-                  triggerClassName="text-xs capitalize font-medium"
-                />
-              </div>
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Modo de Criterio</label>
+            <CustomSelect
+              value={cronoForm.criterio}
+              onChange={val => {
+                const nuevoCrit = val
+                let defaultVal = ''
+                if (nuevoCrit === 'media') defaultVal = catalogo[0]?.codigo || ''
+                if (nuevoCrit === 'talla') defaultVal = 'única'
+                if (nuevoCrit === 'publico') defaultVal = 'Dama'
+                setCronoForm({ ...cronoForm, criterio: nuevoCrit, valor_criterio: defaultVal })
+              }}
+              options={[
+                { value: 'media', label: 'Código Específico del Catálogo' },
+                { value: 'talla', label: 'Por Talla (ej. 10-13, 5, Única)' },
+                { value: 'publico', label: 'Por Público (Dama, Hombre, Niño)' }
+              ]}
+              triggerClassName="text-xs font-medium"
+            />
+          </div>
 
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Modo de Criterio</label>
-                <CustomSelect
-                  value={cronoForm.criterio}
-                  onChange={val => {
-                    const nuevoCrit = val
-                    let defaultVal = ''
-                    if (nuevoCrit === 'media') defaultVal = catalogo[0]?.codigo || ''
-                    if (nuevoCrit === 'talla') defaultVal = 'única'
-                    if (nuevoCrit === 'publico') defaultVal = 'Dama'
-                    setCronoForm({ ...cronoForm, criterio: nuevoCrit, valor_criterio: defaultVal })
-                  }}
-                  options={[
-                    { value: 'media', label: 'Código Específico del Catálogo' },
-                    { value: 'talla', label: 'Por Talla (ej. 10-13, 5, Única)' },
-                    { value: 'publico', label: 'Por Público (Dama, Hombre, Niño)' }
-                  ]}
-                  triggerClassName="text-xs font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Valor Asignado</label>
-                {cronoForm.criterio === 'media' ? (
-                  <CustomSelect
-                    value={cronoForm.valor_criterio}
-                    onChange={val => setCronoForm({ ...cronoForm, valor_criterio: val })}
-                    options={[
-                      { value: '', label: 'Seleccionar media...' },
-                      ...catalogo.map(c => ({ value: c.codigo, label: c.codigo }))
-                    ]}
-                    triggerClassName="text-xs font-mono font-medium"
-                    placeholder="Seleccionar media..."
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    placeholder={cronoForm.criterio === 'talla' ? 'Ej. 10-13, 5, única' : 'Ej. Dama, Hombre, Niño'}
-                    value={cronoForm.valor_criterio}
-                    onChange={e => setCronoForm({ ...cronoForm, valor_criterio: e.target.value })}
-                    className="input-dark text-xs w-full"
-                  />
-                )}
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowCronoModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
-                Cancelar
-              </button>
-              <button onClick={guardarAsignacion} className="btn-primary flex-1 justify-center py-2 text-xs bg-red-600 hover:bg-red-500 border-none shadow-lg shadow-red-600/20">
-                <CheckCircle2 className="w-4 h-4" />
-                Guardar Asignación
-              </button>
-            </div>
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Valor Asignado</label>
+            {cronoForm.criterio === 'media' ? (
+              <CustomSelect
+                value={cronoForm.valor_criterio}
+                onChange={val => setCronoForm({ ...cronoForm, valor_criterio: val })}
+                options={[
+                  { value: '', label: 'Seleccionar media...' },
+                  ...catalogo.map(c => ({ value: c.codigo, label: c.codigo }))
+                ]}
+                triggerClassName="text-xs font-mono font-medium"
+                placeholder="Seleccionar media..."
+              />
+            ) : (
+              <input
+                type="text"
+                placeholder={cronoForm.criterio === 'talla' ? 'Ej. 10-13, 5, única' : 'Ej. Dama, Hombre, Niño'}
+                value={cronoForm.valor_criterio}
+                onChange={e => setCronoForm({ ...cronoForm, valor_criterio: e.target.value })}
+                className="input-dark text-xs w-full"
+              />
+            )}
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

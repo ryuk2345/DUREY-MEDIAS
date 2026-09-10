@@ -36,6 +36,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "html5-qrcode": "^2.3.8",
+    "jose": "^6.2.12",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.28.0",

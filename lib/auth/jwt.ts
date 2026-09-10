@@ -1,44 +1,36 @@
-import crypto from 'crypto'
+import { SignJWT, jwtVerify } from 'jose'
 
-interface UserJWTPayload {
+export interface UserJWTPayload {
   id: string
   email: string
   rol: string
   nombre: string
 }
 
-function base64UrlEncode(data: string | Buffer): string {
-  const buf = typeof data === 'string' ? Buffer.from(data) : data
-  return buf
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
+export interface DecodedDureyJWT {
+  sub: string
+  email: string
+  rol: string
+  nombre: string
+}
+
+function getSecretKey(): Uint8Array {
+  const secret = process.env.SUPABASE_JWT_SECRET || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'durey-secret-jwt-key-2026'
+  return new TextEncoder().encode(secret)
 }
 
 /**
- * Genera un token JWT estándar HS256 compatible con Supabase PostgREST.
- * Utiliza SUPABASE_JWT_SECRET para firmar la petición.
+ * Genera un token JWT estándar HS256 compatible con Supabase PostgREST y Next.js Edge Runtime.
  */
-export function generateSupabaseJWT(user: UserJWTPayload): string {
-  const secret = process.env.SUPABASE_JWT_SECRET || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'durey-secret-jwt-key-2026'
+export async function generateSupabaseJWT(user: UserJWTPayload): Promise<string> {
+  const secretKey = getSecretKey()
 
-  const header = {
-    alg: 'HS256',
-    typ: 'JWT'
-  }
-
-  const now = Math.floor(Date.now() / 1000)
-  const oneWeek = 60 * 60 * 24 * 7 // 7 días
-
-  const payload = {
+  return await new SignJWT({
     aud: 'authenticated',
-    exp: now + oneWeek,
-    iat: now,
     iss: 'supabase',
     sub: user.id,
     email: user.email,
-    role: 'authenticated', // 👈 Rol fundamental para que PostgREST cambie de 'anon' a 'authenticated'
+    role: 'authenticated',
     app_metadata: {
       provider: 'email',
       providers: ['email'],
@@ -49,18 +41,37 @@ export function generateSupabaseJWT(user: UserJWTPayload): string {
       rol: user.rol,
       sub: user.id
     }
+  })
+    .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(secretKey)
+}
+
+/**
+ * Verifica la firma criptográfica HMAC-SHA256 del JWT en memoria local (0 ms de red).
+ * Compatible con Next.js Edge Runtime en Vercel.
+ */
+export async function verifySupabaseJWT(token: string): Promise<DecodedDureyJWT | null> {
+  if (!token) return null
+  try {
+    const secretKey = getSecretKey()
+    const { payload } = await jwtVerify(token, secretKey, {
+      algorithms: ['HS256']
+    })
+
+    const appMeta = (payload.app_metadata as Record<string, any>) || {}
+    const userMeta = (payload.user_metadata as Record<string, any>) || {}
+    const rol = appMeta.rol || userMeta.rol || 'admin'
+    const nombre = userMeta.name || (payload.email as string)?.split('@')[0] || 'Usuario'
+
+    return {
+      sub: payload.sub as string,
+      email: (payload.email as string) || '',
+      rol,
+      nombre
+    }
+  } catch {
+    return null
   }
-
-  const encodedHeader = base64UrlEncode(JSON.stringify(header))
-  const encodedPayload = base64UrlEncode(JSON.stringify(payload))
-  const tokenData = `${encodedHeader}.${encodedPayload}`
-
-  const signature = crypto
-    .createHmac('sha256', secret)
-    .update(tokenData)
-    .digest()
-
-  const encodedSignature = base64UrlEncode(signature)
-
-  return `${tokenData}.${encodedSignature}`
 }

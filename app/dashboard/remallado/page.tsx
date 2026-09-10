@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
 import CustomSelect from '@/components/ui/CustomSelect'
+import Modal from '@/components/ui/Modal'
 
 
 interface LoteRemallado {
@@ -396,7 +397,7 @@ export default function RemalladoMonitorPage() {
               <p className="font-semibold text-sm">No hay máquinas remalladoras encontradas</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4">
               {maquinasFiltradas.map(m => {
                 const lote = maquinasLoteMap.get(m.id)
                 const isEnMarcha = m.estado === 'ocupada' || !!lote
@@ -405,7 +406,7 @@ export default function RemalladoMonitorPage() {
                 return (
                   <div
                     key={m.id}
-                    className={`glass rounded-2xl p-4 border transition-all duration-300 flex flex-col justify-between ${
+                    className={`glass rounded-2xl p-4 border transition-all duration-300 flex flex-col justify-between overflow-hidden min-w-0 ${
                       isEnMarcha
                         ? 'border-orange-500/30 bg-orange-500/[0.02] shadow-lg shadow-orange-500/5'
                         : isMantenimiento
@@ -414,50 +415,50 @@ export default function RemalladoMonitorPage() {
                     }`}
                   >
                     <div>
-                      {/* Cabecera Tarjeta */}
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-lg text-white font-mono">{m.codigo}</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 text-slate-300 font-semibold">
-                              Remalladora
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                            <User className="w-3 h-3 text-slate-500" />
-                            {lote?.remalladora?.nombre || 'Sin Operadora'}
-                          </p>
-                        </div>
+                      {/* Cabecera Tarjeta: Fila 1 (Etiqueta Tipo + Badge de Estado) */}
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 text-slate-300 font-semibold uppercase tracking-wider">
+                          Remalladora
+                        </span>
 
-                        <div>
-                          {isEnMarcha ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
-                              EN MARCHA
-                            </span>
-                          ) : isMantenimiento ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                              <Wrench className="w-3 h-3" />
-                              ALERTA
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              LIBRE
-                            </span>
-                          )}
-                        </div>
+                        {isEnMarcha ? (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
+                            EN MARCHA
+                          </span>
+                        ) : isMantenimiento ? (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                            <Wrench className="w-3 h-3" />
+                            ALERTA
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                            LIBRE
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Fila 2: Código de máquina y operadora */}
+                      <div className="min-w-0 mb-3">
+                        <h3 className="font-black text-base sm:text-lg text-white font-mono tracking-tight truncate" title={m.codigo}>
+                          {m.codigo}
+                        </h3>
+                        <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                          <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span className="truncate">{lote?.remalladora?.nombre || 'Sin Operadora'}</span>
+                        </p>
                       </div>
 
                       {/* Info de media en remallado */}
-                      <div className="mt-3 p-2.5 rounded-xl bg-slate-900/60 border border-white/[0.05]">
+                      <div className="p-2.5 rounded-xl bg-slate-900/60 border border-white/[0.05]">
                         <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">
                           {isEnMarcha ? 'Remallando producto:' : 'Estado máquina:'}
                         </p>
-                        <p className="text-xs font-mono font-medium text-slate-200 truncate">
+                        <p className="text-xs font-mono font-medium text-slate-200 truncate" title={lote ? lote.catalogo_media?.codigo : 'Disponible para asignar'}>
                           {lote ? lote.catalogo_media?.codigo : 'Disponible para asignar'}
                         </p>
                         {lote && (
-                          <p className="text-[10px] text-orange-300 font-medium mt-1">
+                          <p className="text-[10px] text-orange-300 font-medium mt-1 truncate">
                             Docenas: {lote.docenas_asignadas} asignadas / {lote.docenas_pendientes} pend.
                           </p>
                         )}
@@ -623,161 +624,147 @@ export default function RemalladoMonitorPage() {
       </div>
 
       {/* ── MODAL: REGISTRAR PRODUCCIÓN FINAL DE REMALLADO ────────────────────── */}
-      {showReporteModal && loteSeleccionado && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
-              <div>
-                <h2 className="text-lg font-bold text-white">Cierre de Turno de Remallado</h2>
-                <p className="text-xs text-slate-400">
-                  Máquina: <span className="text-orange-300 font-mono">{loteSeleccionado.maquina_remalladora?.codigo}</span> · Operadora: <span className="text-white">{loteSeleccionado.remalladora?.nombre}</span>
-                </p>
-              </div>
-              <button onClick={() => setShowReporteModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={Boolean(showReporteModal && loteSeleccionado)}
+        onClose={() => setShowReporteModal(false)}
+        title="Cierre de Turno de Remallado"
+        subtitle={loteSeleccionado ? `Máquina: ${loteSeleccionado.maquina_remalladora?.codigo} · Operadora: ${loteSeleccionado.remalladora?.nombre}` : undefined}
+        maxWidth="md"
+        footer={
+          <>
+            <button onClick={() => setShowReporteModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
+              Cancelar
+            </button>
+            <button onClick={enviarReporteProduccion} className="btn-primary flex-1 justify-center py-2 text-xs bg-orange-600 hover:bg-orange-500 border-none">
+              <CheckCircle2 className="w-4 h-4" /> Confirmar Reporte
+            </button>
+          </>
+        }
+      >
+        <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-4 text-xs font-mono">
+          <p className="text-slate-400">Media: <span className="text-white font-bold">{loteSeleccionado?.catalogo_media?.codigo}</span></p>
+          <p className="text-slate-400">Docenas asignadas: <span className="text-orange-300 font-bold">{loteSeleccionado?.docenas_asignadas}</span></p>
+        </div>
 
-            <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-4 text-xs font-mono">
-              <p className="text-slate-400">Media: <span className="text-white font-bold">{loteSeleccionado.catalogo_media?.codigo}</span></p>
-              <p className="text-slate-400">Docenas asignadas: <span className="text-orange-300 font-bold">{loteSeleccionado.docenas_asignadas}</span></p>
-            </div>
+        <div className="space-y-4 text-xs">
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">✅ Docenas Remalladas (Terminadas)</label>
+            <input
+              type="number"
+              min="0"
+              max={loteSeleccionado?.docenas_asignadas}
+              placeholder="0"
+              value={reporteForm.docenas_remalladas}
+              onChange={e => setReporteForm({ ...reporteForm, docenas_remalladas: e.target.value })}
+              className="input-dark text-center font-bold text-sm w-full"
+            />
+          </div>
 
-            <div className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">✅ Docenas Remalladas (Terminadas)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max={loteSeleccionado.docenas_asignadas}
-                  placeholder="0"
-                  value={reporteForm.docenas_remalladas}
-                  onChange={e => setReporteForm({ ...reporteForm, docenas_remalladas: e.target.value })}
-                  className="input-dark text-center font-bold text-sm w-full"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">📦 Docenas Restantes (Stock Pendiente)</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={reporteForm.docenas_restantes}
-                  onChange={e => setReporteForm({ ...reporteForm, docenas_restantes: e.target.value })}
-                  className="input-dark text-center font-bold text-sm w-full"
-                />
-              </div>
-            </div>
-
-            <p className="text-[11px] text-slate-500 mt-4">
-              Las docenas remalladas se sumarán al inventario listo para Planchado. La máquina y la operadora quedarán libres.
-            </p>
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowReporteModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
-                Cancelar
-              </button>
-              <button onClick={enviarReporteProduccion} className="btn-primary flex-1 justify-center py-2 text-xs bg-orange-600 hover:bg-orange-500 border-none">
-                <CheckCircle2 className="w-4 h-4" /> Confirmar Reporte
-              </button>
-            </div>
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">📦 Docenas Restantes (Stock Pendiente)</label>
+            <input
+              type="number"
+              min="0"
+              placeholder="0"
+              value={reporteForm.docenas_restantes}
+              onChange={e => setReporteForm({ ...reporteForm, docenas_restantes: e.target.value })}
+              className="input-dark text-center font-bold text-sm w-full"
+            />
           </div>
         </div>
-      )}
+
+        <p className="text-[11px] text-slate-500 mt-4">
+          Las docenas remalladas se sumarán al inventario listo para Planchado. La máquina y la operadora quedarán libres.
+        </p>
+      </Modal>
 
       {/* ── MODAL: TRASPASO POR SATURACIÓN ───────────────────────────────────── */}
-      {showTraspasoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
-              <h2 className="text-lg font-bold text-white">Traspaso por Saturación</h2>
-              <button onClick={() => setShowTraspasoModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={showTraspasoModal}
+        onClose={() => setShowTraspasoModal(false)}
+        title="Traspaso por Saturación"
+        maxWidth="md"
+        footer={
+          <>
+            <button onClick={() => setShowTraspasoModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
+              Cancelar
+            </button>
+            <button onClick={ejecutarTraspaso} className="btn-primary flex-1 justify-center py-2 text-xs">
+              <ArrowRightLeft className="w-4 h-4" /> Traspasar
+            </button>
+          </>
+        }
+      >
+        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 mb-4 flex gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-300">
+            Transfiere docenas pendientes de una remalladora saturada a otra operadora y máquina libre.
+          </p>
+        </div>
 
-            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 mb-4 flex gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-300">
-                Transfiere docenas pendientes de una remalladora saturada a otra operadora y máquina libre.
-              </p>
-            </div>
+        <div className="space-y-3 text-xs">
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Lote de Origen</label>
+            <CustomSelect
+              value={traspasoForm.lote_origen_id}
+              onChange={val => setTraspasoForm({ ...traspasoForm, lote_origen_id: val })}
+              options={[
+                { value: '', label: 'Seleccionar lote activo...' },
+                ...lotes.map(l => ({
+                  value: l.id,
+                  label: `${l.remalladora?.nombre} (${l.maquina_remalladora?.codigo}) — ${l.catalogo_media?.codigo} (${l.docenas_pendientes} pend.)`
+                }))
+              ]}
+              triggerClassName="text-xs"
+              placeholder="Seleccionar lote activo..."
+            />
+          </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Lote de Origen</label>
-                <CustomSelect
-                  value={traspasoForm.lote_origen_id}
-                  onChange={val => setTraspasoForm({ ...traspasoForm, lote_origen_id: val })}
-                  options={[
-                    { value: '', label: 'Seleccionar lote activo...' },
-                    ...lotes.map(l => ({
-                      value: l.id,
-                      label: `${l.remalladora?.nombre} (${l.maquina_remalladora?.codigo}) — ${l.catalogo_media?.codigo} (${l.docenas_pendientes} pend.)`
-                    }))
-                  ]}
-                  triggerClassName="text-xs"
-                  placeholder="Seleccionar lote activo..."
-                />
-              </div>
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Remalladora Destino (disponible)</label>
+            <CustomSelect
+              value={traspasoForm.remalladora_destino_id}
+              onChange={val => setTraspasoForm({ ...traspasoForm, remalladora_destino_id: val })}
+              options={
+                remalladorasDisponibles.length === 0
+                  ? [{ value: '', label: '⚠️ No hay remalladoras asignadas hoy', disabled: true }]
+                  : [
+                      { value: '', label: 'Seleccionar remalladora libre...' },
+                      ...remalladorasDisponibles.map(r => ({ value: r.id, label: r.nombre }))
+                    ]
+              }
+              triggerClassName="text-xs"
+              placeholder="Seleccionar remalladora libre..."
+            />
+          </div>
 
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Remalladora Destino (disponible)</label>
-                <CustomSelect
-                  value={traspasoForm.remalladora_destino_id}
-                  onChange={val => setTraspasoForm({ ...traspasoForm, remalladora_destino_id: val })}
-                  options={
-                    remalladorasDisponibles.length === 0
-                      ? [{ value: '', label: '⚠️ No hay remalladoras asignadas hoy', disabled: true }]
-                      : [
-                          { value: '', label: 'Seleccionar remalladora libre...' },
-                          ...remalladorasDisponibles.map(r => ({ value: r.id, label: r.nombre }))
-                        ]
-                  }
-                  triggerClassName="text-xs"
-                  placeholder="Seleccionar remalladora libre..."
-                />
-              </div>
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Máquina Destino (libre)</label>
+            <CustomSelect
+              value={traspasoForm.maquina_destino_id}
+              onChange={val => setTraspasoForm({ ...traspasoForm, maquina_destino_id: val })}
+              options={[
+                { value: '', label: 'Seleccionar máquina libre...' },
+                ...maquinasLibres.map(m => ({ value: m.id, label: m.codigo }))
+              ]}
+              triggerClassName="text-xs"
+              placeholder="Seleccionar máquina libre..."
+            />
+          </div>
 
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Máquina Destino (libre)</label>
-                <CustomSelect
-                  value={traspasoForm.maquina_destino_id}
-                  onChange={val => setTraspasoForm({ ...traspasoForm, maquina_destino_id: val })}
-                  options={[
-                    { value: '', label: 'Seleccionar máquina libre...' },
-                    ...maquinasLibres.map(m => ({ value: m.id, label: m.codigo }))
-                  ]}
-                  triggerClassName="text-xs"
-                  placeholder="Seleccionar máquina libre..."
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Docenas a Traspasar</label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="0"
-                  value={traspasoForm.docenas}
-                  onChange={e => setTraspasoForm({ ...traspasoForm, docenas: e.target.value })}
-                  className="input-dark text-center font-bold text-sm w-full"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowTraspasoModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
-                Cancelar
-              </button>
-              <button onClick={ejecutarTraspaso} className="btn-primary flex-1 justify-center py-2 text-xs">
-                <ArrowRightLeft className="w-4 h-4" /> Traspasar
-              </button>
-            </div>
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Docenas a Traspasar</label>
+            <input
+              type="number"
+              min="1"
+              placeholder="0"
+              value={traspasoForm.docenas}
+              onChange={e => setTraspasoForm({ ...traspasoForm, docenas: e.target.value })}
+              className="input-dark text-center font-bold text-sm w-full"
+            />
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

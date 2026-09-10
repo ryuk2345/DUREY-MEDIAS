@@ -62,8 +62,8 @@ export async function POST(req: Request) {
       nombre: usuario.nombre || normalizedEmail.split('@')[0]
     }
 
-    // Generar JWT firmado compatible con Supabase PostgREST
-    const access_token = generateSupabaseJWT(matchedUser)
+    // Generar JWT firmado compatible con Supabase PostgREST y Next.js Edge Runtime
+    const access_token = await generateSupabaseJWT(matchedUser)
 
     const response = NextResponse.json({
       success: true,
@@ -74,6 +74,16 @@ export async function POST(req: Request) {
 
     // Guardar cookies de sesión para Next.js
     const oneWeek = 60 * 60 * 24 * 7
+
+    // Cookie segura httpOnly con JWT firmado para el Middleware Edge (inviolable desde el cliente)
+    response.cookies.set('durey_auth_token', access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: oneWeek
+    })
+
     response.cookies.set('durey_user_role', matchedUser.rol, { path: '/', maxAge: oneWeek })
     response.cookies.set('durey_user_name', encodeURIComponent(matchedUser.nombre), { path: '/', maxAge: oneWeek })
     response.cookies.set('durey_user_id', matchedUser.id, { path: '/', maxAge: oneWeek })

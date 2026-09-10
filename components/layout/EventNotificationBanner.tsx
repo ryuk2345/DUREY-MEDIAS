@@ -50,18 +50,23 @@ export default function EventNotificationBanner({ userRol }: EventNotificationBa
     const en3DiasStr = en3Dias.toISOString().split('T')[0]
 
     try {
-      // 1. Obtener usuario actual para filtrar eventos personales
-      const { data: { user } } = await supabase.auth.getUser()
-      let currentUserId = user?.id || ''
-
+      // 1. Obtener usuario actual para filtrar eventos personales (desde cookie o sesión)
+      let currentUserId = ''
+      if (typeof document !== 'undefined') {
+        currentUserId = document.cookie.split('; ').find(row => row.startsWith('durey_user_id='))?.split('=')[1] || ''
+      }
       if (!currentUserId) {
-        const mockSession = document.cookie.split('; ').find(row => row.startsWith('durey_mock_session='))?.split('=')[1]
+        const mockSession = typeof document !== 'undefined' ? document.cookie.split('; ').find(row => row.startsWith('durey_mock_session='))?.split('=')[1] : null
         if (mockSession) {
           try {
             const parsed = JSON.parse(decodeURIComponent(mockSession))
             currentUserId = parsed.id || ''
           } catch (e) {}
         }
+      }
+      if (!currentUserId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        currentUserId = user?.id || ''
       }
 
       // 2. Consultar eventos compartidos + personales del usuario
@@ -97,11 +102,14 @@ export default function EventNotificationBanner({ userRol }: EventNotificationBa
       if (listaEventos.length > 0) {
         setEventosProximos(listaEventos)
         setShowModal(true)
+      } else {
+        // Si no hay eventos próximos, guardar en localStorage para no consultar en cada navegación hoy
+        localStorage.setItem(storageKey, 'true')
       }
     } catch (e) {
       console.warn('Error al verificar alertas de calendario:', e)
     }
-  }, [isAuthorized, supabase])
+  }, [isAuthorized])
 
   useEffect(() => {
     checkEventos()

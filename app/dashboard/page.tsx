@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { MODULOS_POR_ROL } from '@/lib/utils'
 import { cookies } from 'next/headers'
+import { verifySupabaseJWT } from '@/lib/auth/jwt'
 
 function normalizeRole(rawRole: string | undefined | null): string {
   if (!rawRole) return 'admin'
@@ -20,8 +21,6 @@ function normalizeRole(rawRole: string | undefined | null): string {
 }
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  
   const cookieStore = await cookies()
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
   const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
@@ -29,7 +28,20 @@ export default async function DashboardPage() {
   let rol = 'admin'
   let isAuthenticated = false
 
-  if (isMock) {
+  const authToken = cookieStore.get('durey_auth_token')?.value
+  const roleCookie = cookieStore.get('durey_user_role')?.value
+  const loggedCookie = cookieStore.get('durey_user_logged')?.value
+
+  // 🚀 FAST-PATH: Resolver rol al instante con JWT en 0.1ms
+  if (authToken) {
+    const decoded = await verifySupabaseJWT(authToken)
+    if (decoded) {
+      rol = decoded.rol
+      isAuthenticated = true
+    }
+  }
+
+  if (!isAuthenticated && isMock) {
     const mockSession = cookieStore.get('durey_mock_session')?.value
     if (mockSession) {
       try {
@@ -40,9 +52,10 @@ export default async function DashboardPage() {
         isAuthenticated = false
       }
     }
-  } else {
+  } else if (!isAuthenticated) {
+    const supabase = await createClient()
     const { data } = await supabase.auth.getUser()
-    const user = data.user
+    const user = data?.user
 
     const roleCookie = cookieStore.get('durey_user_role')?.value
     const loggedCookie = cookieStore.get('durey_user_logged')?.value

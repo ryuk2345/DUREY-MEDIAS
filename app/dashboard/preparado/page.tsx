@@ -2,6 +2,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
   Package, Plus, QrCode, Loader2, X, Check, Warehouse, ArrowRight,
@@ -13,6 +14,7 @@ import { generarCodigoPaquete, getSemanaAnio, getDiaSemana } from '@/lib/utils'
 import { convertirDocenasAPares } from '@/lib/domain/packaging'
 import QRCode from 'qrcode'
 import CustomSelect from '@/components/ui/CustomSelect'
+import Modal from '@/components/ui/Modal'
 
 interface Preparador { id: string; nombre: string }
 interface StockEmpacar { id: string; docenas: number; catalogo_media_id: string; catalogo_media: { id: string; sku?: string; codigo: string; talla: string; publico: string } }
@@ -419,9 +421,9 @@ export default function PreparadoPage() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          <a href="/dashboard/almacen" className="btn-primary text-xs py-2 px-4 rounded-2xl bg-cyan-600 hover:bg-cyan-500 border-none flex items-center gap-1.5 font-bold shadow-lg shadow-cyan-600/20">
+          <Link href="/dashboard/almacen" className="btn-primary text-xs py-2 px-4 rounded-2xl bg-cyan-600 hover:bg-cyan-500 border-none flex items-center gap-1.5 font-bold shadow-lg shadow-cyan-600/20">
             <Scan className="w-4 h-4" /> 🔫 Escáner de Pistola / Salones
-          </a>
+          </Link>
         </div>
       </div>
 
@@ -655,120 +657,112 @@ export default function PreparadoPage() {
       </div>
 
       {/* ── MODAL: CREADOR Y PREVISUALIZACIÓN DE SACO MAESTRO (QR DE EMPAQUE) ───── */}
-      {showSacoMaestroModal && sacoMaestroActual && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-lg p-7 shadow-2xl border border-emerald-500/30 animate-fadeInUp max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-emerald-400" />
-                <h2 className="text-lg font-bold text-white">Bolsa Grande / Saco Maestro de Empaque</h2>
-              </div>
-              <button onClick={() => setShowSacoMaestroModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={Boolean(showSacoMaestroModal && sacoMaestroActual)}
+        onClose={() => setShowSacoMaestroModal(false)}
+        title="Bolsa Grande / Saco Maestro de Empaque"
+        maxWidth="lg"
+        footer={
+          <>
+            <button onClick={imprimirEtiquetaSacoMaestro} className="btn-secondary flex-1 justify-center py-2 text-xs border-emerald-500/30 text-emerald-300 hover:text-white">
+              <Printer className="w-4 h-4 text-emerald-400" /> Imprimir Etiqueta Saco
+            </button>
+            <button
+              onClick={confirmarGuardarSacoMaestro}
+              disabled={saving}
+              className="btn-primary flex-1 justify-center py-2 text-xs bg-emerald-600 hover:bg-emerald-500 border-none font-bold shadow-lg shadow-emerald-600/20"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              Confirmar y Bajar a Almacén
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          {/* Código y Salón Destino */}
+          <div className="p-4 rounded-2xl bg-slate-900/80 border border-emerald-500/20 text-center">
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Código del Saco Maestro</span>
+            <code className="text-2xl font-black text-emerald-400 font-mono block mb-2">{sacoMaestroActual?.codigo_saco}</code>
 
-            <div className="space-y-4 text-xs">
-              {/* Código y Salón Destino */}
-              <div className="p-4 rounded-2xl bg-slate-900/80 border border-emerald-500/20 text-center">
-                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Código del Saco Maestro</span>
-                <code className="text-2xl font-black text-emerald-400 font-mono block mb-2">{sacoMaestroActual.codigo_saco}</code>
-
-                <div className="mt-2">
-                  <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">📍 Salón Físico Destino para Almacenar</label>
-                  <CustomSelect
-                    value={sacoMaestroActual.salon_destino_id}
-                    onChange={val => {
-                      const ub = ubicaciones.find(u => u.id === val)
-                      setSacoMaestroActual(prev => prev ? ({ ...prev, salon_destino_id: val, salon_destino_nombre: ub?.nombre || 'Salón A' }) : null)
-                    }}
-                    options={ubicaciones.map(u => ({
-                      value: u.id,
-                      label: `📍 ${u.nombre}`
-                    }))}
-                    triggerClassName="text-xs font-bold text-center border-emerald-500/30 text-emerald-300"
-                  />
-                </div>
-              </div>
-
-              {/* Imagen QR */}
-              <div className="p-4 rounded-2xl bg-white text-center shadow-inner">
-                <img src={sacoMaestroActual.qrDataURL} alt="Código QR del Saco Maestro" className="w-44 h-44 mx-auto" />
-                <p className="text-[11px] text-slate-600 font-bold mt-1">Escaneable en Almacén con Pistola de Código de Barras / QR</p>
-              </div>
-
-              {/* Contenido Desglosado */}
-              <div className="p-3 rounded-2xl bg-slate-900/60 border border-white/[0.06] space-y-2">
-                <div className="flex justify-between items-center text-slate-300 font-bold">
-                  <span>Empacador Responsable:</span>
-                  <span className="text-white">{sacoMaestroActual.preparador_nombre}</span>
-                </div>
-                <div className="flex justify-between items-center text-slate-300 font-bold">
-                  <span>Total Contenido:</span>
-                  <span className="text-emerald-400 font-mono">{sacoMaestroActual.totalDocenas} Pack Docenas ({sacoMaestroActual.totalPares} Pares)</span>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/[0.08] overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-white/[0.04] text-slate-400 font-bold">
-                    <tr>
-                      <th className="p-2">SKU</th>
-                      <th className="p-2">Media</th>
-                      <th className="p-2 text-right">Pares</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.04]">
-                    {sacoMaestroActual.items.map((item, idx) => (
-                      <tr key={idx}>
-                        <td className="p-2 font-mono font-bold text-emerald-300">{item.sku}</td>
-                        <td className="p-2 text-slate-300">{item.codigo}</td>
-                        <td className="p-2 text-right font-mono font-bold text-white">{item.pares} pares</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={imprimirEtiquetaSacoMaestro} className="btn-secondary flex-1 justify-center py-2 text-xs border-emerald-500/30 text-emerald-300 hover:text-white">
-                <Printer className="w-4 h-4 text-emerald-400" /> Imprimir Etiqueta Saco
-              </button>
-              <button
-                onClick={confirmarGuardarSacoMaestro}
-                disabled={saving}
-                className="btn-primary flex-1 justify-center py-2 text-xs bg-emerald-600 hover:bg-emerald-500 border-none font-bold shadow-lg shadow-emerald-600/20"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                Confirmar y Bajar a Almacén
-              </button>
+            <div className="mt-2">
+              <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">📍 Salón Físico Destino para Almacenar</label>
+              <CustomSelect
+                value={sacoMaestroActual?.salon_destino_id || ''}
+                onChange={val => {
+                  const ub = ubicaciones.find(u => u.id === val)
+                  setSacoMaestroActual(prev => prev ? ({ ...prev, salon_destino_id: val, salon_destino_nombre: ub?.nombre || 'Salón A' }) : null)
+                }}
+                options={ubicaciones.map(u => ({
+                  value: u.id,
+                  label: `📍 ${u.nombre}`
+                }))}
+                triggerClassName="text-xs font-bold text-center border-emerald-500/30 text-emerald-300"
+              />
             </div>
           </div>
+
+          {/* Imagen QR */}
+          <div className="p-4 rounded-2xl bg-white text-center shadow-inner">
+            <img src={sacoMaestroActual?.qrDataURL} alt="Código QR del Saco Maestro" className="w-44 h-44 mx-auto" />
+            <p className="text-[11px] text-slate-600 font-bold mt-1">Escaneable en Almacén con Pistola de Código de Barras / QR</p>
+          </div>
+
+          {/* Contenido Desglosado */}
+          <div className="p-3 rounded-2xl bg-slate-900/60 border border-white/[0.06] space-y-2">
+            <div className="flex justify-between items-center text-slate-300 font-bold">
+              <span>Empacador Responsable:</span>
+              <span className="text-white">{sacoMaestroActual?.preparador_nombre}</span>
+            </div>
+            <div className="flex justify-between items-center text-slate-300 font-bold">
+              <span>Total Contenido:</span>
+              <span className="text-emerald-400 font-mono">{sacoMaestroActual?.totalDocenas} Pack Docenas ({sacoMaestroActual?.totalPares} Pares)</span>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/[0.08] overflow-hidden">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-white/[0.04] text-slate-400 font-bold">
+                <tr>
+                  <th className="p-2">SKU</th>
+                  <th className="p-2">Media</th>
+                  <th className="p-2 text-right">Pares</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {sacoMaestroActual?.items?.map((item, idx) => (
+                  <tr key={idx}>
+                    <td className="p-2 font-mono font-bold text-emerald-300">{item.sku}</td>
+                    <td className="p-2 text-slate-300">{item.codigo}</td>
+                    <td className="p-2 text-right font-mono font-bold text-white">{item.pares} pares</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      )}
+      </Modal>
 
       {/* ── MODAL: VER QR EXISTENTE ─────────────────────────────────────────── */}
-      {showQRModal && paqueteQR && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-sm p-7 shadow-2xl border border-white/10 animate-fadeInUp text-center">
-            <h2 className="text-lg font-bold text-white mb-1">Saco Maestro {paqueteQR.codigo_paquete}</h2>
-            <p className="text-xs text-slate-400 mb-4">Salón Destino: <strong className="text-emerald-400">{paqueteQR.ubicacion?.nombre || 'Salón A'}</strong></p>
-
-            <div className="p-4 rounded-2xl bg-white mb-4">
-              <img src={qrDataURL} alt="QR Saco Maestro" className="w-48 h-48 mx-auto" />
-            </div>
-
-            <p className="text-xs font-mono text-emerald-400 font-bold mb-6">
-              {paqueteQR.docenas} Docenas ({paqueteQR.total_pares || convertirDocenasAPares(paqueteQR.docenas)} Pares Totales)
-            </p>
-
-            <button onClick={() => setShowQRModal(false)} className="btn-primary w-full justify-center py-2 text-xs bg-emerald-600 border-none font-bold">
-              Cerrar
-            </button>
-          </div>
+      <Modal
+        open={Boolean(showQRModal && paqueteQR)}
+        onClose={() => setShowQRModal(false)}
+        title={paqueteQR ? `Saco Maestro ${paqueteQR.codigo_paquete}` : 'Saco Maestro'}
+        subtitle={paqueteQR ? `Salón Destino: ${paqueteQR.ubicacion?.nombre || 'Salón A'}` : undefined}
+        maxWidth="sm"
+        footer={
+          <button onClick={() => setShowQRModal(false)} className="btn-primary w-full justify-center py-2 text-xs bg-emerald-600 border-none font-bold">
+            Cerrar
+          </button>
+        }
+      >
+        <div className="p-4 rounded-2xl bg-white mb-4 text-center">
+          <img src={qrDataURL} alt="QR Saco Maestro" className="w-48 h-48 mx-auto" />
         </div>
-      )}
+
+        <p className="text-xs font-mono text-emerald-400 font-bold text-center">
+          {paqueteQR?.docenas} Docenas ({paqueteQR?.total_pares || convertirDocenasAPares(paqueteQR?.docenas || 0)} Pares Totales)
+        </p>
+      </Modal>
     </div>
   )
 }

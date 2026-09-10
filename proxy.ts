@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { verifySupabaseJWT, generateSupabaseJWT } from '@/lib/auth/jwt'
 
 // Rutas accesibles por rol (en el dashboard)
 const ROLE_ROUTES: Record<string, string[]> = {
@@ -55,6 +56,7 @@ export async function proxy(request: NextRequest) {
   let user: any = null
   let role = 'admin'
 
+  const authToken = request.cookies.get('durey_auth_token')?.value
   const roleCookie = request.cookies.get('durey_user_role')?.value
   const loggedCookie = request.cookies.get('durey_user_logged')?.value
 
@@ -72,7 +74,20 @@ export async function proxy(request: NextRequest) {
       user = { id: 'mock-user', email: 'admin@durey.com' }
       role = roleCookie
     }
-  } else {
+  } else if (authToken) {
+    // 🚀 RUTA DE ALTA VELOCIDAD (0.1ms en memoria local con jose, 0 llamadas de red a Supabase)
+    const decoded = await verifySupabaseJWT(authToken)
+    if (decoded) {
+      user = { id: decoded.sub, email: decoded.email }
+      role = decoded.rol
+    }
+  }
+
+  // 🔄 PERÍODO DE TRANSICIÓN TRANSPARENTE:
+  // Si el usuario no tiene durey_auth_token pero tiene sesión activa previa,
+  // verificamos una única vez con Supabase y auto-emitimos durey_auth_token para que
+  // a partir del siguiente clic tome la vía rápida sin tener que cerrar sesión.
+  if (!isMock && !user && loggedCookie) {
     try {
       const supabase = createServerClient(
         url,
@@ -98,26 +113,37 @@ export async function proxy(request: NextRequest) {
       )
 
       const { data } = await supabase.auth.getUser()
-      user = data.user
-
-      if (user) {
+      if (data?.user) {
         const { data: perfil } = await supabase
           .from('usuarios')
-          .select('rol, activo')
-          .eq('auth_id', user.id)
+          .select('id, nombre, rol, activo')
+          .eq('auth_id', data.user.id)
           .single()
 
         if (perfil && perfil.activo) {
+          user = { id: perfil.id || data.user.id, email: data.user.email }
           role = perfil.rol || roleCookie || 'admin'
-        } else if (roleCookie) {
-          role = roleCookie
+
+          // Auto-emitir el JWT firmado para que todas las futuras navegaciones sean instantáneas
+          const newToken = await generateSupabaseJWT({
+            id: user.id,
+            email: user.email || '',
+            rol: role,
+            nombre: perfil.nombre || 'Usuario'
+          })
+
+          const oneWeek = 60 * 60 * 24 * 7
+          supabaseResponse.cookies.set('durey_auth_token', newToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: oneWeek
+          })
         }
-      } else if (loggedCookie && roleCookie) {
-        user = { id: 'authenticated-user', email: 'active@durey.com' }
-        role = roleCookie
       }
     } catch (e) {
-      // Fallback ultra seguro si la conexión a Supabase falla
+      // Fallback seguro de emergencia
       if (loggedCookie && roleCookie) {
         user = { id: 'authenticated-user', email: 'active@durey.com' }
         role = roleCookie

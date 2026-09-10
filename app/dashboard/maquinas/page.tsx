@@ -3,6 +3,7 @@
 
 // Maquinas Page - Control Center with ConfirmDialog
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { listarUsuarios, actualizarEstadoUsuario } from '@/lib/api/usuarios'
 import {
@@ -626,9 +627,9 @@ export default function MaquinasPage() {
                       LÍNEA DE TIEMPO DE AVERÍAS
                     </h2>
                   </div>
-                  <a href="/dashboard/mantenimiento" className="text-xs font-bold text-cyan-400 hover:underline flex items-center gap-1 uppercase tracking-wider">
+                  <Link href="/dashboard/mantenimiento" className="text-xs font-bold text-cyan-400 hover:underline flex items-center gap-1 uppercase tracking-wider">
                     VER HISTORIAL COMPLETO ➔
-                  </a>
+                  </Link>
                 </div>
 
                 <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-white/10">

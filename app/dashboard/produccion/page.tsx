@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
 import CustomSelect from '@/components/ui/CustomSelect'
+import Modal from '@/components/ui/Modal'
 
 
 interface Marca { id: string; nombre: string }
@@ -541,7 +542,7 @@ export default function ProduccionTejidoPage() {
               <p className="text-xs text-slate-600 mt-1">Prueba cambiando los filtros de marca o búsqueda</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4">
               {maquinasFiltradas.map(m => {
                 const info = maquinasEstadoMap.get(m.id)
                 const isEnMarcha = m.estado === 'ocupada'
@@ -550,7 +551,7 @@ export default function ProduccionTejidoPage() {
                 return (
                   <div
                     key={m.id}
-                    className={`glass rounded-2xl p-4 border transition-all duration-300 relative flex flex-col justify-between ${
+                    className={`glass rounded-2xl p-4 border transition-all duration-300 relative flex flex-col justify-between overflow-hidden min-w-0 ${
                       isEnMarcha
                         ? 'border-emerald-500/30 bg-emerald-500/[0.02] shadow-lg shadow-emerald-500/5'
                         : isMantenimiento
@@ -560,46 +561,46 @@ export default function ProduccionTejidoPage() {
                   >
                     {/* Header de la Tarjeta */}
                     <div>
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-lg text-white font-mono">{m.codigo}</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 text-slate-300 font-semibold">
-                              {m.marca?.nombre || 'Marca'}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                            <User className="w-3 h-3 text-slate-500" />
-                            {info ? info.tejedorNombre : 'Sin Encargado'}
-                          </p>
-                        </div>
+                      {/* Fila 1: Marca y Badge de Estado */}
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 text-slate-300 font-semibold uppercase tracking-wider">
+                          {m.marca?.nombre || 'Marca'}
+                        </span>
 
-                        {/* Badge de Estado */}
-                        <div>
-                          {isEnMarcha ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              EN MARCHA
-                            </span>
-                          ) : isMantenimiento ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                              <Wrench className="w-3 h-3" />
-                              ALERTA
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                              LIBRE
-                            </span>
-                          )}
-                        </div>
+                        {isEnMarcha ? (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            EN MARCHA
+                          </span>
+                        ) : isMantenimiento ? (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                            <Wrench className="w-3 h-3" />
+                            ALERTA
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
+                            LIBRE
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Fila 2: Código de máquina y encargado */}
+                      <div className="min-w-0 mb-3">
+                        <h3 className="font-black text-base sm:text-lg text-white font-mono tracking-tight truncate" title={m.codigo}>
+                          {m.codigo}
+                        </h3>
+                        <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
+                          <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span className="truncate">{info ? info.tejedorNombre : 'Sin Encargado'}</span>
+                        </p>
                       </div>
 
                       {/* Código de media tejiéndose */}
-                      <div className="mt-3 p-2.5 rounded-xl bg-slate-900/60 border border-white/[0.05]">
+                      <div className="p-2.5 rounded-xl bg-slate-900/60 border border-white/[0.05]">
                         <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">
                           {isEnMarcha ? 'Tejiendo producto:' : 'Especificación:'}
                         </p>
-                        <p className="text-xs font-mono font-medium text-slate-200 truncate">
+                        <p className="text-xs font-mono font-medium text-slate-200 truncate" title={info ? info.catalogoMediaCodigo : (m.caracteristicas || 'Disponible para cargar')}>
                           {info ? info.catalogoMediaCodigo : (m.caracteristicas || 'Disponible para cargar')}
                         </p>
                       </div>
@@ -832,68 +833,59 @@ export default function ProduccionTejidoPage() {
       </div>
 
       {/* ── MODAL: REGISTRAR PRODUCCIÓN FINAL ───────────────────────────────── */}
-      {showReporteModal && turnoSeleccionado && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-lg p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
-              <div>
-                <h2 className="text-lg font-bold text-white">Registrar Producción del Turno</h2>
-                <p className="text-xs text-slate-400">
-                  Tejedor: <span className="text-white font-medium">{turnoSeleccionado.tejedor?.nombre}</span> · Horario: <span className="capitalize">{turnoSeleccionado.horario}</span>
-                </p>
-              </div>
-              <button onClick={() => setShowReporteModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={Boolean(showReporteModal && turnoSeleccionado)}
+        onClose={() => setShowReporteModal(false)}
+        title="Registrar Producción del Turno"
+        subtitle={turnoSeleccionado ? `Tejedor: ${turnoSeleccionado.tejedor?.nombre} · Horario: ${turnoSeleccionado.horario}` : undefined}
+        maxWidth="lg"
+        footer={
+          <>
+            <button onClick={() => setShowReporteModal(false)} className="btn-secondary flex-1 justify-center py-2">
+              Cancelar
+            </button>
+            <button onClick={enviarReporteProduccion} className="btn-primary flex-1 justify-center py-2 bg-emerald-600 hover:bg-emerald-500 border-none">
+              <CheckCircle2 className="w-4 h-4" /> Confirmar Producción
+            </button>
+          </>
+        }
+      >
+        <p className="text-xs text-slate-400 mb-4">
+          Ingresa las docenas obtenidas por cada máquina. Al confirmar, los minidepósitos se actualizarán y las máquinas quedarán libres.
+        </p>
 
-            <p className="text-xs text-slate-400 mb-4">
-              Ingresa las docenas obtenidas por cada máquina. Al confirmar, los minidepósitos se actualizarán y las máquinas quedarán libres.
-            </p>
+        <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+          {turnoSeleccionado?.turno_maquinas?.map(tm => {
+            const maqObj = maquinas.find(m => m.id === tm.maquina_id)
+            const catObj = catalogo.find(c => c.id === tm.catalogo_media_id)
 
-            <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-              {turnoSeleccionado.turno_maquinas?.map(tm => {
-                const maqObj = maquinas.find(m => m.id === tm.maquina_id)
-                const catObj = catalogo.find(c => c.id === tm.catalogo_media_id)
-
-                return (
-                  <div key={tm.maquina_id} className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-white font-mono">{maqObj?.codigo || tm.maquina_id}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-300">{maqObj?.marca?.nombre}</span>
-                      </div>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">{catObj?.codigo || 'Media'}</p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        placeholder="0"
-                        value={reporte[tm.maquina_id] ?? ''}
-                        onChange={e => setReporte(r => ({ ...r, [tm.maquina_id]: e.target.value }))}
-                        className="input-dark w-24 text-center font-bold text-sm"
-                      />
-                      <span className="text-xs text-slate-500">docenas</span>
-                    </div>
+            return (
+              <div key={tm.maquina_id} className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-white font-mono">{maqObj?.codigo || tm.maquina_id}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-300">{maqObj?.marca?.nombre}</span>
                   </div>
-                )
-              })}
-            </div>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">{catObj?.codigo || 'Media'}</p>
+                </div>
 
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowReporteModal(false)} className="btn-secondary flex-1 justify-center py-2">
-                Cancelar
-              </button>
-              <button onClick={enviarReporteProduccion} className="btn-primary flex-1 justify-center py-2 bg-emerald-600 hover:bg-emerald-500 border-none">
-                <CheckCircle2 className="w-4 h-4" /> Confirmar Producción
-              </button>
-            </div>
-          </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    placeholder="0"
+                    value={reporte[tm.maquina_id] ?? ''}
+                    onChange={e => setReporte(r => ({ ...r, [tm.maquina_id]: e.target.value }))}
+                    className="input-dark w-24 text-center font-bold text-sm"
+                  />
+                  <span className="text-xs text-slate-500">docenas</span>
+                </div>
+              </div>
+            )
+          })}
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

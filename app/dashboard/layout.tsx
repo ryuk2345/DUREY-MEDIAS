@@ -4,10 +4,9 @@ import Sidebar from '@/components/layout/Sidebar'
 import { cookies } from 'next/headers'
 import StockNotification from '@/components/layout/StockNotification'
 import EventNotificationBanner from '@/components/layout/EventNotificationBanner'
+import { verifySupabaseJWT } from '@/lib/auth/jwt'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  
   const cookieStore = await cookies()
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
   const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
@@ -16,11 +15,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
   let userRol = 'admin'
   let isAuthenticated = false
 
+  const authToken = cookieStore.get('durey_auth_token')?.value
   const roleCookie = cookieStore.get('durey_user_role')?.value
   const loggedCookie = cookieStore.get('durey_user_logged')?.value
   const nameCookie = cookieStore.get('durey_user_name')?.value
 
-  if (isMock) {
+  // 🚀 FAST-PATH: Verificar JWT en 0.1ms sin llamadas de red
+  if (authToken) {
+    const decoded = await verifySupabaseJWT(authToken)
+    if (decoded) {
+      userName = decoded.nombre || (nameCookie ? decodeURIComponent(nameCookie) : 'Usuario')
+      userRol = decoded.rol
+      isAuthenticated = true
+    }
+  }
+
+  if (!isAuthenticated && isMock) {
     const mockSession = cookieStore.get('durey_mock_session')?.value
     if (mockSession) {
       try {
@@ -36,8 +46,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
       userRol = roleCookie
       isAuthenticated = true
     }
-  } else {
+  } else if (!isAuthenticated) {
     try {
+      const supabase = await createClient()
       const { data } = await supabase.auth.getUser()
       const user = data?.user
 
@@ -45,20 +56,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
         let { data: perfil } = await supabase
           .from('usuarios')
           .select('nombre, rol, activo')
-          .eq('auth_id', user.id)
-          .single()
-
-        if (!perfil && user.email) {
-          const { data: perfilEmail } = await supabase
-            .from('usuarios')
-            .select('nombre, rol, activo')
-            .eq('email', user.email.toLowerCase())
-            .single()
-          perfil = perfilEmail
-        }
+          .or(`auth_id.eq.${user.id}${user.email ? `,email.eq.${user.email.toLowerCase()}` : ''}`)
+          .limit(1)
+          .maybeSingle()
 
         if (perfil && perfil.activo) {
-          userName = perfil.nombre || nameCookie ? decodeURIComponent(nameCookie || '') : 'Usuario'
+          userName = perfil.nombre || (nameCookie ? decodeURIComponent(nameCookie) : 'Usuario')
           userRol = perfil.rol || roleCookie || 'admin'
           isAuthenticated = true
         } else if (roleCookie) {
@@ -92,7 +95,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       */}
       <main className="flex-1 min-h-screen overflow-x-hidden pt-16 md:pt-0 md:ml-16 lg:ml-60 relative">
         {/* Floating Stock Notification for Desktop */}
-        <div className="fixed top-4 right-6 z-40 hidden md:block">
+        <div className="fixed top-4 right-6 z-40 hidden lg:block">
           <StockNotification userRol={userRol} />
         </div>
 
