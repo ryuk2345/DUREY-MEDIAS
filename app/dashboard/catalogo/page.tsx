@@ -22,16 +22,27 @@ interface CatalogoMedia {
   estado: 'activo' | 'inactivo'
 }
 
-const MODELOS = ['Tobillera', 'Media larga', 'Media corta', 'Calcetín ejecutivo', 'Media deportiva']
+interface ModeloMedia {
+  id: string
+  nombre: string
+  activo: boolean
+}
+
 const PUBLICOS = ['Dama', 'Hombre', 'Niño', 'Niña', 'Unisex']
 
 export default function CatalogoPage() {
   const [catalogo, setCatalogo] = useState<CatalogoMedia[]>([])
+  const [modelos, setModelos] = useState<ModeloMedia[]>([])
   const [filtro, setFiltro] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'todos' | 'activo' | 'inactivo'>('todos')
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editando, setEditando] = useState<CatalogoMedia | null>(null)
+
+  // Modal + nuevo modelo
+  const [showModeloModal, setShowModeloModal] = useState(false)
+  const [modeloNombreForm, setModeloNombreForm] = useState('')
+  const [savingModelo, setSavingModelo] = useState(false)
   
   // Modal de impresión de etiqueta de código de barras
   const [showPrintModal, setShowPrintModal] = useState(false)
@@ -62,8 +73,12 @@ export default function CatalogoPage() {
 
   const cargarCatalogo = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('catalogo_medias').select('*').order('modelo')
-    setCatalogo(data ?? [])
+    const [cat, mod] = await Promise.all([
+      supabase.from('catalogo_medias').select('*').order('modelo'),
+      supabase.from('modelos_media').select('*').eq('activo', true).order('created_at')
+    ])
+    setCatalogo(cat.data ?? [])
+    setModelos(mod.data ?? [])
     setLoading(false)
   }, [])
 
@@ -96,6 +111,22 @@ export default function CatalogoPage() {
       precio_venta_sugerido: String(item.precio_venta_sugerido ?? 0)
     })
     setShowModal(true)
+  }
+
+  const guardarNuevoModelo = async () => {
+    if (!modeloNombreForm.trim()) { toast.error('Escribe el nombre del modelo'); return }
+    setSavingModelo(true)
+    const { error } = await supabase.from('modelos_media').insert({ nombre: modeloNombreForm.trim() })
+    if (error) {
+      toast.error(error.message.includes('unique') ? 'Ya existe un modelo con ese nombre' : `Error: ${error.message}`)
+      setSavingModelo(false)
+      return
+    }
+    toast.success(`Modelo "${modeloNombreForm.trim()}" creado`)
+    setModeloNombreForm('')
+    setShowModeloModal(false)
+    setSavingModelo(false)
+    cargarCatalogo()
   }
 
   const autoGenerarCodigo = () => {
@@ -223,9 +254,17 @@ export default function CatalogoPage() {
             <p className="text-slate-400 text-xs font-medium">Gestión de códigos de producto, SKUs escaneables por pistola, atributos y costos por docena</p>
           </div>
         </div>
-        <button onClick={abrirNuevo} className="btn-primary py-2.5 px-4 bg-cyan-600 hover:bg-cyan-500 border-none font-bold text-xs shadow-lg shadow-cyan-600/20">
-          <Plus className="w-4 h-4" /> Nuevo Producto
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => { setModeloNombreForm(''); setShowModeloModal(true) }}
+            className="btn-secondary py-2.5 px-4 text-xs font-bold flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" /> Nuevo Modelo
+          </button>
+          <button onClick={abrirNuevo} className="btn-primary py-2.5 px-4 bg-cyan-600 hover:bg-cyan-500 border-none font-bold text-xs shadow-lg shadow-cyan-600/20">
+            <Plus className="w-4 h-4" /> Nuevo Producto
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -403,16 +442,28 @@ export default function CatalogoPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Modelo *</label>
-                  <CustomSelect
-                    value={form.modelo}
-                    onChange={val => setForm({ ...form, modelo: val })}
-                    options={[
-                      { value: '', label: 'Seleccionar...' },
-                      ...MODELOS.map(m => ({ value: m, label: m }))
-                    ]}
-                    placeholder="Seleccionar..."
-                    triggerClassName="font-semibold"
-                  />
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <CustomSelect
+                        value={form.modelo}
+                        onChange={val => setForm({ ...form, modelo: val })}
+                        options={[
+                          { value: '', label: 'Seleccionar...' },
+                          ...modelos.map(m => ({ value: m.nombre, label: m.nombre }))
+                        ]}
+                        placeholder="Seleccionar..."
+                        triggerClassName="font-semibold"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setModeloNombreForm(''); setShowModeloModal(true) }}
+                      className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-cyan-400 transition-colors shrink-0"
+                      title="Agregar nuevo modelo"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -512,6 +563,41 @@ export default function CatalogoPage() {
               <button onClick={() => setShowPrintModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">Cerrar</button>
               <button onClick={ejecutarImpresionEtiquetaMedia} className="btn-primary flex-1 justify-center py-2 text-xs bg-emerald-600 border-none font-bold shadow-lg shadow-emerald-600/20 flex items-center gap-1">
                 <Printer className="w-4 h-4" /> Imprimir Etiqueta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: NUEVO MODELO ─────────────────────────────────────────────── */}
+      {showModeloModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="glass rounded-3xl w-full max-w-sm p-7 shadow-2xl border border-cyan-500/30 animate-fadeInUp">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-white">Nuevo Modelo de Media</h2>
+              <button type="button" onClick={() => setShowModeloModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <input
+              type="text"
+              placeholder="Ej. Calcetín deportivo, Media ejecutiva..."
+              value={modeloNombreForm}
+              onChange={e => setModeloNombreForm(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && guardarNuevoModelo()}
+              className="input-dark w-full mb-6 font-bold"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowModeloModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">Cancelar</button>
+              <button
+                type="button"
+                onClick={guardarNuevoModelo}
+                disabled={savingModelo || !modeloNombreForm.trim()}
+                className="btn-primary flex-1 justify-center py-2 text-xs bg-cyan-600 border-none font-bold disabled:opacity-50"
+              >
+                {savingModelo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {savingModelo ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </div>
