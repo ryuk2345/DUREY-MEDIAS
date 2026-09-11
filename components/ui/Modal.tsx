@@ -83,13 +83,8 @@ export function Modal({
   }
 
   const modalContent = (
-    /* 
-      1. Overlay a nivel raíz con overflow-y-auto para pantallas con poca altura.
-         Al ser portaleado a document.body, ningún contenedor padre con transform 
-         (animate-fadeInUp) puede atrapar el position: fixed.
-    */
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto animate-fadeIn"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md"
       onClick={(e) => {
         if (closeOnBackdrop && e.target === e.currentTarget) {
           onClose()
@@ -99,43 +94,46 @@ export function Modal({
       aria-modal="true"
       aria-label={title}
     >
-      {/* 
-        2. Fondo sólido bg-slate-900 (NO glass) con borde y sombra profunda.
-           max-h-[90vh] y flex flex-col garantizan que el contenido tenga scroll 
-           interno y los botones/títulos queden visibles.
-           my-auto previene que el diálogo se corte en pantallas pequeñas.
-      */}
       <div
-        className={`bg-slate-900 border border-white/10 rounded-3xl w-full ${widths[maxWidth] || 'max-w-lg'} p-6 sm:p-7 shadow-2xl animate-fadeInUp max-h-[90vh] flex flex-col my-auto ${className}`}
-        onClick={(e) => e.stopPropagation()}
+        className="flex min-h-full items-center justify-center p-4 sm:p-6"
+        onClick={(e) => {
+          if (closeOnBackdrop && e.target === e.currentTarget) {
+            onClose()
+          }
+        }}
       >
-        {/* Cabecera (Fija / shrink-0) */}
-        <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/[0.08] shrink-0">
-          <div>
-            <h2 className="text-lg font-bold text-white tracking-tight">{title}</h2>
-            {subtitle && <p className="text-xs text-slate-400 font-medium mt-0.5">{subtitle}</p>}
+        <div
+          className={`bg-slate-900 border border-white/10 rounded-3xl w-full ${widths[maxWidth] || 'max-w-lg'} p-6 sm:p-7 shadow-2xl max-h-[90vh] flex flex-col ${className}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Cabecera (Fija / shrink-0) */}
+          <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/[0.08] shrink-0">
+            <div>
+              <h2 className="text-lg font-bold text-white tracking-tight">{title}</h2>
+              {subtitle && <p className="text-xs text-slate-400 font-medium mt-0.5">{subtitle}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              aria-label="Cerrar modal"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-            aria-label="Cerrar modal"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
-        {/* 3. Cuerpo con scroll interno independiente */}
-        <div className="flex-1 overflow-y-auto pr-1">
-          {children}
-        </div>
-
-        {/* Pie opcional para botones de acción fijos */}
-        {footer && (
-          <div className="mt-5 pt-3 border-t border-white/[0.06] shrink-0 flex items-center justify-end gap-3">
-            {footer}
+          {/* 3. Cuerpo con scroll interno independiente */}
+          <div className="flex-1 overflow-y-auto pr-1">
+            {children}
           </div>
-        )}
+
+          {/* Pie opcional para botones de acción fijos */}
+          {footer && (
+            <div className="mt-5 pt-3 border-t border-white/[0.06] shrink-0 flex items-center justify-end gap-3">
+              {footer}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

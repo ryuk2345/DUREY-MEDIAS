@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import CustomSelect from '@/components/ui/CustomSelect'
+import { Modal } from '@/components/ui/Modal'
 
 interface MateriaPrima {
   id: string
@@ -2017,24 +2018,13 @@ export default function MateriaPrimaPage() {
 
     {/* ── MODALES DEL SISTEMA (RENDERIZADOS FUERA DEL CONTENEDOR CON TRANSFORM) ── */}
     {/* ── MODAL: AÑADIR / EDITAR HILO ─────────────────────────────────────── */}
-    {showAddHiloModal && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                {editingHilo ? '✏️ Editar Fibra / Insumo' : '🧶 Registrar Nueva Fibra / Hilo'}
-              </h2>
-              <button 
-                type="button"
-                onClick={() => {
-                  setShowAddHiloModal(false)
-                  setEditingHilo(null)
-                }} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* ── MODAL: REGISTRAR / EDITAR HILO / FIBRA ────────────────────────── */}
+      <Modal
+        open={showAddHiloModal}
+        onClose={() => setShowAddHiloModal(false)}
+        title={editingHilo ? '✏️ Editar Fibra / Insumo' : '🧶 Registrar Nueva Fibra / Hilo'}
+        maxWidth="lg"
+      >
 
             <form onSubmit={handleAddHilo} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
               <div>
@@ -2120,24 +2110,15 @@ export default function MateriaPrimaPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── MODAL: REGISTRAR PROVEEDOR ──────────────────────────────────────── */}
-      {showAddProveedorModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">🏢 Registrar Proveedor</h2>
-              <button 
-                type="button"
-                onClick={() => setShowAddProveedorModal(false)} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={showAddProveedorModal}
+        onClose={() => setShowAddProveedorModal(false)}
+        title="🏢 Registrar Proveedor"
+        maxWidth="md"
+      >
 
             <form onSubmit={handleAddProveedor} className="space-y-4 text-xs">
               <div>
@@ -2203,26 +2184,15 @@ export default function MateriaPrimaPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {/* ── MODAL: AÑADIR REPUESTO ─────────────────────────────────────────── */}
-      {showAddRepuestoModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                {editingRepuesto ? '✏️ Editar Repuesto' : '🔧 Añadir Nuevo Repuesto'}
-              </h2>
-              <button 
-                type="button"
-                onClick={() => setShowAddRepuestoModal(false)} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* ── MODAL: REGISTRAR / EDITAR REPUESTO ──────────────────────────────── */}
+      <Modal
+        open={showAddRepuestoModal}
+        onClose={() => setShowAddRepuestoModal(false)}
+        title={editingRepuesto ? '✏️ Editar Repuesto' : '🔧 Añadir Nuevo Repuesto'}
+        maxWidth="md"
+      >
 
             <form onSubmit={editingRepuesto ? handleGuardarEdicionRepuesto : handleAddRepuesto} className="space-y-4 text-xs">
               <div>
@@ -2286,24 +2256,15 @@ export default function MateriaPrimaPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {/* ── MODAL: AJUSTAR STOCK DE REPUESTO ─────────────────────────────────── */}
-      {showAdjustRepuestoModal && selectedRepuesto && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">🔧 Ajustar Inventario de Repuesto</h2>
-              <button 
-                type="button"
-                onClick={() => { setShowAdjustRepuestoModal(false); setSelectedRepuesto(null) }} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* ── MODAL: AJUSTAR INVENTARIO REPUESTO ─────────────────────────────── */}
+      <Modal
+        open={showAdjustRepuestoModal && Boolean(selectedRepuesto)}
+        onClose={() => setShowAdjustRepuestoModal(false)}
+        title="🔧 Ajustar Inventario de Repuesto"
+        maxWidth="md"
+      >
 
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] mb-4 space-y-2 text-xs">
               <div className="flex justify-between"><span className="text-slate-400">Repuesto:</span> <span className="font-bold text-white">{selectedRepuesto.nombre}</span></div>
@@ -2382,24 +2343,15 @@ export default function MateriaPrimaPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {/* ── MODAL: REGISTRAR COMPRA DE MATERIA PRIMA ─────────────────────────── */}
-      {showCompraModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">📦 Adquisición de Materia Prima</h2>
-              <button 
-                type="button"
-                onClick={() => setShowCompraModal(false)} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* ── MODAL: COMPRA / ADQUISICIÓN ──────────────────────────────────────── */}
+      <Modal
+        open={showCompraModal}
+        onClose={() => setShowCompraModal(false)}
+        title="📦 Adquisición de Materia Prima"
+        maxWidth="xl"
+      >
 
             <form onSubmit={handleRegistrarCompra} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
               <div>
@@ -2518,24 +2470,15 @@ export default function MateriaPrimaPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {/* ── MODAL: QC INSPECCIÓN ────────────────────────────────────────────── */}
-      {showQcModal && selectedCompra && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">🔬 Control de Calidad e Inspección</h2>
-              <button 
-                type="button"
-                onClick={() => { setShowQcModal(false); setSelectedCompra(null) }} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* ── MODAL: CONTROL DE CALIDAD ────────────────────────────────────────── */}
+      <Modal
+        open={showQcModal && Boolean(selectedCompra)}
+        onClose={() => setShowQcModal(false)}
+        title="🔬 Control de Calidad e Inspección"
+        maxWidth="lg"
+      >
 
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] mb-4 space-y-2 text-xs">
               <div className="flex justify-between"><span className="text-slate-400">Proveedor:</span> <span className="font-bold text-white">{selectedCompra.proveedores?.nombre}</span></div>
@@ -2600,24 +2543,15 @@ export default function MateriaPrimaPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── MODAL: LIQUIDAR CUOTA DE COMPRA ─────────────────────────────────── */}
-      {showPayCuotaModal && selectedCuota && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">💵 Asentar Pago de Cuota</h2>
-              <button 
-                type="button"
-                onClick={() => { setShowPayCuotaModal(false); setSelectedCuota(null) }} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={showPayCuotaModal && Boolean(selectedCuota)}
+        onClose={() => { setShowPayCuotaModal(false); setSelectedCuota(null) }}
+        title="💵 Asentar Pago de Cuota"
+        maxWidth="md"
+      >
 
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] mb-4 space-y-2 text-xs">
               <div className="flex justify-between"><span className="text-slate-400">Proveedor:</span> <span className="font-bold text-white">{(selectedCuota.compra as any)?.proveedores?.nombre}</span></div>
@@ -2668,9 +2602,7 @@ export default function MateriaPrimaPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Modal>
     </>
   )
 }

@@ -8,6 +8,7 @@ import { Plus, Search, Edit2, Power, AlertTriangle, X, Loader2, Cog, Package, Ba
 import { toast } from 'sonner'
 import QRCode from 'qrcode'
 import CustomSelect from '@/components/ui/CustomSelect'
+import { Modal } from '@/components/ui/Modal'
 
 interface CatalogoMedia {
   id: string
@@ -389,13 +390,11 @@ export default function CatalogoPage() {
     </div>
 
       {/* Modal Nuevo / Editar Producto */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn overflow-y-auto">
-          <div className="bg-slate-900 border border-white/10 rounded-3xl w-full max-w-lg p-6 sm:p-7 shadow-2xl animate-fadeInUp max-h-[90vh] flex flex-col my-auto">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08] shrink-0">
-              <h2 className="text-lg font-bold text-white">{editando ? 'Editar Producto del Catálogo' : 'Nuevo Producto en Catálogo'}</h2>
-              <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/5"><X className="w-5 h-5" /></button>
-            </div>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editando ? "Editar Producto del Catálogo" : "Nuevo Producto en Catálogo"}
+      >
 
             <div className="space-y-4 text-xs overflow-y-auto pr-1">
               {/* CÓDIGO INTERNO PERSONALIZABLE / VARIABLE */}
@@ -543,15 +542,14 @@ export default function CatalogoPage() {
                 <Check className="w-4 h-4" /> Guardar Producto
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Modal Impresión de Etiqueta Barcode SKU */}
-      {showPrintModal && mediaBarcodeImprimir && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn overflow-y-auto">
-          <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl w-full max-w-sm p-7 shadow-2xl text-center space-y-4 animate-fadeInUp my-auto">
-            <h2 className="text-lg font-bold text-white">Etiqueta Barcode SKU</h2>
+      <Modal
+        open={showPrintModal && Boolean(mediaBarcodeImprimir)}
+        onClose={() => setShowPrintModal(false)}
+        title="Etiqueta Barcode SKU"
+      >
             <p className="text-xs text-slate-400">{mediaBarcodeImprimir.modelo} {mediaBarcodeImprimir.publico} ({mediaBarcodeImprimir.talla})</p>
 
             <div className="p-4 bg-white rounded-2xl">
@@ -567,20 +565,14 @@ export default function CatalogoPage() {
                 <Printer className="w-4 h-4" /> Imprimir Etiqueta
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── MODAL: NUEVO MODELO ─────────────────────────────────────────────── */}
-      {showModeloModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn overflow-y-auto">
-          <div className="bg-slate-900 border border-cyan-500/30 rounded-3xl w-full max-w-sm p-7 shadow-2xl animate-fadeInUp my-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-white">Nuevo Modelo de Media</h2>
-              <button type="button" onClick={() => setShowModeloModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={showModeloModal}
+        onClose={() => setShowModeloModal(false)}
+        title="Nuevo Modelo de Media"
+      >
             <input
               type="text"
               placeholder="Ej. Calcetín deportivo, Media ejecutiva..."
@@ -602,9 +594,7 @@ export default function CatalogoPage() {
                 {savingModelo ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </>
   )
 }

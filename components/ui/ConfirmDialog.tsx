@@ -1,6 +1,7 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AlertTriangle, ShieldAlert } from 'lucide-react'
 import { Button } from './Button'
 
@@ -27,11 +28,18 @@ export function ConfirmDialog({
   isDanger = true,
   isLoading = false
 }: ConfirmDialogProps) {
-  if (!isOpen) return null
+  const [mounted, setMounted] = useState(false)
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
-      <div className="glass rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-white/10 text-center space-y-4 animate-fadeInUp">
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!isOpen || !mounted) return null
+
+  const content = (
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/80 backdrop-blur-sm">
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="bg-slate-900 rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-white/10 text-center space-y-4">
         <div className={`w-12 h-12 rounded-2xl ${isDanger ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'} border flex items-center justify-center mx-auto text-xl`}>
           {isDanger ? <ShieldAlert className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
         </div>
@@ -56,5 +64,8 @@ export function ConfirmDialog({
         </div>
       </div>
     </div>
-  )
+  </div>
+)
+
+  return createPortal(content, document.body)
 }

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import CustomSelect from '@/components/ui/CustomSelect'
+import { Modal } from '@/components/ui/Modal'
 import {
   DollarSign, Plus, Search, Filter, Trash2, Calendar, FileText,
   TrendingDown, Building2, Package, Wrench, AlertTriangle, Loader2,
@@ -424,109 +425,97 @@ export default function EgresosPage() {
       </div>
 
       {/* ── MODAL: REGISTRAR NUEVO EGRESO ──────────────────────────────────────── */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-5">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                💸 Registrar Gasto Operativo
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowAddModal(false)}
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleGuardarEgreso} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">📝 Concepto / Detalle del Gasto *</label>
-                <input
-                  type="text"
-                  value={form.concepto}
-                  onChange={e => setForm({ ...form, concepto: e.target.value })}
-                  placeholder="Ej: Pago de planilla semanal, Bolsas de polietileno, etc."
-                  className="input-dark w-full text-sm py-2.5 font-medium"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">💵 Monto (S/) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={form.monto}
-                    onChange={e => setForm({ ...form, monto: e.target.value })}
-                    placeholder="Ej: 350.00"
-                    className="input-dark w-full text-sm py-2.5 font-mono font-bold text-rose-400"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">📅 Fecha *</label>
-                  <input
-                    type="date"
-                    value={form.fecha}
-                    onChange={e => setForm({ ...form, fecha: e.target.value })}
-                    className="input-dark w-full text-sm py-2.5"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">🏷️ Categoría de Gasto *</label>
-                <CustomSelect
-                  value={form.categoria}
-                  onChange={val => setForm({ ...form, categoria: val })}
-                  options={[
-                    { value: 'empaque', label: 'Insumos Empaque (Bolsas/Etiquetas)' },
-                    { value: 'repuestos', label: 'Repuestos de Maquinaria' },
-                    { value: 'planilla', label: 'Planillas Personal' },
-                    { value: 'servicios', label: 'Servicios Básicos (Luz/Agua)' },
-                    { value: 'alquiler', label: 'Alquiler de Local' },
-                    { value: 'otros', label: 'Otros Gastos' }
-                  ]}
-                  triggerClassName="text-sm py-2.5 font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">🔗 Enlace a Comprobante / Recibo (opcional)</label>
-                <input
-                  type="url"
-                  value={form.comprobante_url}
-                  onChange={e => setForm({ ...form, comprobante_url: e.target.value })}
-                  placeholder="https://ejemplo.com/factura.pdf"
-                  className="input-dark w-full text-xs"
-                />
-              </div>
-
-              <div className="flex gap-3 mt-6 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="btn-secondary flex-1 justify-center py-2.5"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="btn-primary flex-1 justify-center py-2.5 bg-rose-600 hover:bg-rose-500 border-none font-bold text-white shadow-lg shadow-rose-600/20"
-                >
-                  {saving ? 'Guardando...' : 'Registrar Gasto'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="💸 Registrar Gasto Operativo"
+        maxWidth="md"
+      >
+        <form onSubmit={handleGuardarEgreso} className="space-y-4 text-xs">
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">📝 Concepto / Detalle del Gasto *</label>
+            <input
+              type="text"
+              value={form.concepto}
+              onChange={e => setForm({ ...form, concepto: e.target.value })}
+              placeholder="Ej: Pago de planilla semanal, Bolsas de polietileno, etc."
+              className="input-dark w-full text-sm py-2.5 font-medium"
+              required
+            />
           </div>
-        </div>
-      )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">💵 Monto (S/) *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={form.monto}
+                onChange={e => setForm({ ...form, monto: e.target.value })}
+                placeholder="Ej: 350.00"
+                className="input-dark w-full text-sm py-2.5 font-mono font-bold text-rose-400"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">📅 Fecha *</label>
+              <input
+                type="date"
+                value={form.fecha}
+                onChange={e => setForm({ ...form, fecha: e.target.value })}
+                className="input-dark w-full text-sm py-2.5"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">🏷️ Categoría de Gasto *</label>
+            <CustomSelect
+              value={form.categoria}
+              onChange={val => setForm({ ...form, categoria: val })}
+              options={[
+                { value: 'empaque', label: 'Insumos Empaque (Bolsas/Etiquetas)' },
+                { value: 'repuestos', label: 'Repuestos de Maquinaria' },
+                { value: 'planilla', label: 'Planillas Personal' },
+                { value: 'servicios', label: 'Servicios Básicos (Luz/Agua)' },
+                { value: 'alquiler', label: 'Alquiler de Local' },
+                { value: 'otros', label: 'Otros Gastos' }
+              ]}
+              triggerClassName="text-sm py-2.5 font-bold"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">🔗 Enlace a Comprobante / Recibo (opcional)</label>
+            <input
+              type="url"
+              value={form.comprobante_url}
+              onChange={e => setForm({ ...form, comprobante_url: e.target.value })}
+              placeholder="https://ejemplo.com/factura.pdf"
+              className="input-dark w-full text-xs"
+            />
+          </div>
+
+          <div className="flex gap-3 mt-6 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowAddModal(false)}
+              className="btn-secondary flex-1 justify-center py-2.5"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-primary flex-1 justify-center py-2.5 bg-rose-600 hover:bg-rose-500 border-none font-bold text-white shadow-lg shadow-rose-600/20"
+            >
+              {saving ? 'Guardando...' : 'Registrar Gasto'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

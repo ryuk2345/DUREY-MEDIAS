@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha, generarCodigoVenta } from '@/lib/utils'
 import { generarCronogramaCuotas } from '@/lib/domain/finance'
 import CustomSelect from '@/components/ui/CustomSelect'
+import { Modal } from '@/components/ui/Modal'
 
 interface Cliente {
   id: string
@@ -1126,18 +1127,12 @@ export default function VentasPage() {
       )}
 
       {/* ── MODAL: REGISTRAR NUEVA VENTA CON VENDEDORA, INICIAL Y CRONOGRAMA ─── */}
-      {showVentaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-2xl p-7 shadow-2xl border border-pink-500/20 animate-fadeInUp max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-pink-400" />
-                <h2 className="text-lg font-bold text-white">Registrar Nueva Venta</h2>
-              </div>
-              <button onClick={() => setShowVentaModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal
+        open={showVentaModal}
+        onClose={() => setShowVentaModal(false)}
+        title="Registrar Nueva Venta"
+        maxWidth="2xl"
+      >
 
             {/* SECCIÓN VENDEDORA ENCARGADA */}
             <div className="mb-4">
@@ -1494,15 +1489,15 @@ export default function VentasPage() {
                 Confirmar y Generar Venta
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Modal: Apertura de Caja */}
-      {showAperturaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-sm p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <h2 className="text-lg font-bold text-white mb-4">Apertura de Caja Diaria</h2>
+      <Modal
+        open={showAperturaModal}
+        onClose={() => setShowAperturaModal(false)}
+        title="Apertura de Caja Diaria"
+      >
+          <div className="space-y-4">
             <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Saldo Inicial en Efectivo (S/)</label>
             <input type="number" min="0" step="0.50" placeholder="0.00" value={saldoInicial} onChange={e => setSaldoInicial(e.target.value)} className="input-dark w-full font-mono text-center font-bold text-lg mb-6" />
             <div className="flex gap-3">
@@ -1510,15 +1505,14 @@ export default function VentasPage() {
               <button onClick={abrirCaja} className="btn-primary flex-1 justify-center py-2 text-xs bg-emerald-600 hover:bg-emerald-500 border-none font-bold"><DollarSign className="w-4 h-4" /> Abrir Caja</button>
             </div>
           </div>
-        </div>
-      )}
+      </Modal>
 
-      {/* Modal: Cierre de Caja */}
-      {showCierreModal && caja && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <h2 className="text-lg font-bold text-white mb-4">Arqueo y Cierre de Caja</h2>
-            <div className="space-y-4 text-xs">
+      <Modal
+        open={showCierreModal && Boolean(caja)}
+        onClose={() => setShowCierreModal(false)}
+        title="Arqueo y Cierre de Caja"
+      >
+          <div className="space-y-4 text-xs">
               <div>
                 <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Saldo Declarado en Efectivo (S/)</label>
                 <input type="number" min="0" step="0.50" placeholder="0.00" value={cierreForm.efectivo} onChange={e => setCierreForm({ ...cierreForm, efectivo: e.target.value })} className="input-dark w-full font-mono font-bold text-center text-lg" />
@@ -1532,26 +1526,15 @@ export default function VentasPage() {
               <button onClick={() => setShowCierreModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">Cancelar</button>
               <button onClick={cerrarCaja} className="btn-primary flex-1 justify-center py-2 text-xs bg-pink-600 hover:bg-pink-500 border-none font-bold"><ClipboardList className="w-4 h-4" /> Confirmar Cierre</button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
+
 
       {/* ── MODAL DE COBRO DE CUOTA / LIQUIDACIÓN TOTAL CON ADJUNTO DE FOTO / VOUCHER ── */}
-      {showCobroModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-emerald-500/30 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2">
-                <Banknote className="w-5 h-5 text-emerald-400" />
-                <h2 className="text-lg font-bold text-white">
-                  {isLiquidacionTotal ? '💥 Liquidar Deuda Total del Cliente' : 'Registrar Cobro de Cuota'}
-                </h2>
-              </div>
-              <button onClick={() => setShowCobroModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
+      <Modal
+        open={showCobroModal}
+        onClose={() => setShowCobroModal(false)}
+        title={isLiquidacionTotal ? "💥 Liquidar Deuda Total del Cliente" : "Registrar Cobro de Cuota"}
+      >
             <div className="space-y-4 text-xs mb-6">
               {/* Tarjeta resumen */}
               <div className="p-4 rounded-2xl bg-slate-900/80 border border-emerald-500/20">
@@ -1659,24 +1642,14 @@ export default function VentasPage() {
                 Confirmar y Registrar Pago
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* ── MODAL: VISOR DE COMPROBANTE PARA EL ADMINISTRADOR ────────────────── */}
-      {showComprobanteModal && comprobanteData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-emerald-500/30 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2">
-                <ImageIcon className="w-5 h-5 text-emerald-400" />
-                <h2 className="text-base font-bold text-white">{comprobanteData.titulo}</h2>
-              </div>
-              <button onClick={() => setShowComprobanteModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
+      <Modal
+        open={showComprobanteModal && Boolean(comprobanteData)}
+        onClose={() => setShowComprobanteModal(false)}
+        title={comprobanteData?.titulo || "Comprobante"}
+      >
             <div className="space-y-4">
               <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/[0.06] text-xs grid grid-cols-2 gap-2">
                 <div>
@@ -1717,9 +1690,7 @@ export default function VentasPage() {
                 Cerrar Visor
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   )
 }

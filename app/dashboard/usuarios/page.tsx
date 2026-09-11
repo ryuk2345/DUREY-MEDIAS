@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import CustomSelect from '@/components/ui/CustomSelect'
+import Modal from '@/components/ui/Modal'
 
 interface Usuario {
   id: string
@@ -688,169 +689,148 @@ export default function UsuariosPage() {
       )}
 
       {/* ── MODAL: NUEVO / EDITAR USUARIO ────────────────────────────────────── */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2.5">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-lg font-bold text-white">
-                  {editUser ? 'Editar Usuario' : 'Nuevo Usuario'}
-                </h2>
-              </div>
-              <button onClick={() => setShowModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editUser ? 'Editar Usuario' : 'Nuevo Usuario'}
+        maxWidth="md"
+        footer={
+          <>
+            <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
+              Cancelar
+            </button>
+            <button onClick={guardarUsuario} className="btn-primary flex-1 justify-center py-2 text-xs bg-indigo-600 hover:bg-indigo-500 border-none shadow-lg shadow-indigo-600/20">
+              <CheckCircle2 className="w-4 h-4" />
+              {editUser ? 'Guardar Cambios' : 'Crear Usuario'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Nombre Completo</label>
+            <input
+              type="text"
+              placeholder="Ej. Luis Pérez"
+              value={form.nombre}
+              onChange={e => setForm({ ...form, nombre: e.target.value })}
+              className="input-dark text-xs w-full font-medium"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Correo Electrónico (Email)</label>
+            <input
+              type="email"
+              placeholder="ej. luis@durey.com"
+              value={form.email}
+              onChange={e => setForm({ ...form, email: e.target.value })}
+              className="input-dark text-xs w-full font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Rol de Sistema</label>
+            <CustomSelect
+              value={form.rol}
+              onChange={val => setForm({ ...form, rol: val })}
+              options={ROLES_LISTA.map(r => ({ value: r.id, label: r.label }))}
+              triggerClassName="text-xs font-medium"
+            />
+          </div>
+
+          {!editUser && (
+            <div>
+              <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">
+                {isMock ? 'Contraseña (Opcional en Mock)' : 'Contraseña Temporal (Obligatoria)'}
+              </label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                className="input-dark text-xs w-full font-mono"
+                required={!isMock}
+              />
             </div>
+          )}
 
-            <div className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Nombre Completo</label>
-                <input
-                  type="text"
-                  placeholder="Ej. Luis Pérez"
-                  value={form.nombre}
-                  onChange={e => setForm({ ...form, nombre: e.target.value })}
-                  className="input-dark text-xs w-full font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Correo Electrónico (Email)</label>
-                <input
-                  type="email"
-                  placeholder="ej. luis@durey.com"
-                  value={form.email}
-                  onChange={e => setForm({ ...form, email: e.target.value })}
-                  className="input-dark text-xs w-full font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Rol de Sistema</label>
-                <CustomSelect
-                  value={form.rol}
-                  onChange={val => setForm({ ...form, rol: val })}
-                  options={ROLES_LISTA.map(r => ({ value: r.id, label: r.label }))}
-                  triggerClassName="text-xs font-medium"
-                />
-              </div>
-
-              {!editUser && (
-                <div>
-                  <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">
-                    {isMock ? 'Contraseña (Opcional en Mock)' : 'Contraseña Temporal (Obligatoria)'}
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    value={form.password}
-                    onChange={e => setForm({ ...form, password: e.target.value })}
-                    className="input-dark text-xs w-full font-mono"
-                    required={!isMock}
-                  />
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="activo-check"
-                  checked={form.activo}
-                  onChange={e => setForm({ ...form, activo: e.target.checked })}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                />
-                <label htmlFor="activo-check" className="text-slate-300 font-medium cursor-pointer">
-                  Usuario Activo en el Sistema
-                </label>
-              </div>
-            </div>
-
-            {errorEnvio && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl font-bold flex flex-col gap-1 text-[11px] mt-4 animate-fadeInUp">
-                <span>⚠️ ERROR DE BASE DE DATOS:</span>
-                <span className="font-mono font-medium whitespace-pre-wrap">{errorEnvio}</span>
-              </div>
-            )}
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
-                Cancelar
-              </button>
-              <button onClick={guardarUsuario} className="btn-primary flex-1 justify-center py-2 text-xs bg-indigo-600 hover:bg-indigo-500 border-none shadow-lg shadow-indigo-600/20">
-                <CheckCircle2 className="w-4 h-4" />
-                {editUser ? 'Guardar Cambios' : 'Crear Usuario'}
-              </button>
-            </div>
-
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="activo-check"
+              checked={form.activo}
+              onChange={e => setForm({ ...form, activo: e.target.checked })}
+              className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+            />
+            <label htmlFor="activo-check" className="text-slate-300 font-medium cursor-pointer">
+              Usuario Activo en el Sistema
+            </label>
           </div>
         </div>
-      )}
+
+        {errorEnvio && (
+          <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl font-bold flex flex-col gap-1 text-[11px] mt-4 animate-fadeInUp">
+            <span>⚠️ ERROR DE BASE DE DATOS:</span>
+            <span className="font-mono font-medium whitespace-pre-wrap">{errorEnvio}</span>
+          </div>
+        )}
+      </Modal>
 
       {/* ── MODAL: ASIGNAR / RESETEAR CONTRASEÑA ─────────────────────────────── */}
-      {showPasswordModal && selectedUserForPassword && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-sm p-7 shadow-2xl border border-amber-500/20 animate-fadeInUp">
-            <div className="flex items-center justify-between mb-5 pb-3 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2.5">
-                <Lock className="w-5 h-5 text-amber-400" />
-                <div>
-                  <h2 className="text-base font-bold text-white">Asignar Contraseña</h2>
-                  <p className="text-[11px] text-amber-400">{selectedUserForPassword.nombre}</p>
-                </div>
-              </div>
-              <button onClick={() => setShowPasswordModal(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Nueva Contraseña</label>
-                <input
-                  type="password"
-                  placeholder="Mínimo 8 caracteres"
-                  value={passwordForm.nueva}
-                  onChange={e => setPasswordForm({ ...passwordForm, nueva: e.target.value })}
-                  className="input-dark text-xs w-full font-mono"
-                />
-              </div>
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Confirmar Contraseña</label>
-                <input
-                  type="password"
-                  placeholder="Repite la contraseña"
-                  value={passwordForm.confirmar}
-                  onChange={e => setPasswordForm({ ...passwordForm, confirmar: e.target.value })}
-                  className={`input-dark text-xs w-full font-mono ${
-                    passwordForm.confirmar && passwordForm.confirmar !== passwordForm.nueva ? 'border-red-500/60' : ''
-                  }`}
-                />
-                {passwordForm.confirmar && passwordForm.confirmar !== passwordForm.nueva && (
-                  <p className="text-red-400 text-[10px] mt-1">Las contraseñas no coinciden</p>
-                )}
-              </div>
-              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-300">
-                ⚠️ Si usas <span className="font-mono font-bold">durey2026</span>, el usuario deberá cambiarla en su primer login.
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowPasswordModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
-                Cancelar
-              </button>
-              <button
-                onClick={guardarPassword}
-                disabled={savingPassword || passwordForm.nueva.length < 8 || passwordForm.nueva !== passwordForm.confirmar}
-                className="btn-primary flex-1 justify-center py-2 text-xs bg-amber-600 hover:bg-amber-500 border-none shadow-lg shadow-amber-600/20 disabled:opacity-50"
-              >
-                {savingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                {savingPassword ? 'Guardando...' : 'Asignar'}
-              </button>
-            </div>
+      <Modal
+        open={Boolean(showPasswordModal && selectedUserForPassword)}
+        onClose={() => setShowPasswordModal(false)}
+        title="Asignar Contraseña"
+        subtitle={selectedUserForPassword?.nombre}
+        maxWidth="sm"
+        footer={
+          <>
+            <button onClick={() => setShowPasswordModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">
+              Cancelar
+            </button>
+            <button
+              onClick={guardarPassword}
+              disabled={savingPassword || passwordForm.nueva.length < 8 || passwordForm.nueva !== passwordForm.confirmar}
+              className="btn-primary flex-1 justify-center py-2 text-xs bg-amber-600 hover:bg-amber-500 border-none shadow-lg shadow-amber-600/20 disabled:opacity-50"
+            >
+              {savingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+              {savingPassword ? 'Guardando...' : 'Asignar'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Nueva Contraseña</label>
+            <input
+              type="password"
+              placeholder="Mínimo 8 caracteres"
+              value={passwordForm.nueva}
+              onChange={e => setPasswordForm({ ...passwordForm, nueva: e.target.value })}
+              className="input-dark text-xs w-full font-mono"
+            />
+          </div>
+          <div>
+            <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Confirmar Contraseña</label>
+            <input
+              type="password"
+              placeholder="Repite la contraseña"
+              value={passwordForm.confirmar}
+              onChange={e => setPasswordForm({ ...passwordForm, confirmar: e.target.value })}
+              className={`input-dark text-xs w-full font-mono ${
+                passwordForm.confirmar && passwordForm.confirmar !== passwordForm.nueva ? 'border-red-500/60' : ''
+              }`}
+            />
+            {passwordForm.confirmar && passwordForm.confirmar !== passwordForm.nueva && (
+              <p className="text-red-400 text-[10px] mt-1">Las contraseñas no coinciden</p>
+            )}
+          </div>
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-300">
+            ⚠️ Si usas <span className="font-mono font-bold">durey2026</span>, el usuario deberá cambiarla en su primer login.
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   )
 }

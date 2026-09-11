@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import CustomSelect from '@/components/ui/CustomSelect'
+import { Modal } from '@/components/ui/Modal'
 import { formatearFecha } from '@/lib/utils'
 import {
   Calendar as CalendarIcon, CalendarDays, Clock, Users, Lock, Plus,
@@ -606,72 +607,29 @@ export default function CalendarioPage() {
       </div>
 
       {/* ── MODAL: DETALLE DE EVENTO ───────────────────────────────────────────── */}
-      {selectedEvent && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-6 shadow-2xl border border-white/10 animate-fadeInUp bg-slate-950/95 space-y-4">
-            <div className="flex justify-between items-start pb-3 border-b border-white/[0.08]">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-white">{selectedEvent.titulo}</h2>
-                  {selectedEvent.visibilidad === 'compartido' ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                      <Users className="w-3 h-3" /> Compartido
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      <Lock className="w-3 h-3" /> Personal
-                    </span>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedEvent(null)}
-                className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/[0.06] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <CalendarIcon className="w-3.5 h-3.5 text-sky-400" /> Fecha:
-                  </span>
-                  <span className="font-bold text-white font-mono">{formatearFecha(selectedEvent.fecha)}</span>
-                </div>
-                {selectedEvent.hora && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-amber-400" /> Hora:
-                    </span>
-                    <span className="font-bold text-white font-mono">{selectedEvent.hora.substring(0, 5)}</span>
-                  </div>
-                )}
-                {selectedEvent.creado_por_nombre && selectedEvent.visibilidad === 'compartido' && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-emerald-400" /> Registrado por:
-                    </span>
-                    <span className="font-semibold text-slate-300">{selectedEvent.creado_por_nombre}</span>
-                  </div>
-                )}
-              </div>
-
-              {selectedEvent.descripcion ? (
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Descripción / Notas:</label>
-                  <p className="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06] text-slate-200 text-xs whitespace-pre-wrap">
-                    {selectedEvent.descripcion}
-                  </p>
-                </div>
+      <Modal
+        open={Boolean(selectedEvent)}
+        onClose={() => setSelectedEvent(null)}
+        title={selectedEvent?.titulo || ''}
+        subtitle={
+          selectedEvent ? (
+            <span className="inline-flex items-center gap-1 mt-1">
+              {selectedEvent.visibilidad === 'compartido' ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                  <Users className="w-3 h-3" /> Compartido
+                </span>
               ) : (
-                <p className="text-slate-500 italic text-center py-2">Sin descripción adicional</p>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  <Lock className="w-3 h-3" /> Personal
+                </span>
               )}
-            </div>
-
-            {/* Acciones de edición/eliminación */}
-            <div className="flex gap-2 pt-3 border-t border-white/[0.08]">
+            </span>
+          ) : undefined
+        }
+        maxWidth="md"
+        footer={
+          selectedEvent && (
+            <div className="flex gap-2 w-full">
               {(selectedEvent.creado_por === currentUserId || userRole === 'admin') && (
                 <>
                   <button
@@ -695,124 +653,152 @@ export default function CalendarioPage() {
                 Cerrar
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL: CREAR / EDITAR EVENTO ───────────────────────────────────────── */}
-      {showEventModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-6 shadow-2xl border border-white/10 animate-fadeInUp bg-slate-950/95 space-y-4">
-            <div className="flex justify-between items-center pb-3 border-b border-white/[0.08]">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                🗓️ {editingEventId ? 'Editar Evento' : 'Programar Nuevo Evento'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowEventModal(false)}
-                className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          )
+        }
+      >
+        {selectedEvent && (
+          <div className="space-y-3 text-xs">
+            <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/[0.06] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 flex items-center gap-1.5">
+                  <CalendarIcon className="w-3.5 h-3.5 text-sky-400" /> Fecha:
+                </span>
+                <span className="font-bold text-white font-mono">{formatearFecha(selectedEvent.fecha)}</span>
+              </div>
+              {selectedEvent.hora && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" /> Hora:
+                  </span>
+                  <span className="font-bold text-white font-mono">{selectedEvent.hora.substring(0, 5)}</span>
+                </div>
+              )}
+              {selectedEvent.creado_por_nombre && selectedEvent.visibilidad === 'compartido' && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-emerald-400" /> Registrado por:
+                  </span>
+                  <span className="font-semibold text-slate-300">{selectedEvent.creado_por_nombre}</span>
+                </div>
+              )}
             </div>
 
-            <form onSubmit={handleGuardarEvento} className="space-y-4 text-xs">
+            {selectedEvent.descripcion ? (
               <div>
-                <label className="block text-slate-300 font-bold mb-1">📝 Título del Evento *</label>
-                <input
-                  type="text"
-                  value={form.titulo}
-                  onChange={e => setForm({ ...form, titulo: e.target.value })}
-                  placeholder="Ej: Reunión de coordinación, Visita técnica, etc."
-                  className="input-dark w-full text-sm py-2.5 font-bold"
-                  required
-                />
+                <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">Descripción / Notas:</label>
+                <p className="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06] text-slate-200 text-xs whitespace-pre-wrap">
+                  {selectedEvent.descripcion}
+                </p>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">📅 Fecha *</label>
-                  <input
-                    type="date"
-                    value={form.fecha}
-                    onChange={e => setForm({ ...form, fecha: e.target.value })}
-                    className="input-dark w-full text-xs py-2.5"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">⏰ Hora (Opcional)</label>
-                  <input
-                    type="time"
-                    value={form.hora}
-                    onChange={e => setForm({ ...form, hora: e.target.value })}
-                    className="input-dark w-full text-xs py-2.5"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">👁️ Visibilidad *</label>
-                  <CustomSelect
-                    value={form.visibilidad}
-                    onChange={val => setForm({ ...form, visibilidad: val as 'compartido' | 'personal' })}
-                    options={[
-                      { value: 'compartido', label: '🌐 Compartido (Todos)' },
-                      { value: 'personal', label: '🔒 Personal (Solo yo)' }
-                    ]}
-                    triggerClassName="text-xs py-2.5 font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">🎨 Color Distintivo</label>
-                  <CustomSelect
-                    value={form.color}
-                    onChange={val => setForm({ ...form, color: val })}
-                    options={[
-                      { value: 'sky', label: '🔵 Azul / Sky' },
-                      { value: 'emerald', label: '🟢 Verde Esmeralda' },
-                      { value: 'amber', label: '🟡 Ámbar / Dorado' },
-                      { value: 'rose', label: '🔴 Rosa / Alerta' },
-                      { value: 'purple', label: '🟣 Morado / Púrpura' },
-                      { value: 'indigo', label: '🔷 Índigo / Violeta' }
-                    ]}
-                    triggerClassName="text-xs py-2.5 font-bold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">📋 Descripción / Notas adicionales</label>
-                <textarea
-                  rows={3}
-                  value={form.descripcion}
-                  onChange={e => setForm({ ...form, descripcion: e.target.value })}
-                  placeholder="Detalles relevantes, objetivos o recordatorios para este evento..."
-                  className="input-dark w-full text-xs resize-none"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowEventModal(false)}
-                  className="btn-secondary flex-1 justify-center py-2.5"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="btn-primary flex-1 justify-center py-2.5 bg-sky-600 hover:bg-sky-500 border-none font-bold text-white shadow-lg shadow-sky-600/20"
-                >
-                  {saving ? 'Guardando...' : editingEventId ? 'Actualizar' : 'Guardar Evento'}
-                </button>
-              </div>
-            </form>
+            ) : (
+              <p className="text-slate-500 italic text-center py-2">Sin descripción adicional</p>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
+
+      {/* ── MODAL: CREAR / EDITAR EVENTO ───────────────────────────────────────── */}
+      <Modal
+        open={showEventModal}
+        onClose={() => setShowEventModal(false)}
+        title={`🗓️ ${editingEventId ? 'Editar Evento' : 'Programar Nuevo Evento'}`}
+        maxWidth="md"
+      >
+        <form onSubmit={handleGuardarEvento} className="space-y-4 text-xs">
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">📝 Título del Evento *</label>
+            <input
+              type="text"
+              value={form.titulo}
+              onChange={e => setForm({ ...form, titulo: e.target.value })}
+              placeholder="Ej: Reunión de coordinación, Visita técnica, etc."
+              className="input-dark w-full text-sm py-2.5 font-bold"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">📅 Fecha *</label>
+              <input
+                type="date"
+                value={form.fecha}
+                onChange={e => setForm({ ...form, fecha: e.target.value })}
+                className="input-dark w-full text-xs py-2.5"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">⏰ Hora (Opcional)</label>
+              <input
+                type="time"
+                value={form.hora}
+                onChange={e => setForm({ ...form, hora: e.target.value })}
+                className="input-dark w-full text-xs py-2.5"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">👁️ Visibilidad *</label>
+              <CustomSelect
+                value={form.visibilidad}
+                onChange={val => setForm({ ...form, visibilidad: val as 'compartido' | 'personal' })}
+                options={[
+                  { value: 'compartido', label: '🌐 Compartido (Todos)' },
+                  { value: 'personal', label: '🔒 Personal (Solo yo)' }
+                ]}
+                triggerClassName="text-xs py-2.5 font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">🎨 Color Distintivo</label>
+              <CustomSelect
+                value={form.color}
+                onChange={val => setForm({ ...form, color: val })}
+                options={[
+                  { value: 'sky', label: '🔵 Azul / Sky' },
+                  { value: 'emerald', label: '🟢 Verde Esmeralda' },
+                  { value: 'amber', label: '🟡 Ámbar / Dorado' },
+                  { value: 'rose', label: '🔴 Rosa / Alerta' },
+                  { value: 'purple', label: '🟣 Morado / Púrpura' },
+                  { value: 'indigo', label: '🔷 Índigo / Violeta' }
+                ]}
+                triggerClassName="text-xs py-2.5 font-bold"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">📋 Descripción / Notas adicionales</label>
+            <textarea
+              rows={3}
+              value={form.descripcion}
+              onChange={e => setForm({ ...form, descripcion: e.target.value })}
+              placeholder="Detalles relevantes, objetivos o recordatorios para este evento..."
+              className="input-dark w-full text-xs resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowEventModal(false)}
+              className="btn-secondary flex-1 justify-center py-2.5"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-primary flex-1 justify-center py-2.5 bg-sky-600 hover:bg-sky-500 border-none font-bold text-white shadow-lg shadow-sky-600/20"
+            >
+              {saving ? 'Guardando...' : editingEventId ? 'Actualizar' : 'Guardar Evento'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

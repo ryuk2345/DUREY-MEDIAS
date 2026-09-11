@@ -17,6 +17,7 @@ import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
 
 
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { Modal } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -792,90 +793,89 @@ export default function MaquinasPage() {
       )}
 
       {/* MODAL REGISTRAR / EDITAR MÁQUINA */}
-      {showMaquinaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center mb-5 pb-3 border-b border-white/[0.08]">
-              <h2 className="text-lg font-bold text-white">{maquinaForm.id ? 'Editar Máquina' : 'Registrar Nueva Máquina'}</h2>
-              <button onClick={() => setShowMaquinaModal(false)} className="p-2 text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={guardarMaquina} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Código de Máquina *</label>
-                <input type="text" placeholder="Ej. M01" value={maquinaForm.codigo} onChange={e => setMaquinaForm({ ...maquinaForm, codigo: e.target.value })} className="input-dark w-full font-mono font-bold" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo</label>
-                  <CustomSelect
-                    value={maquinaForm.tipo}
-                    onChange={val => setMaquinaForm({ ...maquinaForm, tipo: val })}
-                    options={[
-                      { value: 'tejedora', label: 'Tejedora' },
-                      { value: 'remalladora', label: 'Remalladora' },
-                      { value: 'planchadora', label: 'Planchadora' }
-                    ]}
-                    triggerClassName="font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Marca *</label>
-                  <CustomSelect
-                    value={maquinaForm.marca_id}
-                    onChange={val => setMaquinaForm({ ...maquinaForm, marca_id: val })}
-                    options={[
-                      { value: '', label: 'Selecciona...' },
-                      ...marcas.map(m => ({ value: m.id, label: m.nombre }))
-                    ]}
-                    placeholder="Selecciona..."
-                    triggerClassName="font-bold"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Características</label>
-                <textarea rows={2} placeholder="Descripción técnica..." value={maquinaForm.caracteristicas} onChange={e => setMaquinaForm({ ...maquinaForm, caracteristicas: e.target.value })} className="input-dark w-full" />
-              </div>
-              {errorEnvio && (
-                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl font-bold flex flex-col gap-1 text-[11px] mb-3 animate-fadeInUp">
-                  <span>⚠️ ERROR DE BASE DE DATOS:</span>
-                  <span className="font-mono font-medium whitespace-pre-wrap">{errorEnvio}</span>
-                </div>
-              )}
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => setShowMaquinaModal(false)} className="btn-secondary flex-1 justify-center py-2">Cancelar</button>
-                <button type="submit" className="btn-primary flex-1 justify-center py-2 bg-cyan-600 border-none font-bold">Guardar</button>
-              </div>
-            </form>
+      <Modal
+        open={showMaquinaModal}
+        onClose={() => setShowMaquinaModal(false)}
+        title={maquinaForm.id ? 'Editar Máquina' : 'Registrar Nueva Máquina'}
+        maxWidth="md"
+      >
+        <form onSubmit={guardarMaquina} className="space-y-4 text-xs">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Código de Máquina *</label>
+            <input type="text" placeholder="Ej. M01" value={maquinaForm.codigo} onChange={e => setMaquinaForm({ ...maquinaForm, codigo: e.target.value })} className="input-dark w-full font-mono font-bold" />
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tipo</label>
+              <CustomSelect
+                value={maquinaForm.tipo}
+                onChange={val => setMaquinaForm({ ...maquinaForm, tipo: val })}
+                options={[
+                  { value: 'tejedora', label: 'Tejedora' },
+                  { value: 'remalladora', label: 'Remalladora' },
+                  { value: 'planchadora', label: 'Planchadora' }
+                ]}
+                triggerClassName="font-bold"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Marca *</label>
+              <CustomSelect
+                value={maquinaForm.marca_id}
+                onChange={val => setMaquinaForm({ ...maquinaForm, marca_id: val })}
+                options={[
+                  { value: '', label: 'Selecciona...' },
+                  ...marcas.map(m => ({ value: m.id, label: m.nombre }))
+                ]}
+                placeholder="Selecciona..."
+                triggerClassName="font-bold"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Características</label>
+            <textarea rows={2} placeholder="Descripción técnica..." value={maquinaForm.caracteristicas} onChange={e => setMaquinaForm({ ...maquinaForm, caracteristicas: e.target.value })} className="input-dark w-full" />
+          </div>
+          {errorEnvio && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl font-bold flex flex-col gap-1 text-[11px] mb-3 animate-fadeInUp">
+              <span>⚠️ ERROR DE BASE DE DATOS:</span>
+              <span className="font-mono font-medium whitespace-pre-wrap">{errorEnvio}</span>
+            </div>
+          )}
+          <div className="flex gap-3 pt-4">
+            <button type="button" onClick={() => setShowMaquinaModal(false)} className="btn-secondary flex-1 justify-center py-2">Cancelar</button>
+            <button type="submit" className="btn-primary flex-1 justify-center py-2 bg-cyan-600 border-none font-bold">Guardar</button>
+          </div>
+        </form>
+      </Modal>
 
       {/* MODAL NUEVA MARCA */}
-      {showMarcaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-sm p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <h2 className="text-lg font-bold text-white mb-4">Nueva Marca de Máquina</h2>
-            <input type="text" placeholder="Ej. Rosso / Angies" value={marcaForm.nombre} onChange={e => setMarcaForm({ ...marcaForm, nombre: e.target.value })} className="input-dark w-full mb-6 font-bold" />
-            {errorEnvio && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl font-bold flex flex-col gap-1 text-[11px] mb-4 animate-fadeInUp">
-                <span>⚠️ ERROR DE BASE DE DATOS:</span>
-                <span className="font-mono font-medium whitespace-pre-wrap">{errorEnvio}</span>
-              </div>
-            )}
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setShowMarcaModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">Cancelar</button>
-              <button
-                type="button"
-                onClick={guardarNuevaMarca}
-                className="btn-primary flex-1 justify-center py-2 text-xs bg-cyan-600 border-none font-bold"
-              >
-                Guardar
-              </button>
+      <Modal
+        open={showMarcaModal}
+        onClose={() => setShowMarcaModal(false)}
+        title="Nueva Marca de Máquina"
+        maxWidth="sm"
+      >
+        <div className="text-xs">
+          <input type="text" placeholder="Ej. Rosso / Angies" value={marcaForm.nombre} onChange={e => setMarcaForm({ ...marcaForm, nombre: e.target.value })} className="input-dark w-full mb-6 font-bold" />
+          {errorEnvio && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 rounded-2xl font-bold flex flex-col gap-1 text-[11px] mb-4 animate-fadeInUp">
+              <span>⚠️ ERROR DE BASE DE DATOS:</span>
+              <span className="font-mono font-medium whitespace-pre-wrap">{errorEnvio}</span>
             </div>
+          )}
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setShowMarcaModal(false)} className="btn-secondary flex-1 justify-center py-2 text-xs">Cancelar</button>
+            <button
+              type="button"
+              onClick={guardarNuevaMarca}
+              className="btn-primary flex-1 justify-center py-2 text-xs bg-cyan-600 border-none font-bold"
+            >
+              Guardar
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
 
       {/* DIÁLOGO DE CONFIRMACIÓN DE REPORTAR FALLA CRÍTICA */}

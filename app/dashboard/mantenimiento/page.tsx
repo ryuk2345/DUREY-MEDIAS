@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
 import CustomSelect from '@/components/ui/CustomSelect'
+import { Modal } from '@/components/ui/Modal'
 
 
 interface Maquina { id: string; codigo: string; tipo: string; estado: string }
@@ -445,53 +446,60 @@ export default function MantenimientoPage() {
       )}
 
       {/* Modal: Reportar Avería */}
-      {showAveriaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="glass rounded-2xl w-full max-w-md p-8 shadow-2xl animate-fadeInUp">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">⚠ Reportar Avería</h2>
-              <button onClick={() => setShowAveriaModal(false)} className="p-2 rounded-lg hover:bg-white/10 text-slate-400"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 mb-5">
-              <p className="text-xs text-red-300">Al reportar la avería, el estado de la máquina cambiará automáticamente a <strong>MALOGRADA</strong> y no podrá ser asignada a nuevos turnos.</p>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Máquina Afectada</label>
-                <CustomSelect
-                  value={averiaForm.maquina_id}
-                  onChange={val => setAveriaForm({ ...averiaForm, maquina_id: val })}
-                  options={[
-                    { value: '', label: 'Seleccionar máquina...' },
-                    ...maquinas.filter(m => m.estado !== 'malograda').map(m => ({ value: m.id, label: `${m.codigo} (${m.tipo})` }))
-                  ]}
-                  placeholder="Seleccionar máquina..."
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Descripción del Problema</label>
-                <textarea value={averiaForm.descripcion} onChange={e => setAveriaForm({...averiaForm, descripcion: e.target.value})} placeholder="Describe detalladamente qué le pasa a la máquina..." rows={4} className="input-dark resize-none" />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-8">
-              <button onClick={() => setShowAveriaModal(false)} disabled={procesando} className="btn-secondary flex-1 justify-center">Cancelar</button>
-              <button onClick={reportarAveria} disabled={procesando} className="btn-danger flex-1 justify-center">
-                {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} Reportar Avería
-              </button>
-            </div>
+      <Modal
+        open={showAveriaModal}
+        onClose={() => setShowAveriaModal(false)}
+        title="⚠️ Reportar Avería"
+        maxWidth="md"
+        footer={
+          <>
+            <button onClick={() => setShowAveriaModal(false)} disabled={procesando} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button onClick={reportarAveria} disabled={procesando} className="btn-danger flex-1 justify-center">
+              {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />} Reportar Avería
+            </button>
+          </>
+        }
+      >
+        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 mb-5">
+          <p className="text-xs text-red-300">Al reportar la avería, el estado de la máquina cambiará automáticamente a <strong>MALOGRADA</strong> y no podrá ser asignada a nuevos turnos.</p>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Máquina Afectada</label>
+            <CustomSelect
+              value={averiaForm.maquina_id}
+              onChange={val => setAveriaForm({ ...averiaForm, maquina_id: val })}
+              options={[
+                { value: '', label: 'Seleccionar máquina...' },
+                ...maquinas.filter(m => m.estado !== 'malograda').map(m => ({ value: m.id, label: `${m.codigo} (${m.tipo})` }))
+              ]}
+              placeholder="Seleccionar máquina..."
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Descripción del Problema</label>
+            <textarea value={averiaForm.descripcion} onChange={e => setAveriaForm({...averiaForm, descripcion: e.target.value})} placeholder="Describe detalladamente qué le pasa a la máquina..." rows={4} className="input-dark resize-none w-full" />
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Modal: Registrar Reparación */}
-      {showRepararModal && averiaSeleccionada && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="glass rounded-2xl w-full max-w-lg p-8 shadow-2xl animate-fadeInUp">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">Registrar Reparación</h2>
-              <button onClick={() => setShowRepararModal(false)} className="p-2 rounded-lg hover:bg-white/10 text-slate-400"><X className="w-5 h-5" /></button>
-            </div>
-
+      <Modal
+        open={Boolean(showRepararModal && averiaSeleccionada)}
+        onClose={() => setShowRepararModal(false)}
+        title="Registrar Reparación"
+        maxWidth="lg"
+        footer={
+          <>
+            <button onClick={() => setShowRepararModal(false)} disabled={procesando} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button onClick={registrarReparacion} disabled={procesando} className="btn-primary flex-1 justify-center">
+              {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Marcar como Resuelto
+            </button>
+          </>
+        }
+      >
+        {averiaSeleccionada && (
+          <div>
             {/* Vista comparativa */}
             <div className="grid grid-cols-2 gap-4 mb-5">
               <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
@@ -500,18 +508,18 @@ export default function MantenimientoPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Diagnóstico Técnico</label>
-                <textarea value={reparacionForm.descripcion_tecnico} onChange={e => setReparacionForm({...reparacionForm, descripcion_tecnico: e.target.value})} placeholder="Diagnóstico del técnico..." rows={4} className="input-dark resize-none h-full" />
+                <textarea value={reparacionForm.descripcion_tecnico} onChange={e => setReparacionForm({...reparacionForm, descripcion_tecnico: e.target.value})} placeholder="Diagnóstico del técnico..." rows={4} className="input-dark resize-none h-full w-full" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Costo Repuestos (S/)</label>
-                <input type="number" min="0" step="0.01" placeholder="0.00" value={reparacionForm.costo_repuestos} onChange={e => setReparacionForm({...reparacionForm, costo_repuestos: e.target.value})} className="input-dark" />
+                <input type="number" min="0" step="0.01" placeholder="0.00" value={reparacionForm.costo_repuestos} onChange={e => setReparacionForm({...reparacionForm, costo_repuestos: e.target.value})} className="input-dark w-full" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Costo Mano de Obra (S/)</label>
-                <input type="number" min="0" step="0.01" placeholder="0.00" value={reparacionForm.costo_mano_obra} onChange={e => setReparacionForm({...reparacionForm, costo_mano_obra: e.target.value})} className="input-dark" />
+                <input type="number" min="0" step="0.01" placeholder="0.00" value={reparacionForm.costo_mano_obra} onChange={e => setReparacionForm({...reparacionForm, costo_mano_obra: e.target.value})} className="input-dark w-full" />
               </div>
             </div>
 
@@ -521,16 +529,9 @@ export default function MantenimientoPage() {
                 <span className="text-white font-bold">{formatearMoneda(parseFloat(reparacionForm.costo_repuestos) + parseFloat(reparacionForm.costo_mano_obra))}</span>
               </div>
             )}
-
-            <div className="flex gap-3 mt-8">
-              <button onClick={() => setShowRepararModal(false)} disabled={procesando} className="btn-secondary flex-1 justify-center">Cancelar</button>
-              <button onClick={registrarReparacion} disabled={procesando} className="btn-primary flex-1 justify-center">
-                {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Marcar como Resuelto
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

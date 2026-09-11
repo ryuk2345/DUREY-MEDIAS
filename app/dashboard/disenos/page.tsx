@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import CustomSelect from '@/components/ui/CustomSelect'
+import { Modal } from '@/components/ui/Modal'
 import {
   Palette, Plus, Search, Filter, Cpu, Tag, Image as ImageIcon,
   CheckCircle2, XCircle, Clock, AlertTriangle, Layers, Trash2,
@@ -776,407 +777,351 @@ export default function DisenosPage() {
                           className="px-2.5 py-1.5 rounded-xl bg-fuchsia-600/20 hover:bg-fuchsia-600/30 text-fuchsia-300 border border-fuchsia-500/30 text-xs font-bold flex items-center gap-1"
                           title="Cambiar estado de muestra"
                         >
-                          <Edit3 className="w-3.5 h-3.5" /> Estado
+                          <ArrowRight className="w-3.5 h-3.5" /> Estado
                         </button>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleEliminarDiseno(diseno)}
-                        className="p-1.5 rounded-xl hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
-                        title="Eliminar diseño"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
                 </div>
               )
-            })}
+            }
+          )}
           </div>
         )}
       </div>
 
       {/* ── MODAL 1: REGISTRAR NUEVO DISEÑO / MUESTRA ─────────────────────────── */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-lg p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Palette className="w-5 h-5 text-fuchsia-400" /> Registrar Nuevo Diseño y Muestra
-              </h2>
-              <button 
-                type="button"
-                onClick={() => setShowCreateModal(false)} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCrearDiseno} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
-              {/* Foto Upload */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-1.5">📸 Foto de la Muestra / Diseño (Máx 5MB)</label>
-                <div className="border-2 border-dashed border-white/10 hover:border-fuchsia-500/40 rounded-2xl p-4 text-center cursor-pointer transition-colors bg-slate-900/40">
-                  <input 
-                    type="file" 
-                    accept="image/jpeg,image/png,image/webp" 
-                    onChange={handleFileChange}
-                    className="hidden" 
-                    id="diseno-foto-input" 
-                  />
-                  <label htmlFor="diseno-foto-input" className="cursor-pointer flex flex-col items-center gap-2">
-                    {filePreview ? (
-                      <div className="relative w-full h-36 rounded-xl overflow-hidden">
-                        <img src={filePreview} alt="Preview" className="w-full h-full object-cover" />
-                        <span className="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] px-2 py-1 rounded-lg backdrop-blur-md">
-                          Cambiar Foto
-                        </span>
-                      </div>
-                    ) : (
-                      <>
-                        <Upload className="w-8 h-8 text-fuchsia-400" />
-                        <span className="text-white font-bold text-xs">Haz clic o arrastra la foto del diseño</span>
-                        <span className="text-[10px] text-slate-400">Formatos permitidos: JPG, PNG, WEBP (Máx. 5MB)</span>
-                      </>
-                    )}
-                  </label>
-                </div>
-              </div>
-
-              {/* Código y Nombre */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">🏷️ Código de Diseño</label>
-                  <input 
-                    type="text"
-                    value={createForm.codigo}
-                    onChange={e => setCreateForm(prev => ({ ...prev, codigo: e.target.value }))}
-                    placeholder="Ej: DIS-001"
-                    className="input-dark w-full font-mono font-bold"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">🏢 Marca Asociada</label>
-                  <CustomSelect 
-                    value={createForm.marca_id}
-                    onChange={val => setCreateForm(prev => ({ ...prev, marca_id: val }))}
-                    options={[
-                      { value: '', label: 'Seleccionar marca...' },
-                      ...marcas.map(m => ({ value: m.id, label: m.nombre }))
-                    ]}
-                    placeholder="Seleccionar marca..."
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">🎨 Nombre del Modelo / Diseño</label>
-                <input 
-                  type="text"
-                  value={createForm.nombre}
-                  onChange={e => setCreateForm(prev => ({ ...prev, nombre: e.target.value }))}
-                  placeholder="Ej: Media Deportiva con Puntera Reforzada"
-                  className="input-dark w-full text-sm font-bold"
-                  required
-                />
-              </div>
-
-              {/* Color y Orden Muestra */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">🧶 Color de Muestra</label>
-                  <input 
-                    type="text"
-                    value={createForm.color_muestra}
-                    onChange={e => setCreateForm(prev => ({ ...prev, color_muestra: e.target.value }))}
-                    placeholder="Ej: Blanco / Rayas Azules"
-                    className="input-dark w-full"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">📋 N° Lote / Orden de Muestra</label>
-                  <input 
-                    type="text"
-                    value={createForm.orden_muestra}
-                    onChange={e => setCreateForm(prev => ({ ...prev, orden_muestra: e.target.value }))}
-                    placeholder="Ej: MUE-204"
-                    className="input-dark w-full font-mono font-bold"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">🔢 Cantidad de Muestra (Pares/Docenas)</label>
-                <input 
-                  type="number"
-                  min="1"
-                  value={createForm.cantidad_muestra}
-                  onChange={e => setCreateForm(prev => ({ ...prev, cantidad_muestra: e.target.value }))}
-                  className="input-dark w-full"
-                  required
-                />
-              </div>
-
-              {/* Asignar a Tejedoras Iniciales */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-1.5">
-                  🧵 Asignar a Máquinas Tejedoras (Multimarca compatible)
-                </label>
-                <div className="grid grid-cols-3 gap-2 max-h-36 overflow-y-auto p-2 bg-slate-900/60 rounded-2xl border border-white/[0.06]">
-                  {maquinas.length === 0 ? (
-                    <div className="col-span-3 text-center py-4 text-slate-500 text-xs">
-                      No hay máquinas registradas en la base de datos.
-                    </div>
-                  ) : (
-                    maquinas.map(m => {
-                      const isSelected = createForm.maquina_ids.includes(m.id)
-                      const marcaNom = marcas.find(br => br.id === m.marca_id)?.nombre || (m as any).marca?.nombre || (m as any).marcas_maquinas?.nombre || 'Tejedora'
-                      return (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => {
-                            setCreateForm(prev => ({
-                              ...prev,
-                              maquina_ids: isSelected 
-                                ? prev.maquina_ids.filter(id => id !== m.id)
-                                : [...prev.maquina_ids, m.id]
-                            }))
-                          }}
-                          className={`p-2 rounded-xl text-left border text-xs transition-all ${
-                            isSelected 
-                              ? 'bg-fuchsia-500/20 border-fuchsia-500 text-fuchsia-300 font-bold shadow-md shadow-fuchsia-500/10'
-                              : 'bg-slate-800/40 border-white/[0.04] text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <span className="block font-mono font-bold text-xs">{m.codigo}</span>
-                          <span className="block text-[9px] text-slate-400 truncate">{marcaNom}</span>
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">📝 Observaciones Técnicas</label>
-                <textarea 
-                  value={createForm.observaciones}
-                  onChange={e => setCreateForm(prev => ({ ...prev, observaciones: e.target.value }))}
-                  placeholder="Detalles sobre agujas, tensión, hilado o notas del diseñador..."
-                  className="input-dark w-full h-20 text-xs"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-4 flex-shrink-0">
-                <button 
-                  type="button"
-                  onClick={() => setShowCreateModal(false)} 
-                  className="btn-secondary flex-1 justify-center py-2.5"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={saving} 
-                  className="btn-primary flex-1 justify-center py-2.5 bg-fuchsia-600 border-none font-bold text-white shadow-lg shadow-fuchsia-600/20"
-                >
-                  {saving ? 'Guardando...' : 'Registrar Diseño'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL 2: GESTIONAR ASIGNACIÓN A MÁQUINAS (N-A-N MULTIMARCA) ───────── */}
-      {showAsignarModal && selectedDiseno && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Cpu className="w-5 h-5 text-sky-400" /> Asignar Diseño a Máquinas
-              </h2>
-              <button 
-                type="button"
-                onClick={() => setShowAsignarModal(false)} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.06] mb-4 text-xs">
-              <p className="text-slate-400">Diseño: <span className="text-white font-bold">{selectedDiseno.codigo} · {selectedDiseno.nombre}</span></p>
-              <p className="text-slate-400">Marca: <span className="text-fuchsia-300 font-bold">{selectedDiseno.marca?.nombre || 'General'}</span></p>
-            </div>
-
-            <p className="text-[11px] text-slate-400 mb-2">
-              Selecciona las máquinas donde se montará este diseño. Una misma máquina puede tener varios diseños activos simultáneamente de diferentes marcas.
-            </p>
-
-            <form onSubmit={handleGuardarAsignaciones} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
-              <div className="grid grid-cols-2 gap-2">
-                {maquinas.length === 0 ? (
-                  <div className="col-span-2 text-center py-4 text-slate-500 text-xs">
-                    No hay máquinas disponibles para asignar.
+      <Modal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Registrar Nuevo Diseño y Muestra"
+        maxWidth="lg"
+      >
+        <form onSubmit={handleCrearDiseno} className="space-y-4 text-xs">
+          {/* Foto Upload */}
+          <div>
+            <label className="block text-slate-300 font-bold mb-1.5">📸 Foto de la Muestra / Diseño (Máx 5MB)</label>
+            <div className="border-2 border-dashed border-white/10 hover:border-fuchsia-500/40 rounded-2xl p-4 text-center cursor-pointer transition-colors bg-slate-900/40">
+              <input 
+                type="file" 
+                accept="image/jpeg,image/png,image/webp" 
+                onChange={handleFileChange}
+                className="hidden" 
+                id="diseno-foto-input" 
+              />
+              <label htmlFor="diseno-foto-input" className="cursor-pointer flex flex-col items-center gap-2">
+                {filePreview ? (
+                  <div className="relative w-full h-36 rounded-xl overflow-hidden">
+                    <img src={filePreview} alt="Preview" className="w-full h-full object-cover" />
+                    <span className="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] px-2 py-1 rounded-lg backdrop-blur-md">
+                      Cambiar Foto
+                    </span>
                   </div>
                 ) : (
-                  maquinas.map(m => {
-                    const isSelected = asignarMaquinaIds.includes(m.id)
-                    const marcaNom = marcas.find(br => br.id === m.marca_id)?.nombre || (m as any).marca?.nombre || (m as any).marcas_maquinas?.nombre || 'Tejedora'
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          setAsignarMaquinaIds(prev => 
-                            isSelected ? prev.filter(id => id !== m.id) : [...prev, m.id]
-                          )
-                        }}
-                        className={`p-3 rounded-2xl text-left border transition-all flex items-center justify-between ${
-                          isSelected 
-                            ? 'bg-sky-500/20 border-sky-500 text-sky-300 shadow-md shadow-sky-500/10'
-                            : 'bg-slate-900/60 border-white/[0.06] text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <div>
-                          <span className="block font-mono font-bold text-sm">{m.codigo}</span>
-                          <span className="block text-[10px] text-slate-400">{marcaNom}</span>
-                        </div>
-                        {isSelected && <Check className="w-4 h-4 text-sky-400 flex-shrink-0" />}
-                      </button>
-                    )
-                  })
+                  <>
+                    <Upload className="w-8 h-8 text-fuchsia-400" />
+                    <span className="text-white font-bold text-xs">Haz clic o arrastra la foto del diseño</span>
+                    <span className="text-[10px] text-slate-400">Formatos permitidos: JPG, PNG, WEBP (Máx. 5MB)</span>
+                  </>
                 )}
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-4 flex-shrink-0">
-                <button 
-                  type="button"
-                  onClick={() => setShowAsignarModal(false)} 
-                  className="btn-secondary flex-1 justify-center py-2.5"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={saving} 
-                  className="btn-primary flex-1 justify-center py-2.5 bg-sky-600 border-none font-bold text-white shadow-lg shadow-sky-600/20"
-                >
-                  {saving ? 'Guardando...' : `Guardar Asignaciones (${asignarMaquinaIds.length})`}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL 3: CAMBIAR ESTADO DE MUESTRA ───────────────────────────────── */}
-      {showStatusModal && selectedDiseno && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Edit3 className="w-5 h-5 text-fuchsia-400" /> Estado de Validación de Muestra
-              </h2>
-              <button 
-                type="button"
-                onClick={() => setShowStatusModal(false)} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              </label>
             </div>
+          </div>
 
-            <form onSubmit={handleCambiarEstado} className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
-              <div>
-                <label className="block text-slate-300 font-bold mb-2">Nuevo Estado de la Muestra</label>
-                <div className="grid grid-cols-1 gap-2">
-                  {[
-                    { id: 'en_muestra', label: '⏳ En Muestra (Pendiente de Validación)', color: 'border-amber-500/40 text-amber-300' },
-                    { id: 'aprobada', label: '✅ Aprobada (Muestra Conforme para Planta)', color: 'border-emerald-500/40 text-emerald-300' },
-                    { id: 'en_produccion', label: '🧵 En Producción (En Lote de Tejido)', color: 'border-violet-500/40 text-violet-300' },
-                    { id: 'rechazada', label: '❌ Rechazada (Requiere Ajustes)', color: 'border-red-500/40 text-red-300' },
-                    { id: 'archivada', label: '📦 Archivada (Muestra Retirada)', color: 'border-slate-500/40 text-slate-400' },
-                  ].map(est => (
+          {/* Código y Nombre */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">🏷️ Código de Diseño</label>
+              <input 
+                type="text" 
+                value={createForm.codigo}
+                onChange={e => setCreateForm(prev => ({ ...prev, codigo: e.target.value }))}
+                placeholder="Ej: DIS-001"
+                className="input-dark w-full font-mono font-bold"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">🏢 Marca Asociada</label>
+              <CustomSelect 
+                value={createForm.marca_id}
+                onChange={val => setCreateForm(prev => ({ ...prev, marca_id: val }))}
+                options={[
+                  { value: '', label: 'Seleccionar marca...' },
+                  ...marcas.map(m => ({ value: m.id, label: m.nombre }))
+                ]}
+                placeholder="Seleccionar marca..."
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">🎨 Nombre del Modelo / Diseño</label>
+            <input 
+              type="text" 
+              value={createForm.nombre}
+              onChange={e => setCreateForm(prev => ({ ...prev, nombre: e.target.value }))}
+              placeholder="Ej: Media Deportiva con Puntera Reforzada"
+              className="input-dark w-full text-sm font-bold"
+              required
+            />
+          </div>
+
+          {/* Color y Orden Muestra */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">🧶 Color de Muestra</label>
+              <input 
+                type="text" 
+                value={createForm.color_muestra}
+                onChange={e => setCreateForm(prev => ({ ...prev, color_muestra: e.target.value }))}
+                placeholder="Ej: Blanco / Rayas Azules"
+                className="input-dark w-full"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">📋 N° Lote / Orden de Muestra</label>
+              <input 
+                type="text" 
+                value={createForm.orden_muestra}
+                onChange={e => setCreateForm(prev => ({ ...prev, orden_muestra: e.target.value }))}
+                placeholder="Ej: MUE-204"
+                className="input-dark w-full font-mono font-bold"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">🔢 Cantidad de Muestra (Pares/Docenas)</label>
+            <input 
+              type="number" 
+              min="1"
+              value={createForm.cantidad_muestra}
+              onChange={e => setCreateForm(prev => ({ ...prev, cantidad_muestra: e.target.value }))}
+              className="input-dark w-full"
+              required
+            />
+          </div>
+
+          {/* Asignar a Tejedoras Iniciales */}
+          <div>
+            <label className="block text-slate-300 font-bold mb-1.5">
+              🧵 Asignar a Máquinas Tejedoras (Multimarca compatible)
+            </label>
+            <div className="grid grid-cols-3 gap-2 max-h-36 overflow-y-auto p-2 bg-slate-900/60 rounded-2xl border border-white/[0.06]">
+              {maquinas.length === 0 ? (
+                <div className="col-span-3 text-center py-4 text-slate-500 text-xs">
+                  No hay máquinas registradas en la base de datos.
+                </div>
+              ) : (
+                maquinas.map(m => {
+                  const isSelected = createForm.maquina_ids.includes(m.id)
+                  const marcaNom = marcas.find(br => br.id === m.marca_id)?.nombre || (m as any).marca?.nombre || (m as any).marcas_maquinas?.nombre || 'Tejedora'
+                  return (
                     <button
-                      key={est.id}
+                      key={m.id}
                       type="button"
-                      onClick={() => setStatusForm(prev => ({ ...prev, estado: est.id as any }))}
-                      className={`p-3 rounded-2xl text-left border font-bold transition-all ${
-                        statusForm.estado === est.id 
-                          ? `bg-white/[0.06] ${est.color} shadow-lg` 
-                          : 'bg-slate-900/60 border-white/[0.04] text-slate-400 hover:text-white'
+                      onClick={() => {
+                        setCreateForm(prev => ({
+                          ...prev,
+                          maquina_ids: isSelected 
+                            ? prev.maquina_ids.filter(id => id !== m.id)
+                            : [...prev.maquina_ids, m.id]
+                        }))
+                      }}
+                      className={`p-2 rounded-xl text-left border text-xs transition-all ${
+                        isSelected 
+                          ? 'bg-fuchsia-500/20 border-fuchsia-500 text-fuchsia-300 font-bold shadow-md shadow-fuchsia-500/10'
+                          : 'bg-slate-800/40 border-white/[0.04] text-slate-400 hover:text-white'
                       }`}
                     >
-                      {est.label}
+                      <span className="block font-mono font-bold text-xs">{m.codigo}</span>
+                      <span className="block text-[9px] text-slate-400 truncate">{marcaNom}</span>
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">Notas / Justificación</label>
-                <textarea 
-                  value={statusForm.observaciones}
-                  onChange={e => setStatusForm(prev => ({ ...prev, observaciones: e.target.value }))}
-                  placeholder="Comentarios sobre la aprobación o motivos de rechazo..."
-                  className="input-dark w-full h-20 text-xs"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-4 flex-shrink-0">
-                <button 
-                  type="button"
-                  onClick={() => setShowStatusModal(false)} 
-                  className="btn-secondary flex-1 justify-center py-2.5"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={saving} 
-                  className="btn-primary flex-1 justify-center py-2.5 bg-fuchsia-600 border-none font-bold text-white shadow-lg shadow-fuchsia-600/20"
-                >
-                  {saving ? 'Actualizando...' : 'Confirmar Estado'}
-                </button>
-              </div>
-            </form>
+                  )
+                })
+              )}
+            </div>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">📝 Observaciones Técnicas</label>
+            <textarea 
+              value={createForm.observaciones}
+              onChange={e => setCreateForm(prev => ({ ...prev, observaciones: e.target.value }))}
+              placeholder="Detalles sobre agujas, tensión, hilado o notas del diseñador..."
+              className="input-dark w-full h-20 text-xs"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-4">
+            <button 
+              type="button" 
+              onClick={() => setShowCreateModal(false)} 
+              className="btn-secondary flex-1 justify-center py-2.5"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              disabled={saving} 
+              className="btn-primary flex-1 justify-center py-2.5 bg-fuchsia-600 border-none font-bold text-white shadow-lg shadow-fuchsia-600/20"
+            >
+              {saving ? 'Guardando...' : 'Registrar Diseño'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ── MODAL 2: GESTIONAR ASIGNACIÓN A MÁQUINAS (N-A-N MULTIMARCA) ───────── */}
+      <Modal
+        open={Boolean(showAsignarModal && selectedDiseno)}
+        onClose={() => setShowAsignarModal(false)}
+        title="Asignar Diseño a Máquinas"
+        subtitle={selectedDiseno ? `${selectedDiseno.codigo} · ${selectedDiseno.nombre} (${selectedDiseno.marca?.nombre || 'General'})` : ''}
+        maxWidth="md"
+      >
+        <p className="text-[11px] text-slate-400 mb-3">
+          Selecciona las máquinas donde se montará este diseño. Una misma máquina puede tener varios diseños activos simultáneamente de diferentes marcas.
+        </p>
+
+        <form onSubmit={handleGuardarAsignaciones} className="space-y-4 text-xs">
+          <div className="grid grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto pr-1">
+            {maquinas.length === 0 ? (
+              <div className="col-span-2 text-center py-4 text-slate-500 text-xs">
+                No hay máquinas disponibles para asignar.
+              </div>
+            ) : (
+              maquinas.map(m => {
+                const isSelected = asignarMaquinaIds.includes(m.id)
+                const marcaNom = marcas.find(br => br.id === m.marca_id)?.nombre || (m as any).marca?.nombre || (m as any).marcas_maquinas?.nombre || 'Tejedora'
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      setAsignarMaquinaIds(prev => 
+                        isSelected ? prev.filter(id => id !== m.id) : [...prev, m.id]
+                      )
+                    }}
+                    className={`p-3 rounded-2xl text-left border transition-all flex items-center justify-between ${
+                      isSelected 
+                        ? 'bg-sky-500/20 border-sky-500 text-sky-300 shadow-md shadow-sky-500/10'
+                        : 'bg-slate-900/60 border-white/[0.06] text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div>
+                      <span className="block font-mono font-bold text-sm">{m.codigo}</span>
+                      <span className="block text-[10px] text-slate-400">{marcaNom}</span>
+                    </div>
+                    {isSelected && <Check className="w-4 h-4 text-sky-400 flex-shrink-0" />}
+                  </button>
+                )
+              })
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-4">
+            <button 
+              type="button" 
+              onClick={() => setShowAsignarModal(false)} 
+              className="btn-secondary flex-1 justify-center py-2.5"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              disabled={saving} 
+              className="btn-primary flex-1 justify-center py-2.5 bg-sky-600 border-none font-bold text-white shadow-lg shadow-sky-600/20"
+            >
+              {saving ? 'Guardando...' : `Guardar Asignaciones (${asignarMaquinaIds.length})`}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ── MODAL 3: CAMBIAR ESTADO DE MUESTRA ───────────────────────────────── */}
+      <Modal
+        open={Boolean(showStatusModal && selectedDiseno)}
+        onClose={() => setShowStatusModal(false)}
+        title="Estado de Validación de Muestra"
+        maxWidth="md"
+      >
+        <form onSubmit={handleCambiarEstado} className="space-y-4 text-xs">
+          <div>
+            <label className="block text-slate-300 font-bold mb-2">Nuevo Estado de la Muestra</label>
+            <div className="grid grid-cols-1 gap-2">
+              {[
+                { id: 'en_muestra', label: '⏳ En Muestra (Pendiente de Validación)', color: 'border-amber-500/40 text-amber-300' },
+                { id: 'aprobada', label: '✅ Aprobada (Muestra Conforme para Planta)', color: 'border-emerald-500/40 text-emerald-300' },
+                { id: 'en_produccion', label: '🧵 En Producción (En Lote de Tejido)', color: 'border-violet-500/40 text-violet-300' },
+                { id: 'rechazada', label: '❌ Rechazada (Requiere Ajustes)', color: 'border-red-500/40 text-red-300' },
+                { id: 'archivada', label: '📦 Archivada (Muestra Retirada)', color: 'border-slate-500/40 text-slate-400' },
+              ].map(est => (
+                <button
+                  key={est.id}
+                  type="button"
+                  onClick={() => setStatusForm(prev => ({ ...prev, estado: est.id as any }))}
+                  className={`p-3 rounded-2xl text-left border font-bold transition-all ${
+                    statusForm.estado === est.id 
+                      ? `bg-white/[0.06] ${est.color} shadow-lg` 
+                      : 'bg-slate-900/60 border-white/[0.04] text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {est.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">Notas / Justificación</label>
+            <textarea 
+              value={statusForm.observaciones}
+              onChange={e => setStatusForm(prev => ({ ...prev, observaciones: e.target.value }))}
+              placeholder="Comentarios sobre la aprobación o motivos de rechazo..."
+              className="input-dark w-full h-20 text-xs"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-4">
+            <button 
+              type="button" 
+              onClick={() => setShowStatusModal(false)} 
+              className="btn-secondary flex-1 justify-center py-2.5"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              disabled={saving} 
+              className="btn-primary flex-1 justify-center py-2.5 bg-fuchsia-600 border-none font-bold text-white shadow-lg shadow-fuchsia-600/20"
+            >
+              {saving ? 'Actualizando...' : 'Confirmar Estado'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* ── MODAL 4: PREVIEW DE IMAGEN EN TAMAÑO COMPLETO ─────────────────────── */}
-      {showImagePreviewModal && (
-        <div 
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fadeIn"
-          onClick={() => setShowImagePreviewModal(null)}
-        >
-          <div className="relative max-w-2xl max-h-[85vh] p-2 bg-slate-950 rounded-3xl border border-white/20 shadow-2xl overflow-hidden">
-            <button 
-              type="button"
-              onClick={() => setShowImagePreviewModal(null)}
-              className="absolute top-4 right-4 p-2.5 rounded-full bg-black/70 text-white hover:bg-white/20 backdrop-blur-md z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      <Modal
+        open={Boolean(showImagePreviewModal)}
+        onClose={() => setShowImagePreviewModal(null)}
+        title="Vista Previa de Imagen"
+        maxWidth="2xl"
+      >
+        {showImagePreviewModal && (
+          <div className="flex items-center justify-center p-2">
             <img 
               src={showImagePreviewModal} 
               alt="Muestra Full" 
-              className="w-full h-auto max-h-[80vh] object-contain rounded-2xl" 
+              className="w-full h-auto max-h-[75vh] object-contain rounded-2xl" 
             />
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </>
   )
 }
-
-
-

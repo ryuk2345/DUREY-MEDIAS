@@ -11,6 +11,7 @@ import {
 import { toast } from 'sonner'
 import { formatearFecha, formatearMoneda, generarCodigoGuia } from '@/lib/utils'
 import CustomSelect from '@/components/ui/CustomSelect'
+import { Modal } from '@/components/ui/Modal'
 
 // ── TIPOS ──────────────────────────────────────────────────────────────────
 interface Venta {
@@ -659,61 +660,60 @@ export default function DespachoPage() {
       )}
 
       {/* ── MODAL: CONFIRMAR DESPACHO ────────────────────────────────────── */}
-      {showDespachoModal && ventaSeleccionada && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass rounded-2xl w-full max-w-md p-8 shadow-2xl animate-fadeInUp">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">Confirmar Despacho</h2>
-              <button onClick={() => setShowDespachoModal(false)} className="p-2 rounded-lg hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
+      <Modal
+        open={Boolean(showDespachoModal && ventaSeleccionada)}
+        onClose={() => setShowDespachoModal(false)}
+        title="Confirmar Despacho"
+        maxWidth="md"
+        footer={
+          <>
+            <button onClick={() => setShowDespachoModal(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button onClick={despacharVenta} disabled={procesando || !agenciaSeleccionada} className="btn-primary flex-1 justify-center">
+              {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />} Despachar y Cerrar
+            </button>
+          </>
+        }
+      >
+        {ventaSeleccionada && (
+          <div className="space-y-5">
+            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] text-sm space-y-2">
+              <p className="text-slate-400">Pedido: <strong className="text-white">{ventaSeleccionada.codigo_venta}</strong></p>
+              <p className="text-slate-400">Cliente: <strong className="text-white">{ventaSeleccionada.cliente?.nombre}</strong></p>
+              <div className="pt-2 border-t border-white/[0.06] space-y-1">
+                {lineas.map(l => (
+                  <div key={l.catalogo_media_id} className="flex justify-between text-xs">
+                    <span className="font-mono text-blue-300">{l.sku || l.codigo}</span>
+                    <span className="text-emerald-400 font-bold">{l.docenas_escaneadas} doc.</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-slate-400 pt-2 border-t border-white/[0.06]">
+                Total: <strong className="text-emerald-400">{totalEscaneado} docenas · {formatearMoneda(ventaSeleccionada.total_soles)}</strong>
+              </p>
             </div>
-            <div className="space-y-5">
-              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] text-sm space-y-2">
-                <p className="text-slate-400">Pedido: <strong className="text-white">{ventaSeleccionada.codigo_venta}</strong></p>
-                <p className="text-slate-400">Cliente: <strong className="text-white">{ventaSeleccionada.cliente?.nombre}</strong></p>
-                <div className="pt-2 border-t border-white/[0.06] space-y-1">
-                  {lineas.map(l => (
-                    <div key={l.catalogo_media_id} className="flex justify-between text-xs">
-                      <span className="font-mono text-blue-300">{l.sku || l.codigo}</span>
-                      <span className="text-emerald-400 font-bold">{l.docenas_escaneadas} doc.</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-slate-400 pt-2 border-t border-white/[0.06]">
-                  Total: <strong className="text-emerald-400">{totalEscaneado} docenas · {formatearMoneda(ventaSeleccionada.total_soles)}</strong>
-                </p>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Agencia de Transporte</label>
-                <CustomSelect
-                  value={agenciaSeleccionada}
-                  onChange={val => setAgenciaSeleccionada(val)}
-                  options={[
-                    { value: '', label: 'Seleccionar agencia...' },
-                    ...AGENCIAS.map(ag => ({ value: ag, label: ag }))
-                  ]}
-                  placeholder="Seleccionar agencia..."
-                />
-              </div>
-
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-emerald-300">
-                  El pedido quedará <strong>cerrado y registrado en el Kárdex</strong>. El envío corre por cuenta del cliente.
-                </p>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Agencia de Transporte</label>
+              <CustomSelect
+                value={agenciaSeleccionada}
+                onChange={val => setAgenciaSeleccionada(val)}
+                options={[
+                  { value: '', label: 'Seleccionar agencia...' },
+                  ...AGENCIAS.map(ag => ({ value: ag, label: ag }))
+                ]}
+                placeholder="Seleccionar agencia..."
+              />
             </div>
-            <div className="flex gap-3 mt-8">
-              <button onClick={() => setShowDespachoModal(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
-              <button onClick={despacharVenta} disabled={procesando || !agenciaSeleccionada} className="btn-primary flex-1 justify-center">
-                {procesando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />} Despachar y Cerrar
-              </button>
+
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-emerald-300">
+                El pedido quedará <strong>cerrado y registrado en el Kárdex</strong>. El envío corre por cuenta del cliente.
+              </p>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

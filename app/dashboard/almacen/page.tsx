@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner'
 import { validarTransicionEstadoPaquete, convertirDocenasAPares } from '@/lib/domain/packaging'
 import CustomSelect from '@/components/ui/CustomSelect'
+import { Modal } from '@/components/ui/Modal'
 
 
 interface Ubicacion { id: string; nombre: string; tipo: string }
@@ -749,27 +750,25 @@ export default function AlmacenPage() {
       </div>
 
       {/* ── MODAL: VER / BUSCAR TODOS LOS PRODUCTOS DE UN ALMACÉN ───────────── */}
-      {salonModalProductos && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-2xl p-7 shadow-2xl border border-cyan-500/30 animate-fadeInUp max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between pb-4 border-b border-white/[0.08] mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-300 font-bold flex items-center justify-center border border-cyan-500/30 text-lg">
-                  📍
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-white">{salonModalProductos.nombre}</h2>
-                  <p className="text-xs text-slate-400 font-medium">
-                    Catálogo de productos almacenados · {salonModalProductos.skusDesglose.length} tipos de medias
-                  </p>
-                </div>
-              </div>
-
-              <button onClick={() => setSalonModalProductos(null)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400">
-                <X className="w-5 h-5" />
-              </button>
+      <Modal
+        open={Boolean(salonModalProductos)}
+        onClose={() => setSalonModalProductos(null)}
+        title={salonModalProductos?.nombre || ''}
+        subtitle={salonModalProductos ? `Catálogo de productos almacenados · ${salonModalProductos.skusDesglose.length} tipos de medias` : ''}
+        maxWidth="2xl"
+        footer={
+          salonModalProductos && (
+            <div className="flex justify-between items-center text-xs w-full">
+              <span className="text-slate-400">Total Almacenado en {salonModalProductos.nombre}:</span>
+              <span className="font-mono font-black text-emerald-400 text-sm">
+                {salonModalProductos.totalPares} PARES DISPONIBLES
+              </span>
             </div>
-
+          )
+        }
+      >
+        {salonModalProductos && (
+          <div>
             {/* BUSCADOR DENTRO DEL MODAL */}
             <div className="relative mb-4">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-cyan-400" />
@@ -783,7 +782,7 @@ export default function AlmacenPage() {
             </div>
 
             {/* TABLA DE PRODUCTOS EN ESTE SALÓN */}
-            <div className="flex-1 overflow-y-auto pr-1">
+            <div className="max-h-[50vh] overflow-y-auto pr-1">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-900/80 text-slate-400 font-bold sticky top-0 border-b border-white/[0.08]">
                   <tr>
@@ -811,273 +810,242 @@ export default function AlmacenPage() {
                 </tbody>
               </table>
             </div>
-
-            <div className="pt-4 mt-4 border-t border-white/[0.08] flex justify-between items-center text-xs">
-              <span className="text-slate-400">Total Almacenado en {salonModalProductos.nombre}:</span>
-              <span className="font-mono font-black text-emerald-400 text-sm">
-                {salonModalProductos.totalPares} PARES DISPONIBLES
-              </span>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* ── MODAL: INGRESO DIRECTO DE STOCK ─────────────────────────────────── */}
-      {showModalIngreso && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-xl shadow-2xl border border-emerald-500/40 flex flex-col max-h-[90vh] animate-fadeInUp">
-            {/* Header */}
-            <div className="flex items-center justify-between px-7 py-5 border-b border-white/[0.08]">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30">
-                  <PackagePlus className="w-5 h-5 text-emerald-400" />
-                </div>
+      <Modal
+        open={showModalIngreso}
+        onClose={() => setShowModalIngreso(false)}
+        title="Ingreso Directo de Stock"
+        subtitle="Registra producto terminado ya existente en los salones"
+        maxWidth="xl"
+        footer={
+          <>
+            <button
+              onClick={() => setShowModalIngreso(false)}
+              className="btn-secondary py-2.5 px-5 text-sm font-bold"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={ingresarStockDirecto}
+              disabled={guardandoIngreso || !productoSeleccionado || !formIngreso.docenas || !formIngreso.salon_id}
+              className="btn-primary py-2.5 px-7 bg-emerald-600 hover:bg-emerald-500 border-none font-black text-sm shadow-lg shadow-emerald-600/20 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {guardandoIngreso ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              Confirmar Ingreso al Stock
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          {/* Paso 1: Buscar producto */}
+          <div className="space-y-3">
+            <label className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-black flex items-center justify-center">1</span>
+              Seleccionar Producto del Catálogo
+            </label>
+
+            {/* Producto ya seleccionado */}
+            {productoSeleccionado ? (
+              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-black text-white">Ingreso Directo de Stock</h2>
-                  <p className="text-xs text-slate-400">Registra producto terminado ya existente en los salones</p>
+                  <p className="font-mono font-black text-emerald-300 text-sm">{productoSeleccionado.sku || productoSeleccionado.codigo}</p>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    {productoSeleccionado.modelo} · {productoSeleccionado.publico} · {productoSeleccionado.diseno_color} · Talla {productoSeleccionado.talla}
+                  </p>
                 </div>
+                <button
+                  onClick={() => { setProductoSeleccionado(null); setBusquedaCatalogo('') }}
+                  className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400 flex-shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button onClick={() => setShowModalIngreso(false)} className="p-2 rounded-xl hover:bg-white/10 text-slate-400 transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-7 py-6 space-y-5">
-
-              {/* Paso 1: Buscar producto */}
-              <div className="space-y-3">
-                <label className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-black flex items-center justify-center">1</span>
-                  Seleccionar Producto del Catálogo
-                </label>
-
-                {/* Producto ya seleccionado */}
-                {productoSeleccionado ? (
-                  <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-mono font-black text-emerald-300 text-sm">{productoSeleccionado.sku || productoSeleccionado.codigo}</p>
-                      <p className="text-xs text-slate-300 mt-0.5">
-                        {productoSeleccionado.modelo} · {productoSeleccionado.publico} · {productoSeleccionado.diseno_color} · Talla {productoSeleccionado.talla}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => { setProductoSeleccionado(null); setBusquedaCatalogo('') }}
-                      className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400 flex-shrink-0"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="relative">
-                      <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        autoFocus
-                        placeholder="Busca por SKU, código o nombre del producto..."
-                        value={busquedaCatalogo}
-                        onChange={e => setBusquedaCatalogo(e.target.value)}
-                        className="input-dark pl-10 text-sm w-full py-2.5 font-medium"
-                      />
-                    </div>
-                    {busquedaCatalogo.trim().length >= 1 && (
-                      <div className="rounded-2xl border border-white/[0.08] bg-slate-900/90 max-h-48 overflow-y-auto">
-                        {catalogoItems
-                          .filter(item => {
-                            const term = busquedaCatalogo.toLowerCase()
-                            return (
-                              (item.sku && item.sku.toLowerCase().includes(term)) ||
-                              item.codigo.toLowerCase().includes(term) ||
-                              item.modelo.toLowerCase().includes(term) ||
-                              item.publico.toLowerCase().includes(term) ||
-                              item.diseno_color.toLowerCase().includes(term)
-                            )
-                          })
-                          .slice(0, 10)
-                          .map(item => (
-                            <button
-                              key={item.id}
-                              onClick={() => { setProductoSeleccionado(item); setBusquedaCatalogo('') }}
-                              className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/[0.05] text-left border-b border-white/[0.04] last:border-0 transition-colors"
-                            >
-                              <div>
-                                <p className="font-mono font-bold text-emerald-300 text-xs">{item.sku || item.codigo}</p>
-                                <p className="text-xs text-slate-400">{item.modelo} · {item.publico} · {item.diseno_color} · T.{item.talla}</p>
-                              </div>
-                              <Plus className="w-4 h-4 text-slate-500 flex-shrink-0" />
-                            </button>
-                          ))}
-                        {catalogoItems.filter(item => {
-                          const term = busquedaCatalogo.toLowerCase()
-                          return (
-                            (item.sku && item.sku.toLowerCase().includes(term)) ||
-                            item.codigo.toLowerCase().includes(term) ||
-                            item.modelo.toLowerCase().includes(term) ||
-                            item.publico.toLowerCase().includes(term) ||
-                            item.diseno_color.toLowerCase().includes(term)
-                          )
-                        }).length === 0 && (
-                          <p className="px-4 py-4 text-xs text-slate-500 text-center">Sin resultados para "{busquedaCatalogo}"</p>
-                        )}
-                      </div>
-                    )}
-                    {busquedaCatalogo.trim().length === 0 && (
-                      <p className="text-xs text-slate-500 text-center py-2">Escribe el SKU o nombre del producto para buscarlo</p>
+            ) : (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Busca por SKU, código o nombre del producto..."
+                    value={busquedaCatalogo}
+                    onChange={e => setBusquedaCatalogo(e.target.value)}
+                    className="input-dark pl-10 text-sm w-full py-2.5 font-medium"
+                  />
+                </div>
+                {busquedaCatalogo.trim().length >= 1 && (
+                  <div className="rounded-2xl border border-white/[0.08] bg-slate-900/90 max-h-48 overflow-y-auto">
+                    {catalogoItems
+                      .filter(item => {
+                        const term = busquedaCatalogo.toLowerCase()
+                        return (
+                          (item.sku && item.sku.toLowerCase().includes(term)) ||
+                          item.codigo.toLowerCase().includes(term) ||
+                          item.modelo.toLowerCase().includes(term) ||
+                          item.publico.toLowerCase().includes(term) ||
+                          item.diseno_color.toLowerCase().includes(term)
+                        )
+                      })
+                      .slice(0, 10)
+                      .map(item => (
+                        <button
+                          key={item.id}
+                          onClick={() => { setProductoSeleccionado(item); setBusquedaCatalogo('') }}
+                          className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/[0.05] text-left border-b border-white/[0.04] last:border-0 transition-colors"
+                        >
+                          <div>
+                            <p className="font-mono font-bold text-emerald-300 text-xs">{item.sku || item.codigo}</p>
+                            <p className="text-xs text-slate-400">{item.modelo} · {item.publico} · {item.diseno_color} · T.{item.talla}</p>
+                          </div>
+                          <Plus className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                        </button>
+                      ))}
+                    {catalogoItems.filter(item => {
+                      const term = busquedaCatalogo.toLowerCase()
+                      return (
+                        (item.sku && item.sku.toLowerCase().includes(term)) ||
+                        item.codigo.toLowerCase().includes(term) ||
+                        item.modelo.toLowerCase().includes(term) ||
+                        item.publico.toLowerCase().includes(term) ||
+                        item.diseno_color.toLowerCase().includes(term)
+                      )
+                    }).length === 0 && (
+                      <p className="px-4 py-4 text-xs text-slate-500 text-center">Sin resultados para "{busquedaCatalogo}"</p>
                     )}
                   </div>
                 )}
+                {busquedaCatalogo.trim().length === 0 && (
+                  <p className="text-xs text-slate-500 text-center py-2">Escribe el SKU o nombre del producto para buscarlo</p>
+                )}
               </div>
+            )}
+          </div>
 
-              {/* Paso 2: Cantidad y Salón */}
-              {productoSeleccionado && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Docenas */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-black flex items-center justify-center">2</span>
-                        Cantidad (Docenas)
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Ej: 20"
-                        value={formIngreso.docenas}
-                        onChange={e => setFormIngreso(f => ({ ...f, docenas: e.target.value }))}
-                        className="input-dark text-lg font-black text-emerald-400 font-mono text-center py-3 w-full"
-                      />
-                      {formIngreso.docenas && Number(formIngreso.docenas) > 0 && (
-                        <p className="text-center text-xs text-slate-400 font-mono">
-                          = <strong className="text-emerald-400">{convertirDocenasAPares(Number(formIngreso.docenas))} pares</strong>
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Salón */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-black flex items-center justify-center">3</span>
-                        Salón Destino
-                      </label>
-                      <CustomSelect
-                        value={formIngreso.salon_id}
-                        onChange={val => setFormIngreso(f => ({ ...f, salon_id: val }))}
-                        options={[
-                          { value: '', label: 'Seleccionar salón...' },
-                          ...ubicaciones.map(u => ({ value: u.id, label: `📍 ${u.nombre}` }))
-                        ]}
-                        triggerClassName="py-3 font-bold text-sm text-cyan-300 w-full"
-                        placeholder="Seleccionar salón..."
-                      />
-                    </div>
-                  </div>
-
-                  {/* Nota opcional */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nota / Motivo (opcional)</label>
-                    <input
-                      type="text"
-                      placeholder="Ej: Stock existente en salón, Reingreso, Compra externa..."
-                      value={formIngreso.nota}
-                      onChange={e => setFormIngreso(f => ({ ...f, nota: e.target.value }))}
-                      className="input-dark text-sm py-2.5 w-full"
-                    />
-                  </div>
-
-                  {/* Resumen */}
-                  {formIngreso.docenas && formIngreso.salon_id && (
-                    <div className="p-4 rounded-2xl bg-slate-900/80 border border-emerald-500/20 space-y-2">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Resumen del Ingreso</p>
-                      <div className="grid grid-cols-3 gap-3 text-center">
-                        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                          <p className="text-[10px] text-slate-400 uppercase font-bold">Producto</p>
-                          <p className="text-xs font-black text-emerald-300 truncate mt-0.5">{productoSeleccionado.modelo}</p>
-                          <p className="text-[10px] text-slate-400 truncate">{productoSeleccionado.publico} · T.{productoSeleccionado.talla}</p>
-                        </div>
-                        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                          <p className="text-[10px] text-slate-400 uppercase font-bold">Cantidad</p>
-                          <p className="text-lg font-black text-white font-mono">{formIngreso.docenas}</p>
-                          <p className="text-[10px] text-emerald-400 font-bold">{convertirDocenasAPares(Number(formIngreso.docenas))} pares</p>
-                        </div>
-                        <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-                          <p className="text-[10px] text-slate-400 uppercase font-bold">Salón</p>
-                          <p className="text-xs font-black text-cyan-300 truncate mt-0.5">📍 {ubicaciones.find(u=>u.id===formIngreso.salon_id)?.nombre}</p>
-                        </div>
-                      </div>
-                    </div>
+          {/* Paso 2: Cantidad y Salón */}
+          {productoSeleccionado && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Docenas */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-black flex items-center justify-center">2</span>
+                    Cantidad (Docenas)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Ej: 20"
+                    value={formIngreso.docenas}
+                    onChange={e => setFormIngreso(f => ({ ...f, docenas: e.target.value }))}
+                    className="input-dark text-lg font-black text-emerald-400 font-mono text-center py-3 w-full"
+                  />
+                  {formIngreso.docenas && Number(formIngreso.docenas) > 0 && (
+                    <p className="text-center text-xs text-slate-400 font-mono">
+                      = <strong className="text-emerald-400">{convertirDocenasAPares(Number(formIngreso.docenas))} pares</strong>
+                    </p>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Footer botones */}
-            <div className="px-7 py-5 border-t border-white/[0.08] flex items-center justify-between gap-3">
-              <button
-                onClick={() => setShowModalIngreso(false)}
-                className="btn-secondary py-2.5 px-5 text-sm font-bold"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={ingresarStockDirecto}
-                disabled={guardandoIngreso || !productoSeleccionado || !formIngreso.docenas || !formIngreso.salon_id}
-                className="btn-primary py-2.5 px-7 bg-emerald-600 hover:bg-emerald-500 border-none font-black text-sm shadow-lg shadow-emerald-600/20 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {guardandoIngreso ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                Confirmar Ingreso al Stock
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                {/* Salón */}
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-black flex items-center justify-center">3</span>
+                    Salón Destino
+                  </label>
+                  <CustomSelect
+                    value={formIngreso.salon_id}
+                    onChange={val => setFormIngreso(f => ({ ...f, salon_id: val }))}
+                    options={[
+                      { value: '', label: 'Seleccionar salón...' },
+                      ...ubicaciones.map(u => ({ value: u.id, label: `📍 ${u.nombre}` }))
+                    ]}
+                    triggerClassName="py-3 font-bold text-sm text-cyan-300 w-full"
+                    placeholder="Seleccionar salón..."
+                  />
+                </div>
+              </div>
 
-      {/* ── MODAL: CREAR NUEVO SALÓN ─────────────────────────────────────────── */}
-      {showModalNuevoSalon && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">📍 Añadir Nuevo Salón Logístico</h2>
-              <button 
-                onClick={() => { setShowModalNuevoSalon(false); setNuevoSalonNombre('') }} 
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={crearNuevoSalon} className="space-y-5 text-xs">
+              {/* Nota opcional */}
               <div className="space-y-2">
-                <label className="block text-slate-300 font-bold uppercase tracking-wider">Nombre del Salón</label>
-                <input 
-                  type="text" 
-                  value={nuevoSalonNombre}
-                  onChange={e => setNuevoSalonNombre(e.target.value)}
-                  placeholder="Ej: Salón D, Salón E, Almacén Especial" 
-                  className="input-dark w-full text-sm py-2.5 font-bold"
-                  required 
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nota / Motivo (opcional)</label>
+                <input
+                  type="text"
+                  placeholder="Ej: Stock existente en salón, Reingreso, Compra externa..."
+                  value={formIngreso.nota}
+                  onChange={e => setFormIngreso(f => ({ ...f, nota: e.target.value }))}
+                  className="input-dark text-sm py-2.5 w-full"
                 />
               </div>
 
-              <div className="flex gap-3 mt-6">
-                <button 
-                  type="button" 
-                  onClick={() => { setShowModalNuevoSalon(false); setNuevoSalonNombre('') }} 
-                  className="btn-secondary flex-1 justify-center py-2.5"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={guardandoSalon} 
-                  className="btn-primary flex-1 justify-center py-2.5 bg-cyan-600 hover:bg-cyan-500 border-none font-bold text-white"
-                >
-                  {guardandoSalon ? 'Creando...' : 'Crear Salón'}
-                </button>
-              </div>
-            </form>
-          </div>
+              {/* Resumen */}
+              {formIngreso.docenas && formIngreso.salon_id && (
+                <div className="p-4 rounded-2xl bg-slate-900/80 border border-emerald-500/20 space-y-2">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Resumen del Ingreso</p>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                      <p className="text-[10px] text-slate-400 uppercase font-bold">Producto</p>
+                      <p className="text-xs font-black text-emerald-300 truncate mt-0.5">{productoSeleccionado.modelo}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{productoSeleccionado.publico} · T.{productoSeleccionado.talla}</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                      <p className="text-[10px] text-slate-400 uppercase font-bold">Cantidad</p>
+                      <p className="text-lg font-black text-white font-mono">{formIngreso.docenas}</p>
+                      <p className="text-[10px] text-emerald-400 font-bold">{convertirDocenasAPares(Number(formIngreso.docenas))} pares</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+                      <p className="text-[10px] text-slate-400 uppercase font-bold">Salón</p>
+                      <p className="text-xs font-black text-cyan-300 truncate mt-0.5">📍 {ubicaciones.find(u=>u.id===formIngreso.salon_id)?.nombre}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </Modal>
+
+      {/* ── MODAL: CREAR NUEVO SALÓN ─────────────────────────────────────────── */}
+      <Modal
+        open={showModalNuevoSalon}
+        onClose={() => { setShowModalNuevoSalon(false); setNuevoSalonNombre('') }}
+        title="📍 Añadir Nuevo Salón Logístico"
+        maxWidth="md"
+      >
+        <form onSubmit={crearNuevoSalon} className="space-y-5 text-xs">
+          <div className="space-y-2">
+            <label className="block text-slate-300 font-bold uppercase tracking-wider">Nombre del Salón</label>
+            <input 
+              type="text" 
+              value={nuevoSalonNombre}
+              onChange={e => setNuevoSalonNombre(e.target.value)}
+              placeholder="Ej: Salón D, Salón E, Almacén Especial" 
+              className="input-dark w-full text-sm py-2.5 font-bold"
+              required 
+            />
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button 
+              type="button" 
+              onClick={() => { setShowModalNuevoSalon(false); setNuevoSalonNombre('') }} 
+              className="btn-secondary flex-1 justify-center py-2.5"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              disabled={guardandoSalon} 
+              className="btn-primary flex-1 justify-center py-2.5 bg-cyan-600 hover:bg-cyan-500 border-none font-bold text-white"
+            >
+              {guardandoSalon ? 'Creando...' : 'Crear Salón'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

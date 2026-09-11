@@ -12,6 +12,7 @@ import {
   FileText, Building2, User, ChevronRight, RefreshCw, Layers
 } from 'lucide-react'
 import CustomSelect from '@/components/ui/CustomSelect'
+import Modal from '@/components/ui/Modal'
 
 interface Cliente {
   id: string
@@ -616,193 +617,165 @@ export default function ClientesPage() {
       )}
 
       {/* ── MODAL 1: REGISTRAR / EDITAR CLIENTE ───────────────────────────────── */}
-      {showAddEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-md p-7 shadow-2xl border border-white/10 animate-fadeInUp">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                {editingCliente ? '✏️ Editar Datos de Cliente' : '👤 Registrar Nuevo Cliente'}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowAddEditModal(false)}
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      <Modal
+        open={showAddEditModal}
+        onClose={() => setShowAddEditModal(false)}
+        title={editingCliente ? '✏️ Editar Datos de Cliente' : '👤 Registrar Nuevo Cliente'}
+        maxWidth="md"
+      >
+        <form onSubmit={handleGuardarCliente} className="space-y-4 text-xs">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">Tipo Doc.</label>
+              <CustomSelect
+                value={clienteForm.tipo_documento}
+                onChange={val => setClienteForm({ ...clienteForm, tipo_documento: val })}
+                options={[
+                  { value: 'dni', label: 'DNI' },
+                  { value: 'ruc', label: 'RUC' }
+                ]}
+                triggerClassName="py-2 font-bold"
+              />
             </div>
-
-            <form onSubmit={handleGuardarCliente} className="space-y-4 text-xs">
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold mb-1">Tipo Doc.</label>
-                  <CustomSelect
-                    value={clienteForm.tipo_documento}
-                    onChange={val => setClienteForm({ ...clienteForm, tipo_documento: val })}
-                    options={[
-                      { value: 'dni', label: 'DNI' },
-                      { value: 'ruc', label: 'RUC' }
-                    ]}
-                    triggerClassName="py-2 font-bold"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-slate-300 font-bold mb-1">Número de DNI / RUC *</label>
-                  <input
-                    type="text"
-                    maxLength={11}
-                    value={clienteForm.numero_documento}
-                    onChange={e => setClienteForm({ ...clienteForm, numero_documento: e.target.value })}
-                    placeholder={clienteForm.tipo_documento === 'ruc' ? 'Ej: 20601234567' : 'Ej: 45678912'}
-                    className="input-dark w-full py-2 font-mono font-bold"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">Nombre Completo / Razón Social *</label>
-                <input
-                  type="text"
-                  value={clienteForm.nombre}
-                  onChange={e => setClienteForm({ ...clienteForm, nombre: e.target.value })}
-                  placeholder="Ej: Juan Pérez / Comercial Gamarra S.A.C."
-                  className="input-dark w-full py-2 font-bold text-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">📞 Teléfono / WhatsApp</label>
-                <input
-                  type="text"
-                  value={clienteForm.telefono}
-                  onChange={e => setClienteForm({ ...clienteForm, telefono: e.target.value })}
-                  placeholder="Ej: 999 888 777"
-                  className="input-dark w-full py-2 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold mb-1">📍 Dirección de Envío / Agencia</label>
-                <input
-                  type="text"
-                  value={clienteForm.direccion}
-                  onChange={e => setClienteForm({ ...clienteForm, direccion: e.target.value })}
-                  placeholder="Ej: Jr. Gamarra 840 Stand 102 / Agencia Marvisur"
-                  className="input-dark w-full py-2"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowAddEditModal(false)}
-                  className="btn-secondary flex-1 justify-center py-2.5"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="btn-primary flex-1 justify-center py-2.5 bg-rose-600 hover:bg-rose-500 border-none font-bold text-white shadow-lg shadow-rose-600/20"
-                >
-                  {saving ? 'Guardando...' : editingCliente ? 'Guardar Cambios' : 'Registrar Cliente'}
-                </button>
-              </div>
-            </form>
+            <div className="col-span-2">
+              <label className="block text-slate-300 font-bold mb-1">Número de DNI / RUC *</label>
+              <input
+                type="text"
+                maxLength={11}
+                value={clienteForm.numero_documento}
+                onChange={e => setClienteForm({ ...clienteForm, numero_documento: e.target.value })}
+                placeholder={clienteForm.tipo_documento === 'ruc' ? 'Ej: 20601234567' : 'Ej: 45678912'}
+                className="input-dark w-full py-2 font-mono font-bold"
+                required
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">Nombre Completo / Razón Social *</label>
+            <input
+              type="text"
+              value={clienteForm.nombre}
+              onChange={e => setClienteForm({ ...clienteForm, nombre: e.target.value })}
+              placeholder="Ej: Juan Pérez / Comercial Gamarra S.A.C."
+              className="input-dark w-full py-2 font-bold text-white"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">📞 Teléfono / WhatsApp</label>
+            <input
+              type="text"
+              value={clienteForm.telefono}
+              onChange={e => setClienteForm({ ...clienteForm, telefono: e.target.value })}
+              placeholder="Ej: 999 888 777"
+              className="input-dark w-full py-2 font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">📍 Dirección de Envío / Agencia</label>
+            <input
+              type="text"
+              value={clienteForm.direccion}
+              onChange={e => setClienteForm({ ...clienteForm, direccion: e.target.value })}
+              placeholder="Ej: Jr. Gamarra 840 Stand 102 / Agencia Marvisur"
+              className="input-dark w-full py-2"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-white/[0.06] mt-6">
+            <button
+              type="button"
+              onClick={() => setShowAddEditModal(false)}
+              className="btn-secondary flex-1 justify-center py-2.5"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-primary flex-1 justify-center py-2.5 bg-rose-600 hover:bg-rose-500 border-none font-bold text-white shadow-lg shadow-rose-600/20"
+            >
+              {saving ? 'Guardando...' : editingCliente ? 'Guardar Cambios' : 'Registrar Cliente'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* ── MODAL 2: HISTORIAL DE COMPRAS Y DEUDAS DEL CLIENTE ───────────────── */}
-      {selectedClienteHistorial && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fadeIn">
-          <div className="glass rounded-3xl w-full max-w-3xl p-7 shadow-2xl border border-white/10 animate-fadeInUp max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center pb-4 border-b border-white/[0.08] mb-4 flex-shrink-0">
-              <div>
-                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider block">Historial de Compras y Deudas</span>
-                <h2 className="text-lg font-black text-white">{selectedClienteHistorial.nombre}</h2>
-                <p className="text-xs text-slate-400 font-mono">
-                  {selectedClienteHistorial.tipo_documento?.toUpperCase()}: {selectedClienteHistorial.numero_documento}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedClienteHistorial(null)}
-                className="p-2 rounded-xl hover:bg-white/10 text-slate-400"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      <Modal
+        open={Boolean(selectedClienteHistorial)}
+        onClose={() => setSelectedClienteHistorial(null)}
+        title={selectedClienteHistorial?.nombre || ''}
+        subtitle={`${selectedClienteHistorial?.tipo_documento?.toUpperCase() || 'DOC'}: ${selectedClienteHistorial?.numero_documento || ''} · Historial de Compras y Deudas`}
+        maxWidth="3xl"
+        footer={
+          <button
+            type="button"
+            onClick={() => setSelectedClienteHistorial(null)}
+            className="btn-secondary py-2 px-5 text-xs rounded-xl"
+          >
+            Cerrar
+          </button>
+        }
+      >
+        <div className="space-y-4">
+          {ventasDelClienteSeleccionado.length === 0 ? (
+            <div className="p-10 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-white/[0.04]">
+              🛍️ Este cliente no tiene ventas registradas en el sistema todavía.
             </div>
-
-            <div className="overflow-y-auto flex-1 pr-1 space-y-4">
-              {ventasDelClienteSeleccionado.length === 0 ? (
-                <div className="p-10 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-white/[0.04]">
-                  🛍️ Este cliente no tiene ventas registradas en el sistema todavía.
-                </div>
-              ) : (
-                ventasDelClienteSeleccionado.map(v => (
-                  <div key={v.id} className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-white/[0.04]">
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs font-mono font-bold text-rose-300 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20">
-                          {v.codigo_venta}
-                        </code>
-                        <span className={`badge text-[9px] font-bold ${
-                          v.tipo_pago === 'directo' ? 'badge-success' : 'badge-warning'
-                        }`}>
-                          {v.tipo_pago === 'directo' ? '✓ Pago Directo' : '⏳ A Crédito / Cuotas'}
-                        </span>
-                        <span className="badge badge-info text-[9px] capitalize">{v.estado}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-slate-400 mr-2">{v.fecha}</span>
-                        <span className="text-sm font-black text-white font-mono">S/ {Number(v.total_soles).toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    {/* Desglose de Cuotas si es a crédito */}
-                    {v.tipo_pago === 'cuotas' && v.cuotas && v.cuotas.length > 0 && (
-                      <div className="space-y-1.5 pt-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Cronograma de Cuotas:</span>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                          {v.cuotas.map(q => (
-                            <div key={q.id} className="p-2 rounded-xl bg-black/40 border border-white/[0.04] text-[11px] flex items-center justify-between">
-                              <div>
-                                <span className="font-bold text-slate-300 block">Cuota {q.numero_cuota}</span>
-                                <span className="text-[10px] font-mono text-slate-500">Vence: {q.fecha_vencimiento}</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="font-mono font-bold text-white block">S/ {Number(q.monto).toFixed(2)}</span>
-                                <span className={`badge text-[8px] py-0.5 px-1.5 ${
-                                  q.estado === 'pagada' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'
-                                }`}>
-                                  {q.estado === 'pagada' ? 'Pagada' : 'Pendiente'}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+          ) : (
+            ventasDelClienteSeleccionado.map(v => (
+              <div key={v.id} className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-white/[0.04]">
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs font-mono font-bold text-rose-300 bg-rose-500/10 px-2 py-0.5 rounded-lg border border-rose-500/20">
+                      {v.codigo_venta}
+                    </code>
+                    <span className={`badge text-[9px] font-bold ${
+                      v.tipo_pago === 'directo' ? 'badge-success' : 'badge-warning'
+                    }`}>
+                      {v.tipo_pago === 'directo' ? '✓ Pago Directo' : '⏳ A Crédito / Cuotas'}
+                    </span>
+                    <span className="badge badge-info text-[9px] capitalize">{v.estado}</span>
                   </div>
-                ))
-              )}
-            </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 mr-2">{v.fecha}</span>
+                    <span className="text-sm font-black text-white font-mono">S/ {Number(v.total_soles).toFixed(2)}</span>
+                  </div>
+                </div>
 
-            <div className="pt-4 border-t border-white/[0.06] mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setSelectedClienteHistorial(null)}
-                className="btn-secondary py-2 px-5 text-xs rounded-xl"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
+                {/* Desglose de Cuotas si es a crédito */}
+                {v.tipo_pago === 'cuotas' && v.cuotas && v.cuotas.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Cronograma de Cuotas:</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {v.cuotas.map(q => (
+                        <div key={q.id} className="p-2 rounded-xl bg-black/40 border border-white/[0.04] text-[11px] flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-slate-300 block">Cuota {q.numero_cuota}</span>
+                            <span className="text-[10px] font-mono text-slate-500">Vence: {q.fecha_vencimiento}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-mono font-bold text-white block">S/ {Number(q.monto).toFixed(2)}</span>
+                            <span className={`badge text-[8px] py-0.5 px-1.5 ${
+                              q.estado === 'pagada' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'
+                            }`}>
+                              {q.estado === 'pagada' ? 'Pagada' : 'Pendiente'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
-      )}
+      </Modal>
 
     </div>
   )
