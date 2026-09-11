@@ -10,7 +10,7 @@ import {
   ChevronLeft, ChevronRight, Copy
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { getSemanaAnio, getDiaSemana } from '@/lib/utils'
+import { getSemanaAnio, getDiaSemana, formatearRangoSemana } from '@/lib/utils'
 import CustomSelect from '@/components/ui/CustomSelect'
 import Modal from '@/components/ui/Modal'
 
@@ -162,7 +162,7 @@ export default function PlanchadoPage() {
     const proxSemana = semanaSeleccionada === 52 ? 1 : semanaSeleccionada + 1
     const proxAnio = semanaSeleccionada === 52 ? anioSeleccionado + 1 : anioSeleccionado
 
-    if (!confirm(`¿Copiar las ${cronograma.length} asignaciones de la Semana N° ${semanaSeleccionada} a la Semana N° ${proxSemana} (${proxAnio})?`)) return
+    if (!confirm(`¿Copiar las ${cronograma.length} asignaciones de ${formatearRangoSemana(semanaSeleccionada, anioSeleccionado)} (Sem. ${semanaSeleccionada}) a ${formatearRangoSemana(proxSemana, proxAnio)} (Sem. ${proxSemana})?`)) return
 
     const nuevasAsignaciones = cronograma.map(c => ({
       semana: proxSemana,
@@ -180,7 +180,7 @@ export default function PlanchadoPage() {
       return
     }
 
-    toast.success(`🎉 Cronograma duplicado exitosamente para la Semana N° ${proxSemana} / ${proxAnio}`)
+    toast.success(`🎉 Cronograma duplicado para ${formatearRangoSemana(proxSemana, proxAnio)} (Sem. ${proxSemana})`)
     setSemanaSeleccionada(proxSemana)
     setAnioSeleccionado(proxAnio)
   }
@@ -423,7 +423,7 @@ export default function PlanchadoPage() {
     const html = `
       <html>
         <head>
-          <title>Cronograma Semanal Planchado — Semana ${semanaSeleccionada}</title>
+          <title>Cronograma Semanal Planchado — ${formatearRangoSemana(semanaSeleccionada, anioSeleccionado)} (Sem. ${semanaSeleccionada})</title>
           <style>
             body { font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #0f172a; }
             h2 { margin-bottom: 4px; font-size: 20px; color: #1e3a8a; }
@@ -435,7 +435,7 @@ export default function PlanchadoPage() {
         </head>
         <body>
           <h2>FÁBRICA DE MEDIAS DUREY — Programación de Planchado</h2>
-          <p>Cronograma Rotativo Semanal · Semana N° ${semanaSeleccionada} / Año ${anioSeleccionado}</p>
+          <p>Cronograma Rotativo Semanal · ${formatearRangoSemana(semanaSeleccionada, anioSeleccionado)} (Semana N° ${semanaSeleccionada} / Año ${anioSeleccionado})</p>
           <table>
             <thead>
               <tr>
@@ -499,7 +499,7 @@ export default function PlanchadoPage() {
         <body>
           <div class="header-box">
             <h2>DUREY — Planilla de Control Físico de Planchado</h2>
-            <p>Día: <strong>${diaCapitalizado}</strong> · Semana N° ${semanaSeleccionada} / ${anioSeleccionado} · Fecha de Registro: ____ / ____ / ________</p>
+            <p>Día: <strong>${diaCapitalizado}</strong> · ${formatearRangoSemana(semanaSeleccionada, anioSeleccionado)} (Semana N° ${semanaSeleccionada} / ${anioSeleccionado}) · Fecha de Registro: ____ / ____ / ________</p>
           </div>
           <table>
             <thead>
@@ -559,8 +559,8 @@ export default function PlanchadoPage() {
       {/* ── CONTROL NAVEGADOR DE SEMANAS Y PROGRAMACIÓN ANTICIPADA ───────────── */}
       <div className="glass rounded-3xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-white/[0.08]">
         {/* Selector de Semana con botones ◀ y ▶ */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-2xl border border-white/[0.08]">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1 bg-slate-900/80 p-1.5 rounded-2xl border border-white/[0.08]">
             <button
               onClick={irASemanaAnterior}
               className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 transition-colors"
@@ -568,9 +568,17 @@ export default function PlanchadoPage() {
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="font-mono font-bold text-white text-xs px-3">
-              Semana N° {semanaSeleccionada} · {anioSeleccionado}
-            </span>
+            <div className="px-3 py-0.5 text-center min-w-[210px]">
+              <div className="flex items-center justify-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                <span className="font-bold text-white text-xs sm:text-sm">
+                  {formatearRangoSemana(semanaSeleccionada, anioSeleccionado)}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
+                Semana N° {semanaSeleccionada} · {anioSeleccionado}
+              </span>
+            </div>
             <button
               onClick={irASemanaSiguiente}
               className="p-1.5 rounded-xl hover:bg-white/10 text-slate-300 transition-colors"
@@ -585,7 +593,7 @@ export default function PlanchadoPage() {
               onClick={irASemanaActual}
               className="text-[11px] font-bold text-red-400 hover:underline px-2"
             >
-              Ir a Semana Actual ({semanaHoy})
+              Ir a Semana Actual ({formatearRangoSemana(semanaHoy, anioHoy, true, false)})
             </button>
           )}
 
@@ -606,7 +614,7 @@ export default function PlanchadoPage() {
             title="Copiar las asignaciones de esta semana a la próxima semana"
           >
             <Copy className="w-3.5 h-3.5 text-red-400" />
-            Copiar a la Próxima Semana (Sem. {semanaSeleccionada === 52 ? 1 : semanaSeleccionada + 1})
+            Copiar a la Próxima Semana ({formatearRangoSemana(semanaSeleccionada === 52 ? 1 : semanaSeleccionada + 1, semanaSeleccionada === 52 ? anioSeleccionado + 1 : anioSeleccionado, true, false)})
           </button>
 
           <div className="flex items-center gap-2 bg-slate-900/60 p-1.5 rounded-2xl border border-white/[0.06] text-xs">
@@ -629,7 +637,7 @@ export default function PlanchadoPage() {
         <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-white">
-              Cronograma Semanal Rotativo — Semana N° {semanaSeleccionada}
+              Cronograma Semanal Rotativo — {formatearRangoSemana(semanaSeleccionada, anioSeleccionado)} (Sem. {semanaSeleccionada})
             </h2>
             <p className="text-xs text-slate-400">
               Programación anticipada: Haz clic en cualquier celda para asignar qué tipo de media planchará cada trabajador cada día
@@ -719,7 +727,7 @@ export default function PlanchadoPage() {
             <div className="flex items-center gap-2 mb-1">
               <Sparkles className="w-5 h-5 text-red-400" />
               <h2 className="text-lg font-bold text-white">
-                Registro de Producción Diaria — Día <span className="capitalize text-red-400">{diaSeleccionado}</span> (Semana N° {semanaSeleccionada})
+                Registro de Producción Diaria — Día <span className="capitalize text-red-400">{diaSeleccionado}</span> · {formatearRangoSemana(semanaSeleccionada, anioSeleccionado, true, false)}
               </h2>
             </div>
             <p className="text-xs text-slate-400">
@@ -886,7 +894,7 @@ export default function PlanchadoPage() {
       >
         <div className="space-y-4 text-xs">
           <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300">
-            Programando para la <strong>Semana N° {semanaSeleccionada} ({anioSeleccionado})</strong>
+            Programando para la <strong>{formatearRangoSemana(semanaSeleccionada, anioSeleccionado)} (Semana N° {semanaSeleccionada})</strong>
           </div>
 
           <div>

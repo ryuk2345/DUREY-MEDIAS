@@ -10,7 +10,7 @@ import {
   Save, User, Box, ShieldAlert, CheckCircle2, Layers, Tag, Scan, Barcode
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { generarCodigoPaquete, getSemanaAnio, getDiaSemana } from '@/lib/utils'
+import { generarCodigoPaquete, getSemanaAnio, getDiaSemana, formatearRangoSemana } from '@/lib/utils'
 import { convertirDocenasAPares } from '@/lib/domain/packaging'
 import QRCode from 'qrcode'
 import CustomSelect from '@/components/ui/CustomSelect'
@@ -179,7 +179,7 @@ export default function PreparadoPage() {
       .select('*').eq('semana', semanaOrigen).eq('anio', anioOrigen)
 
     if (!origen || origen.length === 0) {
-      toast.error(`No existe programación previa en la Semana ${semanaOrigen}`)
+      toast.error(`No existe programación previa para ${formatearRangoSemana(semanaOrigen, anioOrigen)} (Sem. ${semanaOrigen})`)
       setSaving(false)
       return
     }
@@ -201,7 +201,7 @@ export default function PreparadoPage() {
     if (error) {
       toast.error('Error al copiar programación')
     } else {
-      toast.success(`✓ Programación copiada de la Semana ${semanaOrigen} a la Semana ${semanaSeleccionada}`)
+      toast.success(`✓ Programación copiada de ${formatearRangoSemana(semanaOrigen, anioOrigen)} a ${formatearRangoSemana(semanaSeleccionada, anioSeleccionado)}`)
       cargarDatos()
     }
     setSaving(false)
@@ -429,19 +429,38 @@ export default function PreparadoPage() {
 
       {/* ── CONTROL NAVEGADOR DE SEMANAS Y PROGRAMACIÓN ANTICIPADA ───────────── */}
       <div className="glass rounded-3xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-white/[0.08]">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-slate-900/80 p-1 rounded-2xl border border-white/[0.08]">
-            <button onClick={irASemanaAnterior} className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1 bg-slate-900/80 p-1.5 rounded-2xl border border-white/[0.08]">
+            <button onClick={irASemanaAnterior} className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <div className="px-3 py-1 text-center">
-              <span className="text-xs text-slate-400 block font-medium">Semana de Programación</span>
-              <span className="text-sm font-black text-white">Semana N° {semanaSeleccionada} · {anioSeleccionado}</span>
+            <div className="px-3 py-0.5 text-center min-w-[210px]">
+              <div className="flex items-center justify-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                <span className="text-xs sm:text-sm font-black text-white">
+                  {formatearRangoSemana(semanaSeleccionada, anioSeleccionado)}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
+                Semana N° {semanaSeleccionada} · {anioSeleccionado}
+              </span>
             </div>
-            <button onClick={irASemanaSiguiente} className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors">
+            <button onClick={irASemanaSiguiente} className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+
+          {!isSemanaActual && (
+            <button
+              onClick={() => {
+                setSemanaSeleccionada(semanaHoy)
+                setAnioSeleccionado(anioHoy)
+              }}
+              className="text-[11px] font-bold text-purple-400 hover:underline px-2"
+            >
+              Ir a Semana Actual ({formatearRangoSemana(semanaHoy, anioHoy, true, false)})
+            </button>
+          )}
 
           {isSemanaActual ? (
             <span className="badge bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs py-1 px-3">
@@ -460,8 +479,8 @@ export default function PreparadoPage() {
             disabled={saving}
             className="btn-secondary text-xs py-2 px-3 rounded-2xl text-purple-300 border-purple-500/30 hover:bg-purple-500/10 flex items-center gap-1.5 font-bold"
           >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
-            Copiar Programación de la Semana Anterior
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5 text-purple-400" />}
+            Copiar Programación Anterior ({formatearRangoSemana(semanaSeleccionada === 1 ? 52 : semanaSeleccionada - 1, semanaSeleccionada === 1 ? anioSeleccionado - 1 : anioSeleccionado, true, false)})
           </button>
         </div>
       </div>
@@ -487,7 +506,7 @@ export default function PreparadoPage() {
       <div className="space-y-4">
         <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
           <User className="w-4 h-4 text-emerald-400" />
-          Empacadores Activos — Día <span className="text-white capitalize">{diaSeleccionado}</span> (Semana N° {semanaSeleccionada})
+          Empacadores Activos — Día <span className="text-white capitalize">{diaSeleccionado}</span> · {formatearRangoSemana(semanaSeleccionada, anioSeleccionado, true, false)}
         </h2>
 
         {preparadores.length === 0 ? (
@@ -542,7 +561,7 @@ export default function PreparadoPage() {
                         <span className="text-xs text-emerald-300 font-bold capitalize">
                           {asignacionDia.criterio}: {asignacionDia.valor_criterio}
                         </span>
-                        <span className="text-[10px] text-slate-500 font-mono">Semana {semanaSeleccionada}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">{formatearRangoSemana(semanaSeleccionada, anioSeleccionado, true)}</span>
                       </div>
                     ) : (
                       <span className="text-xs text-slate-500 italic block">Sin programación fija. Selecciona abajo.</span>

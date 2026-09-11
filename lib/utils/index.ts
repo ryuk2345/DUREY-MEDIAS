@@ -63,6 +63,56 @@ export function getSemanaAnio(): { semana: number; anio: number } {
   }
 }
 
+const MESES_ABR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+const MESES_COMPLETOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+/**
+ * Obtiene el rango de fechas (Lunes a Domingo) para una semana y año determinados.
+ */
+export function getFechasDeSemana(semana: number, anio: number): { fechaInicio: Date; fechaFin: Date } {
+  const d4 = new Date(anio, 0, 4)
+  const diaSemana = d4.getDay() || 7
+  const primerLunes = new Date(anio, 0, 4 - diaSemana + 1)
+
+  const fechaInicio = new Date(primerLunes.getTime() + (semana - 1) * 7 * 86400000)
+  const fechaFin = new Date(fechaInicio.getTime() + 6 * 86400000)
+  return { fechaInicio, fechaFin }
+}
+
+/**
+ * Retorna el rango de fechas legible de la semana, p. ej.:
+ * "Semana del 7 al 13 de Septiembre" o "Sem. 7 al 13 Sep"
+ */
+export function formatearRangoSemana(
+  semana: number,
+  anio: number,
+  abreviado: boolean = false,
+  conPrefijo: boolean = true
+): string {
+  const { fechaInicio, fechaFin } = getFechasDeSemana(semana, anio)
+  const diaIni = fechaInicio.getDate()
+  const mesIni = fechaInicio.getMonth()
+  const diaFin = fechaFin.getDate()
+  const mesFin = fechaFin.getMonth()
+  const anioFin = fechaFin.getFullYear()
+
+  const prefijo = conPrefijo ? (abreviado ? 'Sem. ' : 'Semana del ') : (conPrefijo === false && !abreviado ? 'Del ' : '')
+
+  if (mesIni === mesFin) {
+    return abreviado
+      ? `${prefijo}${diaIni} al ${diaFin} ${MESES_ABR[mesIni]}`
+      : `${prefijo}${diaIni} al ${diaFin} de ${MESES_COMPLETOS[mesIni]}`
+  } else if (fechaInicio.getFullYear() === anioFin) {
+    return abreviado
+      ? `${prefijo}${diaIni} ${MESES_ABR[mesIni]} al ${diaFin} ${MESES_ABR[mesFin]}`
+      : `${prefijo}${diaIni} de ${MESES_COMPLETOS[mesIni]} al ${diaFin} de ${MESES_COMPLETOS[mesFin]}`
+  } else {
+    return abreviado
+      ? `${prefijo}${diaIni} ${MESES_ABR[mesIni]} al ${diaFin} ${MESES_ABR[mesFin]} ${anioFin}`
+      : `${prefijo}${diaIni} de ${MESES_COMPLETOS[mesIni]} ${fechaInicio.getFullYear()} al ${diaFin} de ${MESES_COMPLETOS[mesFin]} ${anioFin}`
+  }
+}
+
 export const ROLES_LABELS: Record<string, string> = {
   admin: 'Administrador General',
   supervisor: 'Supervisor de Producción',
