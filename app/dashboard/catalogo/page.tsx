@@ -4,11 +4,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { generarCodigoMedia, generarSkuMedia, formatearMoneda } from '@/lib/utils'
-import { Plus, Search, Edit2, Power, AlertTriangle, X, Loader2, Cog, Package, Barcode, Printer, QrCode, Sparkles, Check } from 'lucide-react'
+import { Plus, Search, Edit2, Power, AlertTriangle, X, Loader2, Cog, Package, Barcode, Printer, QrCode, Sparkles, Check, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import QRCode from 'qrcode'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 interface CatalogoMedia {
   id: string
@@ -49,6 +50,10 @@ export default function CatalogoPage() {
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [mediaBarcodeImprimir, setMediaBarcodeImprimir] = useState<CatalogoMedia | null>(null)
   const [qrDataUrlModal, setQrDataUrlModal] = useState('')
+
+  // Modal de confirmación para eliminar producto
+  const [productoAEliminar, setProductoAEliminar] = useState<CatalogoMedia | null>(null)
+  const [eliminando, setEliminando] = useState(false)
 
   const supabase = createClient()
 
@@ -197,6 +202,33 @@ export default function CatalogoPage() {
     if (error) { toast.error('Error al cambiar estado'); return }
     toast.success(nuevoEstado === 'activo' ? 'Producto reactivado' : 'Producto dado de baja (baja lógica)')
     cargarCatalogo()
+  }
+
+  const confirmarEliminar = (item: CatalogoMedia) => {
+    setProductoAEliminar(item)
+  }
+
+  const ejecutarEliminar = async () => {
+    if (!productoAEliminar) return
+    setEliminando(true)
+    try {
+      const { error } = await supabase.from('catalogo_medias').delete().eq('id', productoAEliminar.id)
+      if (error) {
+        if (error.code === '23503' || error.message?.includes('foreign key') || error.message?.includes('violates')) {
+          toast.error('No se puede eliminar este producto porque ya tiene movimientos de producción, paquetes o ventas vinculadas. Puedes usar el botón de dar de baja para inactivarlo sin romper el historial.')
+        } else {
+          toast.error(`Error al eliminar: ${error.message}`)
+        }
+        return
+      }
+      toast.success(`Producto "${productoAEliminar.codigo}" eliminado del catálogo`)
+      setProductoAEliminar(null)
+      cargarCatalogo()
+    } catch (err: any) {
+      toast.error('Error de conexión al eliminar: ' + err.message)
+    } finally {
+      setEliminando(false)
+    }
   }
 
   // Imprimir Etiqueta de Barcode SKU de Media
@@ -374,8 +406,11 @@ export default function CatalogoPage() {
                           <button onClick={() => abrirEditar(item)} className="btn-secondary py-1 px-2.5 text-xs" title="Editar">
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => toggleEstado(item)} className={`p-2 rounded-xl transition-colors ${item.estado === 'activo' ? 'text-slate-500 hover:text-red-400' : 'text-emerald-400'}`} title={item.estado === 'activo' ? 'Dar de baja' : 'Reactivar'}>
+                          <button onClick={() => toggleEstado(item)} className={`p-2 rounded-xl transition-colors ${item.estado === 'activo' ? 'text-slate-500 hover:text-amber-400 hover:bg-amber-500/10' : 'text-emerald-400 hover:bg-emerald-500/10'}`} title={item.estado === 'activo' ? 'Dar de baja (Inactivar)' : 'Reactivar'}>
                             <Power className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => confirmarEliminar(item)} className="p-2 rounded-xl text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Eliminar producto permanentemente">
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -599,6 +634,19 @@ export default function CatalogoPage() {
               </button>
             </div>
       </Modal>
+
+      {/* ── DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN ───────────────────────────── */}
+      <ConfirmDialog
+        isOpen={Boolean(productoAEliminar)}
+        onClose={() => setProductoAEliminar(null)}
+        onConfirm={ejecutarEliminar}
+        title="¿Eliminar producto del catálogo?"
+        description={`Se eliminará permanentemente "${productoAEliminar?.codigo}" (${productoAEliminar?.modelo} ${productoAEliminar?.publico} · Talla ${productoAEliminar?.talla}). Esta acción no se puede deshacer.`}
+        confirmText="Eliminar permanentemente"
+        cancelText="Cancelar"
+        isDanger={true}
+        isLoading={eliminando}
+      />
     </>
   )
 }
