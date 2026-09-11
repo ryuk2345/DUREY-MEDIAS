@@ -1650,6 +1650,8 @@ export default function VentasPage() {
         onClose={() => setShowComprobanteModal(false)}
         title={comprobanteData?.titulo || "Comprobante"}
       >
+        {comprobanteData && (
+          <>
             <div className="space-y-4">
               <div className="p-3 rounded-2xl bg-slate-900/80 border border-white/[0.06] text-xs grid grid-cols-2 gap-2">
                 <div>
@@ -1690,6 +1692,8 @@ export default function VentasPage() {
                 Cerrar Visor
               </button>
             </div>
+          </>
+        )}
       </Modal>
     </div>
   )

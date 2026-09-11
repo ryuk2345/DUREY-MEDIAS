@@ -2265,7 +2265,8 @@ export default function MateriaPrimaPage() {
         title="🔧 Ajustar Inventario de Repuesto"
         maxWidth="md"
       >
-
+        {selectedRepuesto && (
+          <>
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] mb-4 space-y-2 text-xs">
               <div className="flex justify-between"><span className="text-slate-400">Repuesto:</span> <span className="font-bold text-white">{selectedRepuesto.nombre}</span></div>
               <div className="flex justify-between"><span className="text-slate-400">Stock Actual:</span> <span className="font-bold text-white font-mono">{selectedRepuesto.stock_actual} Unid.</span></div>
@@ -2343,6 +2344,8 @@ export default function MateriaPrimaPage() {
                 </button>
               </div>
             </form>
+          </>
+        )}
       </Modal>
 
       {/* ── MODAL: COMPRA / ADQUISICIÓN ──────────────────────────────────────── */}
@@ -2479,7 +2482,8 @@ export default function MateriaPrimaPage() {
         title="🔬 Control de Calidad e Inspección"
         maxWidth="lg"
       >
-
+        {selectedCompra && (
+          <>
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] mb-4 space-y-2 text-xs">
               <div className="flex justify-between"><span className="text-slate-400">Proveedor:</span> <span className="font-bold text-white">{selectedCompra.proveedores?.nombre}</span></div>
               <div className="flex justify-between"><span className="text-slate-400">Hilo:</span> <span className="font-bold text-white">{selectedCompra.materia_prima?.material} {selectedCompra.materia_prima?.color}</span></div>
@@ -2543,6 +2547,8 @@ export default function MateriaPrimaPage() {
                 </button>
               </div>
             </form>
+          </>
+        )}
       </Modal>
 
       {/* ── MODAL: LIQUIDAR CUOTA DE COMPRA ─────────────────────────────────── */}
@@ -2552,7 +2558,8 @@ export default function MateriaPrimaPage() {
         title="💵 Asentar Pago de Cuota"
         maxWidth="md"
       >
-
+        {selectedCuota && (
+          <>
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] mb-4 space-y-2 text-xs">
               <div className="flex justify-between"><span className="text-slate-400">Proveedor:</span> <span className="font-bold text-white">{(selectedCuota.compra as any)?.proveedores?.nombre}</span></div>
               <div className="flex justify-between"><span className="text-slate-400">Monto Cuota:</span> <span className="font-bold text-amber-400 font-mono">S/ {selectedCuota.monto.toFixed(2)}</span></div>
@@ -2602,6 +2609,8 @@ export default function MateriaPrimaPage() {
                 </button>
               </div>
             </form>
+          </>
+        )}
       </Modal>
     </>
   )

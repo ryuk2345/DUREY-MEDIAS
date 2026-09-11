@@ -86,9 +86,9 @@ export default function CatalogoPage() {
   useEffect(() => { cargarCatalogo() }, [cargarCatalogo])
 
   const catalogoFiltrado = catalogo.filter(item => {
-    const matchTexto = (item.sku && item.sku.toLowerCase().includes(filtro.toLowerCase())) ||
-      item.codigo.toLowerCase().includes(filtro.toLowerCase()) ||
-      item.modelo.toLowerCase().includes(filtro.toLowerCase())
+    const matchTexto = (item.sku?.toLowerCase().includes(filtro.toLowerCase())) ||
+      (item.codigo?.toLowerCase().includes(filtro.toLowerCase())) ||
+      (item.modelo?.toLowerCase().includes(filtro.toLowerCase()))
     const matchEstado = filtroEstado === 'todos' || item.estado === filtroEstado
     return matchTexto && matchEstado
   })
@@ -550,6 +550,8 @@ export default function CatalogoPage() {
         onClose={() => setShowPrintModal(false)}
         title="Etiqueta Barcode SKU"
       >
+        {mediaBarcodeImprimir && (
+          <>
             <p className="text-xs text-slate-400">{mediaBarcodeImprimir.modelo} {mediaBarcodeImprimir.publico} ({mediaBarcodeImprimir.talla})</p>
 
             <div className="p-4 bg-white rounded-2xl">
@@ -565,6 +567,8 @@ export default function CatalogoPage() {
                 <Printer className="w-4 h-4" /> Imprimir Etiqueta
               </button>
             </div>
+          </>
+        )}
       </Modal>
 
       {/* ── MODAL: NUEVO MODELO ─────────────────────────────────────────────── */}
