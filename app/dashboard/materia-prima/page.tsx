@@ -326,24 +326,19 @@ export default function MateriaPrimaPage() {
     try {
       if (editingHilo) {
         if (!usingFallback) {
-          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editingHilo.id)
-          if (isUuid) {
-            const { error } = await supabase.from('materia_prima').update({
-              material: hiloForm.material.trim(),
-              color: hiloForm.color.trim(),
-              stock_kg: parseFloat(hiloForm.stock_kg || '0'),
-              tipo_empaque: hiloForm.tipo_empaque || 'cono'
-            }).eq('id', editingHilo.id)
-            if (error) throw error
-          } else {
-            const { error } = await supabase.from('materia_prima').update({
-              material: hiloForm.material.trim(),
-              color: hiloForm.color.trim(),
-              stock_kg: parseFloat(hiloForm.stock_kg || '0'),
-              tipo_empaque: hiloForm.tipo_empaque || 'cono'
-            }).eq('material', editingHilo.material)
-            if (error) throw error
-          }
+          // Una sola operación: cambia nombre/color/empaque y solo toca el stock si se
+          // modificó (conteo físico), dejando un movimiento 'ajuste_inventario'.
+          // Antes reescribía el stock con el valor viejo de la pantalla y, sin id válido,
+          // editaba por nombre de material (todos los hilos de ese material a la vez).
+          const { error } = await supabase.rpc('editar_materia_prima', {
+            p_id: editingHilo.id,
+            p_material: hiloForm.material.trim(),
+            p_color: hiloForm.color.trim(),
+            p_tipo_empaque: hiloForm.tipo_empaque || 'cono',
+            p_stock_anterior: Number(editingHilo.stock_kg || 0),
+            p_stock_nuevo: parseFloat(hiloForm.stock_kg || '0')
+          })
+          if (error) throw error
         }
         const list = stockHilos.map(x => x.id === editingHilo.id ? {
           ...x,
@@ -353,7 +348,7 @@ export default function MateriaPrimaPage() {
           tipo_empaque: hiloForm.tipo_empaque || 'cono'
         } : x)
         setStockHilos(list)
-        saveToLocal('durey_materia_prima', list)
+        if (usingFallback) saveToLocal('durey_materia_prima', list)
 
         toast.success('✏️ Insumo actualizado correctamente')
       } else {
@@ -574,23 +569,15 @@ export default function MateriaPrimaPage() {
 
     try {
       if (!usingFallback) {
-        const { error } = await supabase
-          .from('repuestos')
-          .update({ stock_actual: newStock })
-          .eq('id', selectedRepuesto.id)
-
+        // Una sola operación: stock relativo al actual + gasto si es salida.
+        // Antes una salida mayor al stock lo dejaba en 0 y registraba el gasto completo.
+        const { error } = await supabase.rpc('ajustar_stock_repuesto', {
+          p_repuesto_id: selectedRepuesto.id,
+          p_tipo: adjustRepuestoForm.tipo,
+          p_cantidad: cant,
+          p_motivo: adjustRepuestoForm.motivo || null
+        })
         if (error) throw error
-
-        // Registrar costo de repuestos como egreso si es salida
-        if (adjustRepuestoForm.tipo === 'salida') {
-          const { error: errEgreso } = await supabase.from('egresos_adicionales').insert({
-            concepto: `Consumo repuesto: ${selectedRepuesto.nombre} (${cant} uds.) — ${adjustRepuestoForm.motivo || 'Mantenimiento'}`,
-            monto: cant * selectedRepuesto.costo_unitario,
-            categoria: 'repuestos',
-            fecha: new Date().toISOString().split('T')[0]
-          })
-          if (errEgreso) throw new Error(`El stock se actualizó pero no se registró el egreso: ${errEgreso.message}`)
-        }
       } else {
         const list = repuestos.map(r => r.id === selectedRepuesto.id ? { ...r, stock_actual: newStock } : r)
         saveToLocal('durey_repuestos', list)
@@ -748,38 +735,17 @@ export default function MateriaPrimaPage() {
 
     try {
       if (!usingFallback) {
-        const { data: compra, error } = await supabase.from('compras_materia_prima').insert({
-          proveedor_id: newComp.proveedor_id,
-          materia_prima_id: newComp.materia_prima_id,
-          cantidad_kg: newComp.cantidad_kg,
-          costo_total: newComp.costo_total,
-          condicion_pago: newComp.condicion_pago,
-          metodo_pago: newComp.metodo_pago,
-          estado: 'pendiente'
-        }).select().single()
-
+        // Una sola operación: compra + cronograma de cuotas (que suma exacto el total)
+        const { error } = await supabase.rpc('registrar_compra_materia_prima', {
+          p_proveedor_id: newComp.proveedor_id,
+          p_materia_prima_id: newComp.materia_prima_id,
+          p_cantidad_kg: newComp.cantidad_kg,
+          p_costo_total: newComp.costo_total,
+          p_condicion_pago: newComp.condicion_pago,
+          p_metodo_pago: newComp.metodo_pago,
+          p_cuotas_num: compraForm.condicion_pago === 'pago_diferido' ? parseInt(compraForm.cuotas_num) : null
+        })
         if (error) throw error
-
-        // Pago diferido cuotas
-        if (compraForm.condicion_pago === 'pago_diferido' && compra) {
-          const total = parseFloat(compraForm.costo_total)
-          const cuotasNum = parseInt(compraForm.cuotas_num) || 3
-          const montoCuota = total / cuotasNum
-          
-          const cuotasToInsert = []
-          const hoy = new Date()
-          for (let i = 1; i <= cuotasNum; i++) {
-            const due = new Date(hoy.getFullYear(), hoy.getMonth() + i, hoy.getDate())
-            cuotasToInsert.push({
-              compra_id: compra.id,
-              monto: parseFloat(montoCuota.toFixed(2)),
-              fecha_vencimiento: due.toISOString().split('T')[0],
-              estado: 'pendiente'
-            })
-          }
-          const { error: cuotasErr } = await supabase.from('cuotas_compras').insert(cuotasToInsert)
-          if (cuotasErr) throw cuotasErr
-        }
       } else {
         const list = JSON.parse(localStorage.getItem('durey_compras') || '[]')
         list.push(newComp)
@@ -851,36 +817,14 @@ export default function MateriaPrimaPage() {
 
     try {
       if (!usingFallback) {
-        const { error: updErr } = await supabase
-          .from('compras_materia_prima')
-          .update({ estado: nuevoEstado, motivo_devolucion: motivo })
-          .eq('id', selectedCompra.id)
-
-        if (updErr) throw updErr
-
-        if (qcForm.aprobar) {
-          const hilo = stockHilos.find(h => h.id === selectedCompra.materia_prima_id)
-          const nuevoStock = Number(hilo?.stock_kg || 0) + Number(selectedCompra.cantidad_kg)
-
-          const { error: stockErr } = await supabase.from('materia_prima').update({ stock_kg: nuevoStock }).eq('id', selectedCompra.materia_prima_id)
-          if (stockErr) throw stockErr
-
-          const { error: movErr } = await supabase.from('movimientos_materia_prima').insert({
-            materia_prima_id: selectedCompra.materia_prima_id,
-            tipo: 'ingreso_compra',
-            cantidad_kg: selectedCompra.cantidad_kg,
-            referencia_id: selectedCompra.id
-          })
-          if (movErr) throw movErr
-        } else {
-          const { error: devErr } = await supabase.from('movimientos_materia_prima').insert({
-            materia_prima_id: selectedCompra.materia_prima_id,
-            tipo: 'devolucion',
-            cantidad_kg: selectedCompra.cantidad_kg,
-            referencia_id: selectedCompra.id
-          })
-          if (devErr) throw devErr
-        }
+        // Una sola operación: estado de la compra + stock (sumado al valor actual, no a
+        // uno leído antes) + movimiento. Rechaza una compra ya procesada.
+        const { error } = await supabase.rpc('procesar_control_calidad_compra', {
+          p_compra_id: selectedCompra.id,
+          p_aprobar: qcForm.aprobar,
+          p_motivo: motivo
+        })
+        if (error) throw error
       } else {
         // Fallback local
         const list = JSON.parse(localStorage.getItem('durey_compras') || '[]')
