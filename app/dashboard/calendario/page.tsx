@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -265,7 +264,8 @@ export default function CalendarioPage() {
     if (!confirm('¿Estás seguro de eliminar este evento?')) return
 
     try {
-      await supabase.from('eventos_calendario').delete().eq('id', id)
+      const { error } = await supabase.from('eventos_calendario').delete().eq('id', id)
+      if (error) throw error
       const filtered = eventos.filter(e => e.id !== id)
       setEventos(filtered)
       localStorage.setItem('durey_eventos_calendario', JSON.stringify(filtered))

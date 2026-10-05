@@ -295,7 +295,7 @@ export default function DisenosPage() {
       } else {
         // Fallback directo a tablas
         try {
-          const { data: insData } = await supabase.from('disenos').insert({
+          const { data: insData, error: insErr } = await supabase.from('disenos').insert({
             codigo: createForm.codigo.trim(),
             nombre: createForm.nombre.trim(),
             foto_url: fotoUrl,
@@ -308,19 +308,22 @@ export default function DisenosPage() {
             estado: 'en_muestra'
           }).select('*').single()
 
+          if (insErr) throw insErr
           if (insData?.id) createdId = insData.id
 
           if (createForm.maquina_ids.length > 0) {
             for (const mId of createForm.maquina_ids) {
-              await supabase.from('disenos_maquinas').insert({
+              const { error: asigErr } = await supabase.from('disenos_maquinas').insert({
                 diseno_id: createdId,
                 maquina_id: mId,
                 activo: true
               })
+              if (asigErr) throw asigErr
             }
           }
         } catch (dbErr) {
-          console.warn('Inserción directa falló:', dbErr)
+          // Antes se ignoraba y el diseño quedaba solo en el navegador como si se hubiera guardado
+          throw new Error(`No se pudo guardar en la base de datos: ${dbErr instanceof Error ? dbErr.message : (dbErr as { message?: string })?.message || rpcErr?.message || 'error desconocido'}`)
         }
       }
 
@@ -471,13 +474,18 @@ export default function DisenosPage() {
     try {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.id)
       if (isUuid) {
-        await supabase.from('disenos_maquinas').delete().eq('diseno_id', d.id)
-        await supabase.from('disenos').delete().eq('id', d.id)
+        const { error: errAsig } = await supabase.from('disenos_maquinas').delete().eq('diseno_id', d.id)
+        if (errAsig) throw errAsig
+        const { error: errDis } = await supabase.from('disenos').delete().eq('id', d.id)
+        if (errDis) throw errDis
       } else {
-        await supabase.from('disenos').delete().eq('codigo', d.codigo)
+        const { error: errDis } = await supabase.from('disenos').delete().eq('codigo', d.codigo)
+        if (errDis) throw errDis
       }
     } catch (e) {
-      console.warn('Error en eliminación backend:', e)
+      // Antes se ignoraba y el diseño desaparecía de la pantalla aunque siguiera en la base de datos
+      toast.error(`No se pudo eliminar el diseño: ${e instanceof Error ? e.message : (e as { message?: string })?.message || 'error desconocido'}`)
+      return
     }
 
     // Limpiar de estado React

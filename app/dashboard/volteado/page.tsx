@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -12,7 +11,7 @@ import { formatearFecha } from '@/lib/utils'
 import Modal from '@/components/ui/Modal'
 
 interface Volteador { id: string; nombre: string }
-interface StockVoltear { id: string; docenas: number; catalogo_media: { id: string; sku?: string; codigo: string; talla: string; publico: string } }
+interface StockVoltear { id: string; docenas: number; catalogo_media: { id: string; sku?: string; codigo: string; modelo?: string; talla: string; publico: string } }
 interface LoteVolteado {
   id: string
   volteador_id: string
@@ -22,7 +21,7 @@ interface LoteVolteado {
   estado: 'en_proceso' | 'completado'
   created_at: string
   volteador?: { nombre: string }
-  catalogo_media?: { id: string; sku?: string; codigo: string; talla: string; publico: string }
+  catalogo_media?: { id: string; sku?: string; codigo: string; modelo?: string; talla: string; publico: string }
 }
 interface ReporteVolteado {
   id: string
@@ -88,11 +87,11 @@ export default function VolteadoPage() {
     setLoading(true)
     try {
       const [sRes, lRes, rRes] = await Promise.all([
-        supabase.from('stock_listo_voltear').select('id, docenas, catalogo_media:catalogo_medias(id, sku, codigo, talla, publico)').gt('docenas', 0),
+        supabase.from('stock_listo_voltear').select('id, docenas, catalogo_media:catalogo_medias(id, sku, codigo, modelo, talla, publico)').gt('docenas', 0),
         supabase.from('lotes_volteado').select(`
           id, volteador_id, catalogo_media_id, docenas_asignadas, docenas_pendientes, estado, created_at,
           volteador:usuarios(nombre),
-          catalogo_media:catalogo_medias(id, sku, codigo, talla, publico)
+          catalogo_media:catalogo_medias(id, sku, codigo, modelo, talla, publico)
         `).order('created_at', { ascending: false }),
         supabase.from('reportes_volteado').select(`
           id, docenas_volteadas, pares_defectuosos, fecha,

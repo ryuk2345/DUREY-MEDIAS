@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -598,9 +597,18 @@ export default function VentasPage() {
     }
 
 
-    await supabase.from('items_venta').insert(
+    // Sin productos la venta no sirve: si fallan, se deshace la venta (antes quedaba vacía)
+    const { error: errItems } = await supabase.from('items_venta').insert(
       carrito.map(i => ({ venta_id: venta.id, catalogo_media_id: i.catalogo_media_id, docenas: i.docenas, precio_docena: i.precio_docena }))
     )
+    if (errItems) {
+      const { error: errDeshacer } = await supabase.from('ventas').delete().eq('id', venta.id)
+      toast.error(errDeshacer
+        ? `No se guardaron los productos de la venta ${codigoVenta} (${errItems.message}) y no se pudo anularla. Elimínala en el historial antes de reintentar.`
+        : `No se pudo registrar la venta (productos): ${errItems.message}. No se guardó nada; intenta de nuevo.`)
+      setGuardandoVenta(false)
+      return
+    }
 
     if (tipoPago === 'cuotas' && cronogramaCuotas.length > 0) {
       const cuotasToInsert = cronogramaCuotas.map(c => ({
@@ -610,7 +618,16 @@ export default function VentasPage() {
         fecha_vencimiento: c.fecha_vencimiento,
         estado: 'pendiente'
       }))
-      await supabase.from('cuotas').insert(cuotasToInsert)
+      const { error: errCuotas } = await supabase.from('cuotas').insert(cuotasToInsert)
+      if (errCuotas) {
+        const { error: errDeshacerItems } = await supabase.from('items_venta').delete().eq('venta_id', venta.id)
+        const { error: errDeshacerVenta } = errDeshacerItems ? { error: errDeshacerItems } : await supabase.from('ventas').delete().eq('id', venta.id)
+        toast.error(errDeshacerVenta
+          ? `No se guardaron las cuotas de la venta ${codigoVenta} (${errCuotas.message}) y no se pudo anularla. Elimínala en el historial antes de reintentar.`
+          : `No se pudo registrar el cronograma de cuotas: ${errCuotas.message}. No se guardó la venta; intenta de nuevo.`)
+        setGuardandoVenta(false)
+        return
+      }
 
       const vendObj = vendedoras.find(v => v.id === vendedoraSeleccionadaId)
 

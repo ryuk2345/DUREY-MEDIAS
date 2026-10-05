@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -328,9 +327,15 @@ export default function PlanchadoPage() {
     for (const [mediaId, cantDescontar] of stockToUpdate.entries()) {
       const itemStock = stock.find(s => s.catalogo_media_id === mediaId)
       if (itemStock) {
-        await supabase.from('stock_listo_planchar')
+        const { error: errStock } = await supabase.from('stock_listo_planchar')
           .update({ docenas: Math.max(0, itemStock.docenas - cantDescontar) })
           .eq('id', itemStock.id)
+        if (errStock) {
+          toast.error(`Los reportes se guardaron, pero no se pudo descontar el stock listo para planchar: ${errStock.message}. Avisa al supervisor antes de reintentar.`)
+          setSaving(false)
+          cargarDatos()
+          return
+        }
       }
     }
 

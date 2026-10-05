@@ -13,7 +13,7 @@ export interface ModalProps {
   /** Título principal del modal */
   title: string
   /** Subtítulo opcional explicativo */
-  subtitle?: string
+  subtitle?: React.ReactNode
   /** Contenido del cuerpo del modal */
   children: React.ReactNode
   /** Acciones o botones de pie de página opcionales (fijos abajo) */

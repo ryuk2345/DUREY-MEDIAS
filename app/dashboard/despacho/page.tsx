@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -241,17 +240,19 @@ export default function DespachoPage() {
       // 1. Descontar paquetes del almacén → pasan a 'entregado' directamente
       for (const linea of lineas) {
         let faltantes = linea.docenas_escaneadas
-        const { data: paqDisp } = await supabase
+        const { data: paqDisp, error: errPaq } = await supabase
           .from('paquetes').select('id, docenas')
           .eq('catalogo_media_id', linea.catalogo_media_id)
           .in('estado', ['almacenado', 'pendiente_almacenar'])
           .order('created_at', { ascending: true })
+        if (errPaq) throw errPaq
 
         for (const paq of paqDisp ?? []) {
           if (faltantes <= 0) break
-          await supabase.from('paquetes')
+          const { error: errUpd } = await supabase.from('paquetes')
             .update({ venta_id: ventaSeleccionada.id, estado: 'entregado', ubicacion_id: null })
             .eq('id', paq.id)
+          if (errUpd) throw errUpd
           faltantes -= Number(paq.docenas)
         }
       }
@@ -269,18 +270,20 @@ export default function DespachoPage() {
       if (errorGuia) throw errorGuia
 
       // 3. Cerrar la venta
-      await supabase.from('ventas')
+      const { error: errVenta } = await supabase.from('ventas')
         .update({ estado: 'entregado' })
         .eq('id', ventaSeleccionada.id)
+      if (errVenta) throw errVenta
 
       // 4. Registrar movimiento de salida
-      await supabase.from('movimientos_stock').insert(
+      const { error: errMov } = await supabase.from('movimientos_stock').insert(
         lineas.map(l => ({
           tipo: 'salida_venta',
           referencia: `Despacho ${ventaSeleccionada.codigo_venta} — ${agenciaSeleccionada}`,
           docenas: l.docenas_escaneadas,
         }))
       )
+      if (errMov) throw errMov
 
       toast.success(`✅ Pedido ${ventaSeleccionada.codigo_venta} despachado. Guía ${codigoGuia} registrada en el Kárdex.`)
       setShowDespachoModal(false)

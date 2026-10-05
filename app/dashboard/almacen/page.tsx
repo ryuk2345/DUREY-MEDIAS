@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -43,7 +42,7 @@ interface EscaneoMasterBagInfo {
   salon_destino_nombre: string
   total_docenas: number
   total_pares: number
-  items: { sku: string; codigo: string; docenas: number; pares: number }[]
+  items: { sku?: string; codigo: string; docenas: number; pares: number }[]
   paqueteId?: string
 }
 
@@ -247,12 +246,17 @@ export default function AlmacenPage() {
         }
       }
 
-      await supabase.from('paquetes').update({
+      const { error: errUpd } = await supabase.from('paquetes').update({
         estado: 'almacenado',
         ubicacion_id: saco.salon_destino_id
       }).eq('id', saco.paqueteId)
+      if (errUpd) {
+        toast.error(`No se pudo almacenar el saco: ${errUpd.message}`)
+        setProcesandoEscaneo(false)
+        return
+      }
     } else {
-      await supabase.from('paquetes').insert({
+      const { error: errIns } = await supabase.from('paquetes').insert({
         codigo_paquete: saco.codigo_saco,
         docenas: saco.total_docenas,
         total_pares: saco.total_pares,
@@ -260,16 +264,24 @@ export default function AlmacenPage() {
         detalles_contenido: saco.items,
         estado: 'almacenado'
       })
+      if (errIns) {
+        toast.error(`No se pudo registrar el saco: ${errIns.message}`)
+        setProcesandoEscaneo(false)
+        return
+      }
     }
 
 
     // Registrar en movimientos de stock
-    await supabase.from('movimientos_stock').insert({
+    const { error: errMovSaco } = await supabase.from('movimientos_stock').insert({
       tipo: 'ingreso_salon',
       referencia: `Escáner Pistola Saco ${saco.codigo_saco}`,
       ubicacion_id: saco.salon_destino_id,
       docenas: saco.total_docenas
     })
+    if (errMovSaco) {
+      toast.error(`El saco se almacenó, pero no se registró en el kárdex: ${errMovSaco.message}`)
+    }
 
     toast.success(`📍 Saco ${saco.codigo_saco} ALMACENADO EN ${saco.salon_destino_nombre.toUpperCase()} (${saco.total_pares} pares ingresados)`, { duration: 4000 })
 
@@ -312,12 +324,15 @@ export default function AlmacenPage() {
     }
 
     // Registrar movimiento de stock
-    await supabase.from('movimientos_stock').insert({
+    const { error: errMovIngreso } = await supabase.from('movimientos_stock').insert({
       tipo: 'ingreso_directo',
       referencia: `${codigoIngreso} — ${formIngreso.nota || 'Ingreso directo de stock'}`,
       ubicacion_id: formIngreso.salon_id,
       docenas
     })
+    if (errMovIngreso) {
+      toast.error(`El ingreso se guardó, pero no se registró en el kárdex: ${errMovIngreso.message}`)
+    }
 
     toast.success(
       `✅ ${docenas} docenas (${pares} pares) de ${productoSeleccionado.modelo} ingresadas a ${salon?.nombre}`,
@@ -702,7 +717,7 @@ export default function AlmacenPage() {
                     {p.estado !== 'almacenado' && (
                       <div className="flex items-center justify-end gap-2">
                         <CustomSelect
-                          value={salonDestinoManual[p.id] || p.ubicacion_id || p.ubicacion?.id || ubicaciones[0]?.id || ''}
+                          value={salonDestinoManual[p.id] || p.ubicacion?.id || ubicaciones[0]?.id || ''}
                           onChange={val => setSalonDestinoManual(prev => ({ ...prev, [p.id]: val }))}
                           options={ubicaciones.map(u => ({ value: u.id, label: u.nombre }))}
                           triggerClassName="px-2 py-1 text-xs text-white font-medium min-w-[120px]"
@@ -714,7 +729,7 @@ export default function AlmacenPage() {
                               toast.error(`Error en paquete: ${v.error}`)
                               return
                             }
-                            const destId = salonDestinoManual[p.id] || p.ubicacion_id || p.ubicacion?.id || ubicaciones[0]?.id || ''
+                            const destId = salonDestinoManual[p.id] || p.ubicacion?.id || ubicaciones[0]?.id || ''
                             const destNombre = ubicaciones.find(u => u.id === destId)?.nombre || 'Salón'
                             
                             const { error } = await supabase.from('paquetes').update({ estado: 'almacenado', ubicacion_id: destId }).eq('id', p.id)
@@ -724,12 +739,15 @@ export default function AlmacenPage() {
                             }
                             
                             // Registrar en movimientos de stock
-                            await supabase.from('movimientos_stock').insert({
+                            const { error: errMov } = await supabase.from('movimientos_stock').insert({
                               tipo: 'ingreso_salon',
                               referencia: `Manual Saco ${p.codigo_paquete}`,
                               ubicacion_id: destId,
                               docenas: p.docenas
                             })
+                            if (errMov) {
+                              toast.error(`El saco se almacenó, pero no se registró en el kárdex: ${errMov.message}`)
+                            }
 
                             toast.success(`📍 Saco ${p.codigo_paquete} almacenado en ${destNombre}`)
                             cargarDatos()

@@ -42,3 +42,8 @@ next-env.d.ts
 
 
 
+
+# Playwright (tests de navegador)
+/test-results/
+/playwright-report/
+/mock_db.e2e.json

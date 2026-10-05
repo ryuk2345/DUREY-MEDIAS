@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -26,6 +25,7 @@ interface Cliente {
 
 interface VentaCliente {
   id: string
+  cliente_id: string
   codigo_venta: string
   total_soles: number
   monto_adelanto?: number
@@ -321,7 +321,8 @@ export default function ClientesPage() {
           const { error } = await supabase.from('clientes').delete().eq('id', c.id)
           if (error) throw error
         } else {
-          await supabase.from('clientes').delete().eq('numero_documento', c.numero_documento)
+          const { error } = await supabase.from('clientes').delete().eq('numero_documento', c.numero_documento)
+          if (error) throw error
         }
       }
       const list = clientes.filter(x => x.id !== c.id)
