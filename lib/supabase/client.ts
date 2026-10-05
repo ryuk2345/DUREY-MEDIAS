@@ -1,5 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 import { createMockClient } from './mockDb'
+import { crearFetchConSesion } from '@/lib/auth/tokenDb'
 
 // Igual que createBrowserClient (que devuelve siempre la misma instancia), el mock
 // se reutiliza: varias páginas usan el cliente como dependencia de useCallback y
@@ -28,5 +29,7 @@ export function createClient() {
     return mockClient as any
   }
 
-  return createBrowserClient(url, key)
+  // Las consultas a tablas, RPC y Storage van con el JWT del usuario (cookie durey_db_token),
+  // no como 'anon': así la base puede negar el acceso a quien no inició sesión (migración 026).
+  return createBrowserClient(url, key, { global: { fetch: crearFetchConSesion() } })
 }

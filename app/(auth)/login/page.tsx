@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shirt, Lock, Mail, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -13,7 +12,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   const router = useRouter()
-  const supabase = createClient()
 
   // ── INICIAR SESIÓN CON CREDENCIALES ───────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,26 +39,10 @@ export default function LoginPage() {
         return
       }
 
-      const { user, access_token, debe_cambiar_password } = data
+      const { user, debe_cambiar_password } = data
 
-      // 2. Inyectar el JWT en el cliente de Supabase para que las peticiones lleven Authorization: Bearer <jwt>
-      if (access_token) {
-        try {
-          const { error: sessionErr } = await supabase.auth.setSession({
-            access_token,
-            refresh_token: access_token
-          })
-          if (!sessionErr) {
-            console.log('🔑 [Shadow Auth] Sesión Supabase activada con JWT:', {
-              user_id: user.id,
-              role: user.rol,
-              email: user.email
-            })
-          }
-        } catch (sessionEx) {
-          console.warn('Nota: Sincronización de sesión Supabase en progreso:', sessionEx)
-        }
-      }
+      // 2. La sesión frente a la base la pone el servidor en la cookie durey_db_token
+      //    (lib/auth/tokenDb.ts); el cliente de Supabase la manda en cada consulta.
 
       // 3. Si el usuario debe cambiar contraseña, redirigir antes del dashboard
       if (debe_cambiar_password) {

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { generateSupabaseJWT } from '@/lib/auth/jwt'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { usaBaseMock } from '@/lib/supabase/client'
+import { COOKIE_TOKEN_DB, OPCIONES_COOKIE_TOKEN_DB, tokenAceptadoPorSupabase } from '@/lib/auth/tokenDb'
 
 export async function POST(req: Request) {
   try {
@@ -83,6 +85,15 @@ export async function POST(req: Request) {
       path: '/',
       maxAge: oneWeek
     })
+
+    // Copia legible del JWT para que el navegador consulte la base con la sesión del
+    // usuario. Solo si Supabase acepta la firma: con un secreto equivocado, mandar el
+    // token rompería todas las consultas (sin él siguen funcionando como antes).
+    if (!usaBaseMock() && (await tokenAceptadoPorSupabase(access_token)) === true) {
+      response.cookies.set(COOKIE_TOKEN_DB, access_token, OPCIONES_COOKIE_TOKEN_DB)
+    } else {
+      response.cookies.set(COOKIE_TOKEN_DB, '', { path: '/', maxAge: 0 })
+    }
 
     response.cookies.set('durey_user_role', matchedUser.rol, { path: '/', maxAge: oneWeek })
     response.cookies.set('durey_user_name', encodeURIComponent(matchedUser.nombre), { path: '/', maxAge: oneWeek })

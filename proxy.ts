@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { verifySupabaseJWT, generateSupabaseJWT } from '@/lib/auth/jwt'
 import { normalizarRol } from '@/lib/auth/roles'
+import { COOKIE_TOKEN_DB, OPCIONES_COOKIE_TOKEN_DB, tokenAceptadoPorSupabase } from '@/lib/auth/tokenDb'
 
 // Rutas accesibles por rol (en el dashboard)
 const ROLE_ROUTES: Record<string, string[]> = {
@@ -42,6 +43,8 @@ export async function proxy(request: NextRequest) {
 
   let user: any = null
   let role: string | null = null
+  // JWT con el que el navegador debe consultar la base (ver lib/auth/tokenDb.ts)
+  let tokenSesion: string | null = null
 
   const authToken = request.cookies.get('durey_auth_token')?.value
   const roleCookie = request.cookies.get('durey_user_role')?.value
@@ -67,6 +70,7 @@ export async function proxy(request: NextRequest) {
     if (decoded) {
       user = { id: decoded.sub, email: decoded.email }
       role = decoded.rol
+      tokenSesion = authToken
     }
   }
 
@@ -127,6 +131,7 @@ export async function proxy(request: NextRequest) {
             path: '/',
             maxAge: oneWeek
           })
+          tokenSesion = newToken
         }
       }
     } catch (e) {
@@ -141,9 +146,25 @@ export async function proxy(request: NextRequest) {
   // Sesión sin rol válido = sin sesión
   if (!cleanRole) user = null
 
+  // Sincronizar la copia legible del JWT (cookie durey_db_token) con la sesión:
+  // las sesiones abiertas antes de este cambio la reciben sin volver a iniciar sesión,
+  // y si la sesión ya no es válida se borra para no mandar un token vencido.
+  if (!isMock) {
+    const tokenDbActual = request.cookies.get(COOKIE_TOKEN_DB)?.value
+    if (user && tokenSesion && tokenDbActual !== tokenSesion) {
+      if ((await tokenAceptadoPorSupabase(tokenSesion)) === true) {
+        supabaseResponse.cookies.set(COOKIE_TOKEN_DB, tokenSesion, OPCIONES_COOKIE_TOKEN_DB)
+      }
+    } else if (!user && tokenDbActual) {
+      supabaseResponse.cookies.set(COOKIE_TOKEN_DB, '', { path: '/', maxAge: 0 })
+    }
+  }
+
   // 1. Redirigir al login si no está autenticado y está en ruta protegida
   if (!user && pathname.startsWith('/dashboard')) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    const redireccion = NextResponse.redirect(new URL('/login', request.url))
+    if (request.cookies.get(COOKIE_TOKEN_DB)) redireccion.cookies.set(COOKIE_TOKEN_DB, '', { path: '/', maxAge: 0 })
+    return redireccion
   }
 
   // 2. Redirigir al dashboard si ya está autenticado y entra al login
