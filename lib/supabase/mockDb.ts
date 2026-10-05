@@ -2,6 +2,8 @@
 // Emula el cliente de Supabase (.from().select().insert().update().eq().single())
 // Guardando el estado en durey-app/mock_db.json (Servidor) y localStorage (Cliente)
 
+import { ejecutarRpcProduccion, RPC_PRODUCCION } from './mockRpcProduccion'
+
 const SEMILLAS = {
   usuarios: [
     { id: '1', nombre: 'Admin General', email: 'admin@durey.com', rol: 'admin', activo: true, estado: 'disponible' },
@@ -358,6 +360,17 @@ class MockQueryBuilder {
         }
         return { data: result[0] || null, error: null };
       },
+      async maybeSingle() {
+        const data = await self.getTableData();
+        let result = data;
+        for (const filter of filters) {
+          result = result.filter(filter);
+        }
+        if (result.length > 1) {
+          return { data: null, error: { message: 'JSON object requested, multiple (or no) rows returned' } };
+        }
+        return { data: result[0] ?? null, error: null };
+      },
       then(onfulfilled?: (value: any) => any) {
         return this.execute().then(onfulfilled);
       },
@@ -680,6 +693,13 @@ export function createMockClient() {
       return new MockQueryBuilder(tableName);
     },
     async rpc(fnName: string, params: any) {
+      if ((RPC_PRODUCCION as readonly string[]).includes(fnName)) {
+        const db = await getMockDb();
+        const resultado = ejecutarRpcProduccion(db, fnName, params)!;
+        if (!resultado.error) await saveMockDb(db);
+        return resultado;
+      }
+
       if (fnName === 'finalizar_lote_remallado') {
         const {
           p_lote_id,

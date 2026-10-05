@@ -4,11 +4,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatearFecha } from '@/lib/utils'
-import { listarUsuarios, actualizarEstadoUsuario } from '@/lib/api/usuarios'
+import { listarUsuarios } from '@/lib/api/usuarios'
 import {
   Layers, Plus, Search, CheckCircle, Clock, ChevronDown, X,
   Loader2, AlertTriangle, Cpu, Play, Pause, Activity, User, Wrench,
-  CheckCircle2, Sparkles, Filter, TrendingUp, ShieldAlert
+  CheckCircle2, Sparkles, Filter, ShieldAlert
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
@@ -197,6 +197,7 @@ export default function ProduccionTejidoPage() {
   const countActivas = maquinas.filter(m => m.estado === 'ocupada').length
   const countDisponibles = maquinas.filter(m => m.estado === 'activa').length
   const countMantenimiento = maquinas.filter(m => m.estado === 'mantenimiento').length
+  const countMalogradas = maquinas.filter(m => m.estado === 'malograda').length
 
   // ── MANEJADOR DE CAMBIO DE MARCA EN LA CARGA DE LOTE ──────────────────────
   const handleMarcaChange = (marcaId: string) => {
@@ -254,7 +255,7 @@ export default function ProduccionTejidoPage() {
       return
     }
 
-    // Validar transiciones de estado de las máquinas a 'ocupada'
+    // Validar transiciones de estado de las máquinas a 'ocupada' (aviso rápido; la BD vuelve a validar)
     for (const mId of maquinaIds) {
       const maq = maquinas.find(m => m.id === mId)
       if (maq) {
@@ -266,114 +267,17 @@ export default function ProduccionTejidoPage() {
       }
     }
 
-    // --- VALIDACIÓN DE MATERIA PRIMA (HILO) ---
-    const mediaIdsToCheck = maquinaIds.map(id => maquinas_seleccionadas[id])
-    const { data: mediasInfo, error: mediaErr } = await supabase
-      .from('catalogo_medias')
-      .select('id, codigo, peso_docena_g, materia_prima_id, materia_prima:materia_prima(material, color, stock_kg)')
-      .in('id', mediaIdsToCheck)
-
-    if (mediaErr) {
-      toast.error(`Error al validar materia prima: ${mediaErr.message}`)
-      return
-    }
-
-    const yarnRequirements: Record<string, { material: string; color: string; needed: number; stock: number }> = {}
-    for (const tm of mediaIdsToCheck) {
-      const mInfo = mediasInfo?.find(m => m.id === tm)
-      if (mInfo && mInfo.materia_prima_id) {
-        const weightNeededKg = (15 * (Number(mInfo.peso_docena_g) || 360.00)) / 1000
-        const yKey = mInfo.materia_prima_id
-        if (!yarnRequirements[yKey]) {
-          yarnRequirements[yKey] = {
-            material: (mInfo.materia_prima as any)?.material || 'Algodón',
-            color: (mInfo.materia_prima as any)?.color || 'Blanco',
-            needed: 0,
-            stock: Number((mInfo.materia_prima as any)?.stock_kg || 0)
-          }
-        }
-        yarnRequirements[yKey].needed += weightNeededKg
-      }
-    }
-
-    for (const yKey of Object.keys(yarnRequirements)) {
-      const req = yarnRequirements[yKey]
-      if (req.stock < req.needed) {
-        toast.error(`⚠️ Alerta: Falta de materia prima. Se requieren ${req.needed.toFixed(2)} Kg de ${req.material} ${req.color} pero solo quedan ${req.stock.toFixed(2)} Kg.`)
-        return
-      }
-    }
-
-    // 1. Crear el turno de producción en DB
-    const { data: nuevoTurno, error: tErr } = await supabase.from('turnos_produccion').insert({
-      tejedor_id,
-      horario,
-      duracion_horas: parseInt(duracion_horas),
-      estado: 'activo',
-      fecha: new Date().toISOString().split('T')[0]
-    }).select().single()
-
-    if (tErr || !nuevoTurno) {
-      toast.error('Error al iniciar el turno de tejido')
-      return
-    }
-
-    // --- DESCONTAR STOCK DE HILO Y REGISTRAR CONSUMO ---
-    for (const yKey of Object.keys(yarnRequirements)) {
-      const req = yarnRequirements[yKey]
-      const newStock = req.stock - req.needed
-      
-      const { error: stockErr } = await supabase
-        .from('materia_prima')
-        .update({ stock_kg: newStock })
-        .eq('id', yKey)
-      
-      if (stockErr) {
-        toast.error(`Error al descontar stock de materia prima: ${stockErr.message}`)
-        return
-      }
-
-      const { error: movErr } = await supabase
-        .from('movimientos_materia_prima')
-        .insert({
-          materia_prima_id: yKey,
-          tipo: 'consumo_produccion',
-          cantidad_kg: req.needed,
-          referencia_id: nuevoTurno.id
-        })
-
-      if (movErr) {
-        toast.error(`Error al registrar movimiento de consumo: ${movErr.message}`)
-        return
-      }
-    }
-
-
-    // 2. Insertar las asignaciones de máquina-media
-    const asignaciones = maquinaIds.map(id => ({
-      turno_id: nuevoTurno.id,
-      maquina_id: id,
-      catalogo_media_id: maquinas_seleccionadas[id]
-    }))
-
-    const { error: asigErr } = await supabase.from('turno_maquinas').insert(asignaciones)
-    if (asigErr) {
-      toast.error(`Error al registrar asignaciones de máquinas: ${asigErr.message}`)
-      return
-    }
-
-    // 3. Marcar las máquinas de esa marca como ocupadas
-    const { error: maqErr } = await supabase.from('maquinas').update({ estado: 'ocupada' }).in('id', maquinaIds)
-    if (maqErr) {
-      toast.error(`Error al actualizar estado de las máquinas: ${maqErr.message}`)
-      return
-    }
-
-    // 4. Marcar al tejedor como ocupado
-    try {
-      await actualizarEstadoUsuario(tejedor_id, 'ocupada')
-    } catch (tejErr: any) {
-      toast.error(`Error al actualizar estado de operario tejedor: ${tejErr.message}`)
+    // Una sola operación atómica: valida hilo, crea turno + asignaciones, descuenta
+    // stock y marca máquinas/tejedor. Si algo falla no queda nada a medias.
+    const { error: loteErr } = await supabase.rpc('cargar_lote_produccion', {
+      p_tejedor_id: tejedor_id,
+      p_horario: horario,
+      p_duracion_horas: parseInt(duracion_horas),
+      p_asignaciones: maquinaIds.map(id => ({ maquina_id: id, catalogo_media_id: maquinas_seleccionadas[id] }))
+    })
+    if (loteErr) {
+      toast.error(`No se pudo cargar el lote: ${loteErr.message}`)
+      cargarDatos()
       return
     }
 
@@ -405,37 +309,21 @@ export default function ProduccionTejidoPage() {
   const enviarReporteProduccion = async () => {
     if (!turnoSeleccionado) return
 
-    // Validar transición de las máquinas a 'activa'
-    const mIds = turnoSeleccionado.turno_maquinas.map(tm => tm.maquina_id)
-    for (const mId of mIds) {
-      const maq = maquinas.find(m => m.id === mId)
-      if (maq) {
-        const v = validarTransicionEstadoMaquina(maq.estado as any, 'activa')
-        if (!v.valido) {
-          toast.error(`Error en máquina ${maq.codigo}: ${v.error}`)
-          return
-        }
-      }
-    }
+    const docenasInvalidas = turnoSeleccionado.turno_maquinas.some(tm => parseFloat(reporte[tm.maquina_id] ?? '0') < 0)
+    if (docenasInvalidas) { toast.error('Las docenas producidas no pueden ser negativas'); return }
 
-    const items = turnoSeleccionado.turno_maquinas.map(tm => ({
-      turno_id: turnoSeleccionado.id,
-      maquina_id: tm.maquina_id,
-      catalogo_media_id: tm.catalogo_media_id,
-      docenas_producidas: parseFloat(reporte[tm.maquina_id] ?? '0') || 0,
-      fecha: new Date().toISOString().split('T')[0],
-    }))
-
-    const { error: rErr } = await supabase.from('reportes_produccion').insert(items)
-    if (rErr) { toast.error('Error al guardar reporte de producción'); return }
-
-    // Liberar turno y máquinas
-    await supabase.from('turnos_produccion').update({ estado: 'cerrado' }).eq('id', turnoSeleccionado.id)
-    await supabase.from('maquinas').update({ estado: 'activa' }).in('id', mIds)
-
-    // Liberar al tejedor
-    if (turnoSeleccionado.tejedor_id) {
-      await actualizarEstadoUsuario(turnoSeleccionado.tejedor_id, 'disponible').catch(() => {})
+    // Una sola operación atómica: reportes + cierre del turno + liberar máquinas y tejedor
+    const { error: cierreErr } = await supabase.rpc('cerrar_turno_produccion', {
+      p_turno_id: turnoSeleccionado.id,
+      p_reportes: turnoSeleccionado.turno_maquinas.map(tm => ({
+        maquina_id: tm.maquina_id,
+        docenas: parseFloat(reporte[tm.maquina_id] ?? '0') || 0
+      }))
+    })
+    if (cierreErr) {
+      toast.error(`No se pudo registrar la producción: ${cierreErr.message}`)
+      cargarDatos()
+      return
     }
 
     toast.success('🎉 Producción registrada correctamente.')
@@ -547,6 +435,8 @@ export default function ProduccionTejidoPage() {
                 const info = maquinasEstadoMap.get(m.id)
                 const isEnMarcha = m.estado === 'ocupada'
                 const isMantenimiento = m.estado === 'mantenimiento'
+                const isMalograda = m.estado === 'malograda'
+                const isLibre = m.estado === 'activa'
 
                 return (
                   <div
@@ -556,6 +446,8 @@ export default function ProduccionTejidoPage() {
                         ? 'border-emerald-500/30 bg-emerald-500/[0.02] shadow-lg shadow-emerald-500/5'
                         : isMantenimiento
                         ? 'border-amber-500/30 bg-amber-500/[0.02]'
+                        : isMalograda
+                        ? 'border-red-500/40 bg-red-500/[0.03]'
                         : 'border-white/[0.08] hover:border-blue-400/40'
                     }`}
                   >
@@ -577,9 +469,18 @@ export default function ProduccionTejidoPage() {
                             <Wrench className="w-3 h-3" />
                             ALERTA
                           </span>
-                        ) : (
+                        ) : isMalograda ? (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 shrink-0">
+                            <AlertTriangle className="w-3 h-3" />
+                            FALLA
+                          </span>
+                        ) : isLibre ? (
                           <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
                             LIBRE
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-700 text-slate-300 border border-white/10 shrink-0 uppercase">
+                            {m.estado}
                           </span>
                         )}
                       </div>
@@ -618,6 +519,10 @@ export default function ProduccionTejidoPage() {
                             Registrar Producción
                           </button>
                         </>
+                      ) : !isLibre ? (
+                        <p className="flex-1 text-center text-[11px] text-slate-500 py-1.5">
+                          No disponible para cargar
+                        </p>
                       ) : (
                         <button
                           onClick={() => setCargaForm(f => ({ ...f, marca_id: m.marca_id }))}
@@ -789,42 +694,54 @@ export default function ProduccionTejidoPage() {
             </div>
           </div>
 
-          {/* Widget 2: Eficiencia OEE de Planta */}
+          {/* Widget 2: Uso real de la planta (tejedoras) */}
           <div className="glass rounded-3xl p-5 border border-white/[0.08]">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Eficiencia de Planta</p>
+                <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Uso de la Planta</p>
                 <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl font-black text-white">88.4%</span>
-                  <span className="text-xs text-emerald-400 font-bold flex items-center">
-                    <TrendingUp className="w-3 h-3 mr-0.5" /> +2.4%
+                  <span className="text-2xl font-black text-white">
+                    {countActivas + countDisponibles > 0
+                      ? `${Math.round((countActivas / (countActivas + countDisponibles)) * 100)}%`
+                      : '—'}
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium">
+                    {countActivas} de {countActivas + countDisponibles} operativas en marcha
                   </span>
                 </div>
               </div>
               <Activity className="w-6 h-6 text-blue-400" />
             </div>
 
-            {/* Barras animadas OEE */}
-            <div className="flex items-end gap-1.5 h-12 pt-2">
-              {[60, 75, 80, 88, 92, 85, 90, 94].map((h, i) => (
-                <div key={i} className="flex-1 bg-blue-500/20 rounded-t-md relative overflow-hidden h-full">
-                  <div
-                    className="bg-gradient-to-t from-blue-600 to-cyan-400 absolute bottom-0 left-0 right-0 rounded-t-md transition-all duration-500"
-                    style={{ height: `${h}%` }}
-                  />
-                </div>
-              ))}
-            </div>
+            {/* Barra por estado (datos reales de máquinas tejedoras) */}
+            {maquinas.length > 0 ? (
+              <div className="flex h-3 rounded-full overflow-hidden bg-slate-800">
+                {[
+                  { n: countActivas, cls: 'bg-emerald-400', label: 'En marcha' },
+                  { n: countDisponibles, cls: 'bg-blue-400', label: 'Libres' },
+                  { n: countMantenimiento, cls: 'bg-amber-400', label: 'Mantenimiento' },
+                  { n: countMalogradas, cls: 'bg-red-500', label: 'Malogradas' },
+                ].filter(x => x.n > 0).map(x => (
+                  <div key={x.label} title={`${x.label}: ${x.n}`} className={x.cls} style={{ width: `${(x.n / maquinas.length) * 100}%` }} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-slate-500">Sin máquinas tejedoras registradas</p>
+            )}
           </div>
 
-          {/* Widget 3: Mantenimiento Preventivo Banner */}
+          {/* Widget 3: Máquinas fuera de servicio (datos reales) */}
           <div className="p-4 rounded-3xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 flex items-center gap-3">
             <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
               <ShieldAlert className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs font-bold text-amber-300">Mantenimiento Preventivo</p>
-              <p className="text-[11px] text-amber-200/70">Próxima ronda programada en 2h 15m</p>
+              <p className="text-xs font-bold text-amber-300">Fuera de servicio</p>
+              <p className="text-[11px] text-amber-200/70">
+                {countMalogradas + countMantenimiento === 0
+                  ? 'Todas las tejedoras están operativas'
+                  : `${countMalogradas} malograda(s) · ${countMantenimiento} en mantenimiento`}
+              </p>
             </div>
           </div>
 
