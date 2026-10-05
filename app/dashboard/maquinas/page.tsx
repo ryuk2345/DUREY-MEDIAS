@@ -303,20 +303,6 @@ export default function MaquinasPage() {
         return
       }
 
-      // 3. Limpiar de mockDb en browser si existe
-      try {
-        const mockStr = localStorage.getItem('durey_mock_db')
-        if (mockStr) {
-          const parsed = JSON.parse(mockStr)
-          if (parsed.maquinas) {
-            parsed.maquinas = parsed.maquinas.filter((item: any) => item.id !== m.id && item.codigo !== m.codigo)
-          }
-          if (parsed.disenos_maquinas) {
-            parsed.disenos_maquinas = parsed.disenos_maquinas.filter((item: any) => item.maquina_id !== m.id)
-          }
-          localStorage.setItem('durey_mock_db', JSON.stringify(parsed))
-        }
-      } catch (err) {}
 
       setMaquinas(prev => prev.filter(item => item.id !== m.id && item.codigo !== m.codigo))
       toast.success(`✅ Máquina ${m.codigo} eliminada correctamente`)

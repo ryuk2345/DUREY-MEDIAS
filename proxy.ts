@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { verifySupabaseJWT, generateSupabaseJWT } from '@/lib/auth/jwt'
+import { normalizarRol } from '@/lib/auth/roles'
 
 // Rutas accesibles por rol (en el dashboard)
 const ROLE_ROUTES: Record<string, string[]> = {
@@ -31,22 +32,6 @@ const ROLE_ROUTES: Record<string, string[]> = {
   volteador: ['/volteado'],
 }
 
-// Devuelve null si el rol no existe: un rol desconocido NUNCA obtiene acceso.
-function normalizeRole(rawRole: string | undefined | null): string | null {
-  if (!rawRole) return null
-  const r = rawRole.toLowerCase().trim()
-  if (r.includes('admin')) return 'admin'
-  if (r.includes('super')) return 'supervisor'
-  if (r.includes('oper')) return 'operador'
-  if (r.includes('vend')) return 'vendedora'
-  if (r.includes('tecn') || r.includes('técn')) return 'tecnico'
-  if (r.includes('tej')) return 'tejedor'
-  if (r.includes('remal')) return 'remalladora'
-  if (r.includes('planc')) return 'planchador'
-  if (r.includes('prep')) return 'preparador'
-  if (r.includes('almac')) return 'almacenero'
-  return r in ROLE_ROUTES ? r : null
-}
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -150,7 +135,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  const cleanRole = normalizeRole(role)
+  const cleanRole = normalizarRol(role)
   const pathname = request.nextUrl.pathname
 
   // Sesión sin rol válido = sin sesión

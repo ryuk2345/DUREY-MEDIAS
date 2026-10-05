@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Bell, AlertTriangle, X, Package, Database, Info, Loader2, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { esStockBajoMateriaPrima, UMBRAL_STOCK_BAJO_DOCENAS, UMBRAL_STOCK_BAJO_KG } from '@/lib/domain/inventario'
 
 interface LowStockProduct {
   id: string
@@ -85,8 +86,7 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
         const empaque = (m.tipo_empaque || 'cono') as 'bolsa' | 'cono' | 'caja'
         const stock = Number(m.stock_kg ?? 0)
 
-        // Cajas: <= 4 | Bolsas: <= 4 | Conos: <= 10
-        const isLow = empaque === 'caja' ? stock <= 4 : empaque === 'bolsa' ? stock <= 4 : stock <= 10
+        const isLow = esStockBajoMateriaPrima(stock, empaque)
 
         if (isLow) {
           const item: LowStockMaterial = {
@@ -135,7 +135,7 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
       const lowMedias: LowStockProduct[] = []
       catData?.forEach(m => {
         const stock = stockMap[m.id] ?? 0
-        if (stock <= 5) {
+        if (stock <= UMBRAL_STOCK_BAJO_DOCENAS) {
           lowMedias.push({
             id: m.id,
             codigo: m.codigo,
@@ -257,7 +257,7 @@ export default function StockNotification({ userRol }: StockNotificationProps) {
                       <div className="space-y-2">
                         {lowMaterials.map((mat) => {
                           const empaqueIcon = mat.tipo_empaque === 'caja' ? '📦 Caja' : mat.tipo_empaque === 'bolsa' ? '🛍️ Bolsa' : '🧵 Cono'
-                          const umbralText = mat.tipo_empaque === 'cono' ? '≤ 10' : '≤ 4'
+                          const umbralText = `≤ ${UMBRAL_STOCK_BAJO_KG[mat.tipo_empaque ?? 'cono']}`
                           const unidadText = mat.tipo_empaque === 'caja' ? 'cajas' : mat.tipo_empaque === 'bolsa' ? 'bolsas' : 'conos'
                           return (
                             <div

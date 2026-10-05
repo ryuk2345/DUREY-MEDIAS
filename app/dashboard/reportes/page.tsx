@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { BarChart3, Download, Calendar, FileSpreadsheet, FileText, Loader2, TrendingUp, Package, Scissors, Wind, Warehouse, ShoppingCart, Wrench, Layers } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatearFecha, formatearMoneda } from '@/lib/utils'
+import { formatearFecha } from '@/lib/utils'
 import * as XLSX from 'xlsx'
 
 const MODULOS_REPORTE = [
@@ -27,7 +27,10 @@ export default function ReportesPage() {
 
   const generarReporte = useCallback(async () => {
     if (!moduloSeleccionado) { toast.error('Selecciona un módulo'); return }
+    if (fechaInicio > fechaFin) { toast.error('La fecha de inicio no puede ser posterior a la fecha fin'); return }
     setGenerando(true)
+    // fecha_reporte es fecha+hora: comparar contra el día siguiente incluye todo el último día
+    const finExclusivo = new Date(new Date(`${fechaFin}T00:00:00Z`).getTime() + 86400000).toISOString().split('T')[0]
 
     try {
       let data: Record<string, unknown>[] = []
@@ -39,7 +42,7 @@ export default function ReportesPage() {
             .from('reportes_produccion')
             .select('fecha, docenas_producidas, maquina:maquinas(codigo), catalogo_media:catalogo_medias(codigo)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
-          if (error) toast.error(`Error al generar reporte de producción: ${error.message}`)
+          if (error) throw new Error(`Error al generar reporte de producción: ${error.message}`)
           data = (rows ?? []).map(r => ({
             Fecha: formatearFecha(r.fecha as string),
             Máquina: (r.maquina as {codigo:string})?.codigo,
@@ -53,7 +56,7 @@ export default function ReportesPage() {
             .from('reportes_remallado')
             .select('fecha, docenas_remalladas, docenas_restantes, lote:lotes_remallado(catalogo_media:catalogo_medias(codigo))')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
-          if (error) toast.error(`Error al generar reporte de remallado: ${error.message}`)
+          if (error) throw new Error(`Error al generar reporte de remallado: ${error.message}`)
           data = (rows ?? []).map(r => ({
             Fecha: formatearFecha(r.fecha as string),
             'Tipo de Media': ((r.lote as {catalogo_media:{codigo:string}})?.catalogo_media)?.codigo,
@@ -67,7 +70,7 @@ export default function ReportesPage() {
             .from('reportes_planchado')
             .select('fecha, docenas_planchadas, docenas_defectuosas, planchador:usuarios(nombre), catalogo_media:catalogo_medias(codigo)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
-          if (error) toast.error(`Error al generar reporte de planchado: ${error.message}`)
+          if (error) throw new Error(`Error al generar reporte de planchado: ${error.message}`)
           data = (rows ?? []).map(r => ({
             Fecha: formatearFecha(r.fecha as string),
             Planchador: (r.planchador as {nombre:string})?.nombre,
@@ -82,13 +85,13 @@ export default function ReportesPage() {
             .from('ventas')
             .select('fecha, codigo_venta, total_soles, tipo_pago, estado, cliente:clientes(nombre), asesora:usuarios(nombre)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
-          if (error) toast.error(`Error al generar reporte de ventas: ${error.message}`)
+          if (error) throw new Error(`Error al generar reporte de ventas: ${error.message}`)
           data = (rows ?? []).map(r => ({
             Fecha: formatearFecha(r.fecha as string),
             'N° Venta': r.codigo_venta,
             Cliente: (r.cliente as {nombre:string})?.nombre,
             Asesora: (r.asesora as {nombre:string})?.nombre,
-            Total: `S/ ${r.total_soles}`,
+            'Total (S/)': Number(r.total_soles),
             'Tipo Pago': r.tipo_pago,
             Estado: r.estado,
           }))
@@ -98,8 +101,8 @@ export default function ReportesPage() {
           const { data: rows, error } = await supabase
             .from('averias_maquinas')
             .select('fecha_reporte, descripcion_operador, estado, maquina:maquinas(codigo), reparaciones(costo_repuestos, costo_mano_obra, costo_total)')
-            .gte('fecha_reporte', fechaInicio).lte('fecha_reporte', fechaFin)
-          if (error) toast.error(`Error al generar reporte de mantenimiento: ${error.message}`)
+            .gte('fecha_reporte', fechaInicio).lt('fecha_reporte', finExclusivo)
+          if (error) throw new Error(`Error al generar reporte de mantenimiento: ${error.message}`)
 
           data = (rows ?? []).map(r => {
             const rep = (r.reparaciones as {costo_total:number}[])?.[0]
@@ -108,7 +111,8 @@ export default function ReportesPage() {
               Máquina: (r.maquina as {codigo:string})?.codigo,
               'Descripción Problema': r.descripcion_operador,
               Estado: r.estado,
-              'Costo Total': rep ? formatearMoneda(rep.costo_total) : 'Sin reparar',
+              'Costo Total (S/)': rep ? Number(rep.costo_total) : null,
+              Reparada: rep ? 'Sí' : 'No',
             }
           })
           break
@@ -118,7 +122,7 @@ export default function ReportesPage() {
             .from('paquetes')
             .select('fecha, codigo_paquete, docenas, estado, preparador:usuarios(nombre), catalogo_media:catalogo_medias(codigo, sku)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
-          if (error) toast.error(`Error al generar reporte de preparado: ${error.message}`)
+          if (error) throw new Error(`Error al generar reporte de preparado: ${error.message}`)
 
           data = (rows ?? []).map(r => ({
             Fecha: formatearFecha(r.fecha as string),
@@ -135,7 +139,7 @@ export default function ReportesPage() {
             .from('guias_remision')
             .select('fecha_despacho, codigo_guia, agencia, estado, fecha_entrega, venta:ventas(codigo_venta, total_soles, cliente:clientes(nombre))')
             .gte('fecha_despacho', fechaInicio).lte('fecha_despacho', fechaFin)
-          if (error) toast.error(`Error al generar reporte de almacén: ${error.message}`)
+          if (error) throw new Error(`Error al generar reporte de almacén: ${error.message}`)
 
           data = (rows ?? []).map(r => ({
             'Fecha Despacho': formatearFecha(r.fecha_despacho as string),
@@ -143,7 +147,7 @@ export default function ReportesPage() {
             Agencia: r.agencia,
             'Cód. Venta': r.venta?.codigo_venta || 'N/A',
             Cliente: r.venta?.cliente?.nombre || 'N/A',
-            Monto: r.venta?.total_soles ? `S/ ${r.venta.total_soles}` : 'N/A',
+            'Monto (S/)': r.venta?.total_soles != null ? Number(r.venta.total_soles) : null,
             Estado: r.estado,
             'Fecha Entrega': r.fecha_entrega ? formatearFecha(r.fecha_entrega) : '—'
           }))
@@ -151,6 +155,11 @@ export default function ReportesPage() {
         }
         default:
           data = [{ Nota: `Reporte del módulo ${moduloSeleccionado} — Período: ${fechaInicio} al ${fechaFin}` }]
+      }
+
+      if (data.length === 0) {
+        toast.info('No hay registros en el período seleccionado; no se generó el archivo')
+        return
       }
 
       if (formato === 'excel') {
@@ -171,7 +180,7 @@ export default function ReportesPage() {
         if (data.length > 0) {
           autoTable(doc, {
             head: [Object.keys(data[0])],
-            body: data.map(row => Object.values(row) as string[]),
+            body: data.map(row => Object.values(row).map(v => v == null ? '—' : String(v))),
             startY: 35,
             theme: 'grid',
             styles: { fontSize: 8 },
@@ -183,7 +192,8 @@ export default function ReportesPage() {
       }
     } catch (err) {
       console.error(err)
-      toast.error('Error al generar el reporte')
+      // Antes un error de consulta igual descargaba un archivo vacío
+      toast.error(err instanceof Error ? err.message : 'Error al generar el reporte')
     } finally {
       setGenerando(false)
     }

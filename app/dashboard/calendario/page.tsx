@@ -157,17 +157,13 @@ export default function CalendarioPage() {
 
       const { data, error } = await query
 
-      if (!error && data && data.length > 0) {
-        setEventos(data)
-        localStorage.setItem('durey_eventos_calendario', JSON.stringify(data))
-      } else {
-        const local = JSON.parse(localStorage.getItem('durey_eventos_calendario') || '[]')
-        setEventos(local)
-      }
+      // Solo eventos de la base: antes, si no había o fallaba la consulta, se mostraban
+      // eventos viejos guardados en este navegador (incluso los ya eliminados).
+      if (error) toast.error(`Error al cargar eventos: ${error.message}`)
+      setEventos(data ?? [])
     } catch (err: any) {
-      console.warn('Fallback a local para calendario:', err)
-      const local = JSON.parse(localStorage.getItem('durey_eventos_calendario') || '[]')
-      setEventos(local)
+      toast.error(`Error al cargar eventos: ${err.message}`)
+      setEventos([])
     } finally {
       setLoading(false)
     }
@@ -213,11 +209,9 @@ export default function CalendarioPage() {
           })
           .eq('id', editingEventId)
 
-        if (error) console.warn('Supabase update fallback:', error.message)
+        if (error) throw error
 
-        const updatedList = eventos.map(ev => ev.id === editingEventId ? nuevoEvento : ev)
-        setEventos(updatedList)
-        localStorage.setItem('durey_eventos_calendario', JSON.stringify(updatedList))
+        setEventos(eventos.map(ev => ev.id === editingEventId ? nuevoEvento : ev))
         toast.success('🗓️ Evento actualizado correctamente')
       } else {
         const { error } = await supabase
@@ -233,11 +227,9 @@ export default function CalendarioPage() {
             creado_por_nombre: nuevoEvento.creado_por_nombre
           })
 
-        if (error) console.warn('Supabase insert fallback:', error.message)
+        if (error) throw error
 
-        const updatedList = [...eventos, nuevoEvento]
-        setEventos(updatedList)
-        localStorage.setItem('durey_eventos_calendario', JSON.stringify(updatedList))
+        await cargarEventos()
         toast.success('🗓️ Evento programado exitosamente')
       }
 
@@ -266,9 +258,7 @@ export default function CalendarioPage() {
     try {
       const { error } = await supabase.from('eventos_calendario').delete().eq('id', id)
       if (error) throw error
-      const filtered = eventos.filter(e => e.id !== id)
-      setEventos(filtered)
-      localStorage.setItem('durey_eventos_calendario', JSON.stringify(filtered))
+      setEventos(eventos.filter(e => e.id !== id))
       toast.success('Evento eliminado')
       setSelectedEvent(null)
     } catch (err: any) {

@@ -6,7 +6,7 @@ import { listarUsuarios } from '@/lib/api/usuarios'
 import {
   Scissors, Send, ArrowRightLeft, Loader2, X,
   AlertTriangle, CheckCircle2, Package, User, Cpu,
-  Play, Wrench, Search, Sparkles, Activity, TrendingUp, ShieldAlert
+  Play, Wrench, Search, Sparkles, Activity, ShieldAlert
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
@@ -38,7 +38,6 @@ interface MaquinaRem {
 }
 interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: string }
 
-const LIMITE_DOCENAS = 75
 
 export default function RemalladoMonitorPage() {
   const [lotes, setLotes] = useState<LoteRemallado[]>([])
@@ -186,7 +185,12 @@ export default function RemalladoMonitorPage() {
     if (!remalladora_id) { toast.error('Selecciona una operadora remalladora'); return }
     if (!catalogo_media_id) { toast.error('Selecciona el tipo de media a remallar'); return }
 
-    const numDocenas = parseFloat(docenas_asignadas) || LIMITE_DOCENAS
+    // Antes un valor vacío o inválido asignaba 75 docenas sin avisar
+    const numDocenas = parseFloat(docenas_asignadas)
+    if (!Number.isFinite(numDocenas) || numDocenas <= 0) {
+      toast.error('Ingresa las docenas a asignar (mayor a 0)')
+      return
+    }
 
     // Validar transición de la máquina a 'ocupada'
     const maquinaActual = maquinasRem.find(m => m.id === maquina_id)
@@ -587,31 +591,27 @@ export default function RemalladoMonitorPage() {
             </div>
           </div>
 
-          {/* Widget OEE Remallado */}
+          {/* Widget: uso real de las remalladoras (antes "91.2% / +1.8%" y barras fijas) */}
           <div className="glass rounded-3xl p-5 border border-white/[0.08]">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Eficiencia Remallado</p>
+                <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Uso de Remalladoras</p>
                 <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl font-black text-white">91.2%</span>
-                  <span className="text-xs text-emerald-400 font-bold flex items-center">
-                    <TrendingUp className="w-3 h-3 mr-0.5" /> +1.8%
+                  <span className="text-2xl font-black text-white">
+                    {countActivas + countDisponibles > 0
+                      ? `${Math.round((countActivas / (countActivas + countDisponibles)) * 100)}%`
+                      : '—'}
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium">
+                    {countActivas} de {countActivas + countDisponibles} operativas en marcha
                   </span>
                 </div>
               </div>
               <Activity className="w-6 h-6 text-orange-400" />
             </div>
-
-            <div className="flex items-end gap-1.5 h-12 pt-2">
-              {[70, 85, 90, 88, 95, 91, 89, 93].map((h, i) => (
-                <div key={i} className="flex-1 bg-orange-500/20 rounded-t-md relative overflow-hidden h-full">
-                  <div
-                    className="bg-gradient-to-t from-orange-600 to-amber-400 absolute bottom-0 left-0 right-0 rounded-t-md transition-all duration-500"
-                    style={{ height: `${h}%` }}
-                  />
-                </div>
-              ))}
-            </div>
+            <p className="text-[11px] text-slate-500">
+              {countMantenimiento > 0 ? `${countMantenimiento} en mantenimiento` : 'Ninguna en mantenimiento'}
+            </p>
           </div>
         </div>
 

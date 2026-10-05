@@ -85,13 +85,14 @@ export default function BalancePage() {
         .reduce((s, r) => s + (Number(r.costo_total) || 0), 0)
       setRepairsTotal(totalRepairs)
 
-      const localEgresos = JSON.parse(localStorage.getItem('durey_egresos_adicionales') || '[]')
-      const remoteEgresos = egrRes.data ?? []
-      setEgresosAdicionales(remoteEgresos.length > 0 ? remoteEgresos : localEgresos)
+      // Solo datos de la base (antes se mezclaban egresos guardados en este navegador)
+      for (const r of [ventasRes, comprasRes, repRes, egrRes]) {
+        if (r.error) toast.error(`Error al cargar el balance: ${r.error.message}`)
+      }
+      setEgresosAdicionales(egrRes.data ?? [])
     } catch (err: any) {
-      console.error('Error al cargar balance:', err)
-      const localEgresos = JSON.parse(localStorage.getItem('durey_egresos_adicionales') || '[]')
-      setEgresosAdicionales(localEgresos)
+      toast.error(`Error al cargar el balance: ${err.message}`)
+      setEgresosAdicionales([])
     } finally {
       setLoading(false)
     }
