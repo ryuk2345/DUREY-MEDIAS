@@ -11,6 +11,8 @@ import {
   crearFetchConSesion,
   leerTokenDbNavegador,
   reiniciarCacheTokenDb,
+  reiniciarRecuperacionTokenDb,
+  recuperarTokenDbNavegador,
   tokenAceptadoPorSupabase,
 } from '@/lib/auth/tokenDb'
 
@@ -52,12 +54,53 @@ describe('fetch del cliente de Supabase', () => {
     expect(base.mock.calls[0][1]).toBe(init)
   })
 
-  it('sin token (sesión no aceptada por Supabase) deja la petición igual que antes', async () => {
+  it('sin token y sin poder recuperarlo deja la petición igual que antes', async () => {
     const base = fetchFalso(200)
-    const f = crearFetchConSesion(base, () => null)
+    const f = crearFetchConSesion(base, () => null, async () => null)
     const init = { headers: { Authorization: anon } }
     await f(`${SUPABASE}/rest/v1/maquinas`, init)
     expect(base.mock.calls[0][1]).toBe(init)
+  })
+
+  it('[NEGOCIO] si falta la cookie la recupera ANTES de consultar (si no, la base responde "permission denied")', async () => {
+    const base = fetchFalso(200)
+    const recuperar = vi.fn(async () => 'jwt-recuperado')
+    const f = crearFetchConSesion(base, () => null, recuperar)
+    await f(`${SUPABASE}/rest/v1/reportes_produccion?select=*`, { headers: { Authorization: anon } })
+    expect(recuperar).toHaveBeenCalledTimes(1)
+    expect(new Headers(base.mock.calls[0][1]!.headers).get('Authorization')).toBe('Bearer jwt-recuperado')
+  })
+
+  it('con la cookie presente no pide nada al servidor', async () => {
+    const recuperar = vi.fn(async () => 'otro')
+    const f = crearFetchConSesion(fetchFalso(200), () => 'jwt-usuario', recuperar)
+    await f(`${SUPABASE}/rest/v1/maquinas`)
+    expect(recuperar).not.toHaveBeenCalled()
+  })
+})
+
+describe('Recuperación de la cookie en el navegador', () => {
+  beforeEach(() => {
+    reiniciarRecuperacionTokenDb()
+    document.cookie = `${COOKIE_TOKEN_DB}=; max-age=0; path=/`
+  })
+
+  it('varias consultas a la vez generan UNA sola petición al servidor', async () => {
+    const servidor = vi.fn<typeof fetch>(async () => {
+      document.cookie = `${COOKIE_TOKEN_DB}=jwt-nuevo; path=/`
+      return new Response('{"ok":true}')
+    })
+    const tokens = await Promise.all([recuperarTokenDbNavegador(servidor), recuperarTokenDbNavegador(servidor), recuperarTokenDbNavegador(servidor)])
+    expect(tokens).toEqual(['jwt-nuevo', 'jwt-nuevo', 'jwt-nuevo'])
+    expect(servidor).toHaveBeenCalledTimes(1)
+    expect(servidor.mock.calls[0][0]).toBe('/api/auth/token-db')
+  })
+
+  it('sin sesión no insiste en cada consulta', async () => {
+    const servidor = vi.fn<typeof fetch>(async () => new Response('{}', { status: 401 }))
+    expect(await recuperarTokenDbNavegador(servidor)).toBeNull()
+    expect(await recuperarTokenDbNavegador(servidor)).toBeNull()
+    expect(servidor).toHaveBeenCalledTimes(1)
   })
 })
 

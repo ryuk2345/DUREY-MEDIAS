@@ -24,18 +24,52 @@ export function leerTokenDbNavegador(cookies: string = typeof document === 'unde
 const RUTAS_CON_SESION = /\/(rest|storage)\/v1\//
 
 /**
- * fetch para el cliente de Supabase del navegador: si hay token de base de datos,
- * reemplaza el "Bearer <anon key>" por "Bearer <token del usuario>".
- * Lee la cookie en cada petición para tomar el token nuevo tras volver a iniciar sesión.
+ * Pide al servidor que publique la cookie durey_db_token a partir de la sesión
+ * httpOnly. Cubre las pestañas abiertas antes de que existiera la cookie o en las
+ * que el proxy no pudo comprobar la firma: sin esto, sus consultas salían como
+ * 'anon' y la base (migración 026) respondía "permission denied".
+ * Una sola petición a la vez; si no se obtuvo, se reintenta pasados 30 s.
+ */
+let recuperacion: Promise<string | null> | null = null
+let recuperacionFallidaEn = 0
+const REINTENTO_RECUPERACION_MS = 30 * 1000
+
+export function recuperarTokenDbNavegador(fetchBase: typeof fetch = (input, init) => fetch(input, init)): Promise<string | null> {
+  if (typeof document === 'undefined') return Promise.resolve(null)
+  if (!recuperacion && Date.now() - recuperacionFallidaEn < REINTENTO_RECUPERACION_MS) return Promise.resolve(null)
+  recuperacion ??= fetchBase('/api/auth/token-db', { method: 'POST', credentials: 'same-origin', cache: 'no-store' })
+    .then(() => leerTokenDbNavegador())
+    .catch(() => null)
+    .then(token => {
+      if (!token) recuperacionFallidaEn = Date.now()
+      recuperacion = null
+      return token
+    })
+  return recuperacion
+}
+
+/** Solo para pruebas. */
+export function reiniciarRecuperacionTokenDb() {
+  recuperacion = null
+  recuperacionFallidaEn = 0
+}
+
+/**
+ * fetch para el cliente de Supabase del navegador: reemplaza el "Bearer <anon key>"
+ * por "Bearer <token del usuario>". Lee la cookie en cada petición para tomar el
+ * token nuevo tras volver a iniciar sesión, y si falta la pide al servidor.
  */
 export function crearFetchConSesion(
   fetchBase: typeof fetch = (input, init) => fetch(input, init),
-  leerToken: () => string | null = () => leerTokenDbNavegador()
+  leerToken: () => string | null = () => leerTokenDbNavegador(),
+  recuperarToken: () => Promise<string | null> = () => recuperarTokenDbNavegador()
 ): typeof fetch {
-  return (input, init) => {
-    const token = leerToken()
+  return async (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-    if (!token || !RUTAS_CON_SESION.test(url)) return fetchBase(input, init)
+    if (!RUTAS_CON_SESION.test(url)) return fetchBase(input, init)
+
+    const token = leerToken() ?? (await recuperarToken())
+    if (!token) return fetchBase(input, init)
 
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
     headers.set('Authorization', `Bearer ${token}`)
