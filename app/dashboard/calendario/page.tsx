@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import { toast } from 'sonner'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
@@ -84,60 +85,21 @@ export default function CalendarioPage() {
     color: 'sky'
   })
 
-  // 1. Validar roles admin o supervisor
+  // 1. Validar roles admin o supervisor (con la sesión verificada; nada de valores por defecto)
   useEffect(() => {
     async function checkRole() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        let rol = 'admin'
-        let uid = user?.id || ''
-        let nombre = 'Usuario'
-
-        if (user) {
-          const { data: perfil } = await supabase
-            .from('usuarios')
-            .select('id, nombre, rol')
-            .eq('auth_id', user.id)
-            .single()
-
-          if (perfil) {
-            rol = perfil.rol || 'admin'
-            uid = perfil.id || user.id
-            nombre = perfil.nombre || 'Usuario'
-          }
-        } else {
-          // Mock cookie session
-          const mockSession = document.cookie.split('; ').find(row => row.startsWith('durey_mock_session='))?.split('=')[1]
-          if (mockSession) {
-            try {
-              const parsed = JSON.parse(decodeURIComponent(mockSession))
-              rol = parsed.rol || 'admin'
-              uid = parsed.id || '1'
-              nombre = parsed.nombre || 'Administrador'
-            } catch (e) {}
-          } else {
-            const cookieRole = document.cookie.split('; ').find(row => row.startsWith('durey_user_role='))?.split('=')[1]
-            rol = cookieRole || 'admin'
-            uid = '1'
-            nombre = 'Administrador'
-          }
-        }
-
-        if (rol !== 'admin' && rol !== 'supervisor') {
-          toast.error('Acceso denegado: El Calendario es exclusivo para Admin y Supervisor.')
-          router.push('/dashboard')
-          return
-        }
-
-        setUserRole(rol)
-        setCurrentUserId(uid)
-        setCurrentUserName(nombre)
-      } catch (e) {
-        setUserRole('admin')
+      const usuario = await obtenerUsuarioActual()
+      if (!usuario || (usuario.rol !== 'admin' && usuario.rol !== 'supervisor')) {
+        toast.error('Acceso denegado: El Calendario es exclusivo para Admin y Supervisor.')
+        router.push('/dashboard')
+        return
       }
+      setUserRole(usuario.rol)
+      setCurrentUserId(usuario.id)
+      setCurrentUserName(usuario.nombre)
     }
     checkRole()
-  }, [router, supabase])
+  }, [router])
 
   // 2. Cargar eventos desde Supabase / LocalStorage
   const cargarEventos = useCallback(async () => {
@@ -181,6 +143,11 @@ export default function CalendarioPage() {
       return
     }
 
+    if (!currentUserId) {
+      toast.error('No se pudo identificar tu sesión. Recarga la página o vuelve a iniciar sesión.')
+      return
+    }
+
     setSaving(true)
     const nuevoEvento: Evento = {
       id: editingEventId || Math.random().toString(),
@@ -190,8 +157,8 @@ export default function CalendarioPage() {
       hora: form.hora.trim() || undefined,
       visibilidad: form.visibilidad,
       color: form.color || 'sky',
-      creado_por: currentUserId || '1',
-      creado_por_nombre: currentUserName || 'Supervisor',
+      creado_por: currentUserId,
+      creado_por_nombre: currentUserName,
       created_at: new Date().toISOString()
     }
 
@@ -211,7 +178,8 @@ export default function CalendarioPage() {
 
         if (error) throw error
 
-        setEventos(eventos.map(ev => ev.id === editingEventId ? nuevoEvento : ev))
+        // Se conserva el autor original (un admin puede editar eventos de otros)
+        setEventos(eventos.map(ev => ev.id === editingEventId ? { ...nuevoEvento, creado_por: ev.creado_por, creado_por_nombre: ev.creado_por_nombre } : ev))
         toast.success('🗓️ Evento actualizado correctamente')
       } else {
         const { error } = await supabase

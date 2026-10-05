@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { olvidarUsuarioActual } from '@/lib/auth/usuarioActual'
 import { MODULOS_POR_ROL, ROLES_LABELS, cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
@@ -87,6 +88,7 @@ export default function Sidebar({ userRol, userName }: SidebarProps) {
       toast.error('No se pudo cerrar la sesión. Revisa tu conexión e inténtalo de nuevo.')
       return
     }
+    olvidarUsuarioActual()
     await supabase.auth.signOut().catch(() => { /* la sesión de Supabase Auth es opcional */ })
     document.cookie = 'durey_mock_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     document.cookie = 'durey_demo_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import { Wrench, AlertTriangle, Plus, Clock, CheckCircle, TrendingUp, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
@@ -84,7 +85,7 @@ export default function MantenimientoPage() {
     }
 
     setProcesando(true)
-    const reportadoPorId = document.cookie.split('; ').find(r => r.startsWith('durey_user_id='))?.split('=')[1] || null
+    const reportadoPorId = (await obtenerUsuarioActual())?.id ?? null
 
     // Misma operación atómica que usa Máquinas: avería + máquina malograda + cierre del turno activo
     const { data, error } = await supabase.rpc('reportar_averia_maquina', {

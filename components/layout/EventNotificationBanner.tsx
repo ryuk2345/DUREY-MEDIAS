@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import { Calendar, CalendarDays, Clock, Users, Lock, X, ArrowRight, AlertCircle, Sparkles } from 'lucide-react'
 import { formatearFecha } from '@/lib/utils'
 
@@ -49,24 +50,8 @@ export default function EventNotificationBanner({ userRol }: EventNotificationBa
     const en3DiasStr = en3Dias.toISOString().split('T')[0]
 
     try {
-      // 1. Obtener usuario actual para filtrar eventos personales (desde cookie o sesión)
-      let currentUserId = ''
-      if (typeof document !== 'undefined') {
-        currentUserId = document.cookie.split('; ').find(row => row.startsWith('durey_user_id='))?.split('=')[1] || ''
-      }
-      if (!currentUserId) {
-        const mockSession = typeof document !== 'undefined' ? document.cookie.split('; ').find(row => row.startsWith('durey_mock_session='))?.split('=')[1] : null
-        if (mockSession) {
-          try {
-            const parsed = JSON.parse(decodeURIComponent(mockSession))
-            currentUserId = parsed.id || ''
-          } catch (e) {}
-        }
-      }
-      if (!currentUserId) {
-        const { data: { user } } = await supabase.auth.getUser()
-        currentUserId = user?.id || ''
-      }
+      // 1. Usuario de la sesión verificada (para incluir sus eventos personales)
+      const currentUserId = (await obtenerUsuarioActual())?.id ?? ''
 
       // 2. Consultar eventos compartidos + personales del usuario
       let query = supabase

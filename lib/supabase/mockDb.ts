@@ -342,6 +342,18 @@ class MockQueryBuilder {
         filters.push(item => item[column] !== value);
         return queryObj;
       },
+      // Como PostgREST: "col.eq.valor,col2.eq.valor2" (se cumple si alguna condición se cumple).
+      // Solo eq/neq, que es lo que usa la app (Calendario y avisos de eventos).
+      or(expresion: string) {
+        const condiciones = expresion.split(',').map(c => {
+          const [col, op, ...resto] = c.split('.')
+          return { col, op, valor: resto.join('.') }
+        })
+        filters.push(item => condiciones.some(({ col, op, valor }) =>
+          op === 'eq' ? String(item[col]) === valor : op === 'neq' ? String(item[col]) !== valor : false
+        ));
+        return queryObj;
+      },
       gt(column: string, value: any) {
         filters.push(item => item[column] > value);
         return queryObj;

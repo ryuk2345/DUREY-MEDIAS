@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import { toast } from 'sonner'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
@@ -152,10 +153,12 @@ export default function DisenosPage() {
 
       // 2. Obtener usuario actual en bloque aislado (no interrumpe la carga de datos)
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          const { data: perfil } = await supabase.from('usuarios').select('id, nombre, email, rol, activo, estado, auth_id').eq('auth_id', user.id).single()
-          setCurrentUser(perfil || null)
+        // Sesión verificada: antes supabase.auth.getUser() siempre era null y los
+        // diseños se guardaban sin diseñador
+        const usuario = await obtenerUsuarioActual()
+        if (usuario) {
+          const { data: perfil } = await supabase.from('usuarios').select('id, nombre, email, rol, activo, estado, auth_id').eq('id', usuario.id).maybeSingle()
+          setCurrentUser(perfil ?? { id: usuario.id, nombre: usuario.nombre, email: usuario.email, rol: usuario.rol })
         }
       } catch (authErr) {
         console.warn('Sesión no disponible:', authErr)
