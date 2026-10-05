@@ -11,7 +11,7 @@ function CambiarPasswordContent() {
   const [showNueva, setShowNueva] = useState(false)
   const [showConfirmar, setShowConfirmar] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [userId, setUserId] = useState('')
+  const [, setUserId] = useState('')
   const [userName, setUserName] = useState('')
 
   const router = useRouter()
@@ -51,11 +51,8 @@ function CambiarPasswordContent() {
       const res = await fetch('/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          nuevaPassword,
-          esPrimerLogin: true
-        })
+        // El usuario se toma de la sesión en el servidor
+        body: JSON.stringify({ nuevaPassword })
       })
 
       const data = await res.json()

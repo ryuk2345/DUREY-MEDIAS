@@ -174,7 +174,7 @@ export default function DisenosPage() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
-          const { data: perfil } = await supabase.from('usuarios').select('*').eq('auth_id', user.id).single()
+          const { data: perfil } = await supabase.from('usuarios').select('id, nombre, email, rol, activo, estado, auth_id').eq('auth_id', user.id).single()
           setCurrentUser(perfil || null)
         }
       } catch (authErr) {

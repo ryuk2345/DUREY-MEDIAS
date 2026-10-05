@@ -14,8 +14,17 @@ export interface DecodedDureyJWT {
   nombre: string
 }
 
+// Solo para desarrollo local. Nunca usar la anon key (es pública) como secreto.
+const DEV_SECRET = 'durey-dev-only-secret-no-usar-en-produccion'
+
 function getSecretKey(): Uint8Array {
-  const secret = process.env.SUPABASE_JWT_SECRET || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'durey-secret-jwt-key-2026'
+  const secret = process.env.SUPABASE_JWT_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SUPABASE_JWT_SECRET no está configurado')
+    }
+    return new TextEncoder().encode(DEV_SECRET)
+  }
   return new TextEncoder().encode(secret)
 }
 
@@ -62,7 +71,7 @@ export async function verifySupabaseJWT(token: string): Promise<DecodedDureyJWT 
 
     const appMeta = (payload.app_metadata as Record<string, any>) || {}
     const userMeta = (payload.user_metadata as Record<string, any>) || {}
-    const rol = appMeta.rol || userMeta.rol || 'admin'
+    const rol = appMeta.rol || userMeta.rol || ''
     const nombre = userMeta.name || (payload.email as string)?.split('@')[0] || 'Usuario'
 
     return {

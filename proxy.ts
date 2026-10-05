@@ -28,10 +28,12 @@ const ROLE_ROUTES: Record<string, string[]> = {
   almacenero: ['/almacen', '/despacho', '/materia-prima'],
   vendedora: ['/ventas', '/clientes', '/catalogo', '/despacho'],
   tecnico: ['/maquinas', '/mantenimiento'],
+  volteador: ['/volteado'],
 }
 
-function normalizeRole(rawRole: string | undefined | null): string {
-  if (!rawRole) return 'admin'
+// Devuelve null si el rol no existe: un rol desconocido NUNCA obtiene acceso.
+function normalizeRole(rawRole: string | undefined | null): string | null {
+  if (!rawRole) return null
   const r = rawRole.toLowerCase().trim()
   if (r.includes('admin')) return 'admin'
   if (r.includes('super')) return 'supervisor'
@@ -43,7 +45,7 @@ function normalizeRole(rawRole: string | undefined | null): string {
   if (r.includes('planc')) return 'planchador'
   if (r.includes('prep')) return 'preparador'
   if (r.includes('almac')) return 'almacenero'
-  return r in ROLE_ROUTES ? r : 'admin'
+  return r in ROLE_ROUTES ? r : null
 }
 
 export async function proxy(request: NextRequest) {
@@ -54,7 +56,7 @@ export async function proxy(request: NextRequest) {
   const isMock = !url || !anonKey || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
 
   let user: any = null
-  let role = 'admin'
+  let role: string | null = null
 
   const authToken = request.cookies.get('durey_auth_token')?.value
   const roleCookie = request.cookies.get('durey_user_role')?.value
@@ -66,7 +68,7 @@ export async function proxy(request: NextRequest) {
       try {
         const parsed = JSON.parse(decodeURIComponent(mockSession))
         user = { id: parsed.id, email: parsed.email }
-        role = parsed.rol || 'admin'
+        role = parsed.rol || null
       } catch (e) {
         user = null
       }
@@ -122,7 +124,7 @@ export async function proxy(request: NextRequest) {
 
         if (perfil && perfil.activo) {
           user = { id: perfil.id || data.user.id, email: data.user.email }
-          role = perfil.rol || roleCookie || 'admin'
+          role = perfil.rol || null
 
           // Auto-emitir el JWT firmado para que todas las futuras navegaciones sean instantáneas
           const newToken = await generateSupabaseJWT({
@@ -143,16 +145,16 @@ export async function proxy(request: NextRequest) {
         }
       }
     } catch (e) {
-      // Fallback seguro de emergencia
-      if (loggedCookie && roleCookie) {
-        user = { id: 'authenticated-user', email: 'active@durey.com' }
-        role = roleCookie
-      }
+      // Si no se puede verificar la sesión, NO se confía en cookies editables por el cliente
+      user = null
     }
   }
 
   const cleanRole = normalizeRole(role)
   const pathname = request.nextUrl.pathname
+
+  // Sesión sin rol válido = sin sesión
+  if (!cleanRole) user = null
 
   // 1. Redirigir al login si no está autenticado y está en ruta protegida
   if (!user && pathname.startsWith('/dashboard')) {
@@ -166,13 +168,13 @@ export async function proxy(request: NextRequest) {
 
   // 3. Control de acceso estricto por rol en las subrutas del dashboard
   if (user && cleanRole !== 'admin' && pathname.startsWith('/dashboard') && pathname !== '/dashboard') {
-    const allowedRoutes = ROLE_ROUTES[cleanRole] || ROLE_ROUTES['admin']
+    const allowedRoutes = ROLE_ROUTES[cleanRole!] || []
 
     const segments = pathname.split('/')
     const moduleName = '/' + segments[2]
 
     if (!allowedRoutes.includes(moduleName)) {
-      const targetModule = allowedRoutes[0] ? `/dashboard${allowedRoutes[0]}` : '/dashboard/admin'
+      const targetModule = allowedRoutes[0] ? `/dashboard${allowedRoutes[0]}` : '/login'
       return NextResponse.redirect(new URL(targetModule, request.url))
     }
   }
