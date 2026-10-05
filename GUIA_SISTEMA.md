@@ -11,9 +11,9 @@ Para desplegar el sistema desde cero en un nuevo entorno (local o producción), 
 ### Paso 1: Configurar la Base de Datos (Supabase)
 1. Crea un proyecto en [Supabase](https://supabase.com/).
 2. Ve al **SQL Editor** de tu panel de Supabase.
-3. Ejecuta los archivos de migración ubicados en la carpeta `supabase/migrations/` en orden correlativo (desde `000` hasta `999`).
-   > [!IMPORTANT]
-   > El script `999_purga_total_sistema.sql` dejará la base de datos vacía y lista para iniciar. Asegúrate de ejecutarlo al final si deseas empezar con datos limpios.
+3. Ejecuta los archivos de migración ubicados en la carpeta `supabase/migrations/` en orden correlativo.
+   > [!CAUTION]
+   > El script `supabase/scripts/PELIGRO_purga_total_sistema.sql` **borra todos los datos** (solo conserva al administrador). No es una migración: ejecútalo a mano y solo si quieres vaciar la base de datos.
 
 ### Paso 2: Configurar las Variables de Entorno
 Crea un archivo llamado `.env.local` en la raíz del proyecto `durey-app` con las claves de tu proyecto de Supabase:
@@ -21,7 +21,13 @@ Crea un archivo llamado `.env.local` en la raíz del proyecto `durey-app` con la
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key-de-supabase
+# Obligatorias en producción (solo servidor, nunca con prefijo NEXT_PUBLIC_):
+SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
+SUPABASE_JWT_SECRET=un-secreto-largo-y-aleatorio
 ```
+
+> [!IMPORTANT]
+> Sin `SUPABASE_JWT_SECRET` el login falla en producción a propósito: antes se firmaban las sesiones con la anon key, que es pública, y cualquiera podía fabricar una sesión de administrador. Sin `SUPABASE_SERVICE_ROLE_KEY` el login deja de funcionar después de aplicar la migración `020`.
 
 > [!TIP]
 > **Modo Demo/Local (Mock)**:

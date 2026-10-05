@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requerirSesion, sanitizarCamposUsuario, COLUMNAS_PUBLICAS_USUARIO } from '@/lib/auth/session'
 
 /**
  * GET /api/usuarios-lista
@@ -9,16 +10,27 @@ import { createAdminClient } from '@/lib/supabase/admin'
  * Query params:
  *   rol    → valor único: "tejedor", "vendedora", etc.
  *   roles  → múltiples separados por coma: "remalladora,remallador"
- *   campos → columnas (default: "id,nombre,estado")
+ *   campos → columnas de COLUMNAS_PUBLICAS_USUARIO (default: "id,nombre,estado"; "*" = todas las públicas)
  *   activo → "true" (default) | "false" | "all"
+ * Requiere sesión. password_hash nunca se devuelve.
  */
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
+    const auth = await requerirSesion(req)
+    if ('respuesta' in auth) return auth.respuesta
+
     const { searchParams } = new URL(req.url)
     const rol = searchParams.get('rol')
     const rolesParam = searchParams.get('roles')
-    const campos = searchParams.get('campos') ?? 'id,nombre,estado'
+    const campos = sanitizarCamposUsuario(searchParams.get('campos'))
     const activoParam = searchParams.get('activo') ?? 'true'
+
+    if (!campos) {
+      return NextResponse.json(
+        { error: `Campos no permitidos. Permitidos: ${COLUMNAS_PUBLICAS_USUARIO.join(', ')}` },
+        { status: 400 }
+      )
+    }
 
     if (!rol && !rolesParam) {
       return NextResponse.json(
@@ -61,8 +73,11 @@ export async function GET(req: Request) {
  * Actualiza el campo `estado` de un usuario.
  * Body: { id: string, estado: "disponible" | "ocupada" }
  */
-export async function PATCH(req: Request) {
+export async function PATCH(req: NextRequest) {
   try {
+    const auth = await requerirSesion(req)
+    if ('respuesta' in auth) return auth.respuesta
+
     const body = await req.json()
     const { id, estado } = body
 

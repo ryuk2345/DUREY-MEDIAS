@@ -1,22 +1,35 @@
 import { createClient } from '@supabase/supabase-js'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requerirSesion, puedeGestionarUsuarios, puedeGestionarUsuarioObjetivo } from '@/lib/auth/session'
 
-export async function POST(request: Request) {
+const NO_AUTORIZADO_ADMIN = 'Solo un administrador puede gestionar cuentas de administrador'
+
+/** Rol y email actuales de un usuario (para impedir que un supervisor toque cuentas admin). */
+async function obtenerUsuarioObjetivo(id: string): Promise<{ rol: string; email: string } | null> {
+  const { data } = await createAdminClient().from('usuarios').select('rol, email').eq('id', id)
+  return data?.[0] ?? null
+}
+
+export async function POST(request: NextRequest) {
   try {
+    const auth = await requerirSesion(request, puedeGestionarUsuarios)
+    if ('respuesta' in auth) return auth.respuesta
+
     const body = await request.json()
     const { nombre, email, rol, password, activo } = body
-
-    console.log('📡 [BACKEND /api/usuarios POST] Datos recibidos:', { nombre, email, rol, activo, rolType: typeof rol, rolLength: rol?.length })
 
     if (!nombre || !email || !rol) {
       return NextResponse.json({ error: 'Faltan campos obligatorios (nombre, email, rol)' }, { status: 400 })
     }
 
+    if (!puedeGestionarUsuarioObjetivo(auth.sesion.rol, null, rol)) {
+      return NextResponse.json({ error: NO_AUTORIZADO_ADMIN }, { status: 403 })
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
     if (!supabaseUrl) {
       return NextResponse.json({
@@ -78,11 +91,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, userId: authUserId })
     }
 
-    // 2. Modo Resiliente (sin Service Role Key): insertar directamente en tabla pública
-    const clientKey = supabaseAnonKey || 'placeholder'
-    const supabaseClient = createClient(supabaseUrl, clientKey)
-
-    const { error: dbError } = await supabaseClient.from('usuarios').insert({
+    // 2. Sin Service Role Key (desarrollo/mock): insertar solo en la tabla pública
+    const { error: dbError } = await createAdminClient().from('usuarios').insert({
       nombre: nombre.trim(),
       email: email.trim().toLowerCase(),
       rol,
@@ -104,14 +114,43 @@ export async function POST(request: Request) {
   }
 }
 
-// ── PATCH: Asignar o resetear contraseña (solo Admin) ────────────────────────
-export async function PATCH(request: Request) {
+// ── PATCH: Editar datos o asignar/resetear contraseña (admin/supervisor) ─────
+// Body: { userId, nuevaPassword }                       → resetear contraseña
+//       { userId, cambios: { nombre?, email?, rol?, activo? } } → editar perfil
+export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { userId, nuevaPassword } = body
+    const auth = await requerirSesion(request, puedeGestionarUsuarios)
+    if ('respuesta' in auth) return auth.respuesta
 
-    if (!userId || !nuevaPassword) {
-      return NextResponse.json({ error: 'userId y nuevaPassword son requeridos' }, { status: 400 })
+    const body = await request.json()
+    const { userId, nuevaPassword, cambios } = body
+
+    if (!userId || (!nuevaPassword && !cambios)) {
+      return NextResponse.json({ error: 'userId y nuevaPassword o cambios son requeridos' }, { status: 400 })
+    }
+
+    const objetivo = await obtenerUsuarioObjetivo(userId)
+    if (!objetivo) {
+      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+    }
+    if (!puedeGestionarUsuarioObjetivo(auth.sesion.rol, objetivo.rol, cambios?.rol)) {
+      return NextResponse.json({ error: NO_AUTORIZADO_ADMIN }, { status: 403 })
+    }
+
+    if (cambios) {
+      const update: Record<string, unknown> = {}
+      if (typeof cambios.nombre === 'string') update.nombre = cambios.nombre.trim()
+      if (typeof cambios.email === 'string') update.email = cambios.email.trim().toLowerCase()
+      if (typeof cambios.rol === 'string') update.rol = cambios.rol
+      if (typeof cambios.activo === 'boolean') update.activo = cambios.activo
+      if (Object.keys(update).length === 0) {
+        return NextResponse.json({ error: 'No hay cambios válidos' }, { status: 400 })
+      }
+      const { error } = await createAdminClient().from('usuarios').update(update).eq('id', userId)
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json({ success: true })
     }
     if (nuevaPassword.length < 8) {
       return NextResponse.json({ error: 'La contraseña debe tener al menos 8 caracteres' }, { status: 400 })
@@ -137,37 +176,43 @@ export async function PATCH(request: Request) {
 }
 
 // ── DELETE: Eliminar usuario ──────────────────────────────────────────────────
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const auth = await requerirSesion(request, puedeGestionarUsuarios)
+    if ('respuesta' in auth) return auth.respuesta
+
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
-    const email = searchParams.get('email')
 
-    if (!id && !email) {
-      return NextResponse.json({ error: 'Se requiere id o email para eliminar' }, { status: 400 })
+    if (!id) {
+      return NextResponse.json({ error: 'Se requiere id para eliminar' }, { status: 400 })
+    }
+    if (id === auth.sesion.sub) {
+      return NextResponse.json({ error: 'No puedes eliminar tu propia cuenta' }, { status: 400 })
+    }
+
+    const objetivo = await obtenerUsuarioObjetivo(id)
+    if (!objetivo) {
+      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+    }
+    if (!puedeGestionarUsuarioObjetivo(auth.sesion.rol, objetivo.rol)) {
+      return NextResponse.json({ error: NO_AUTORIZADO_ADMIN }, { status: 403 })
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    if (!supabaseUrl) {
-      return NextResponse.json({ error: 'URL de Supabase no configurada' }, { status: 500 })
+    // Borrar la cuenta de Auth usando el email de la BD (nunca uno enviado por el cliente)
+    if (supabaseUrl && supabaseServiceKey && objetivo.email) {
+      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
+      const { data: usersData } = await supabaseAdmin.auth.admin.listUsers()
+      const user = (usersData?.users as any[])?.find((u: any) => u.email?.toLowerCase() === objetivo.email.toLowerCase())
+      if (user) await supabaseAdmin.auth.admin.deleteUser(user.id)
     }
 
-    if (supabaseServiceKey) {
-      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
-      if (email) {
-        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers()
-        const user = (usersData?.users as any[])?.find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
-        if (user) await supabaseAdmin.auth.admin.deleteUser(user.id)
-      }
-      if (id) await supabaseAdmin.from('usuarios').delete().eq('id', id)
-      else if (email) await supabaseAdmin.from('usuarios').delete().eq('email', email.toLowerCase())
-    } else {
-      const supabaseClient = createClient(supabaseUrl, supabaseAnonKey || 'placeholder')
-      if (id) await supabaseClient.from('usuarios').delete().eq('id', id)
-      else if (email) await supabaseClient.from('usuarios').delete().eq('email', email.toLowerCase())
+    const { error: delErr } = await createAdminClient().from('usuarios').delete().eq('id', id)
+    if (delErr) {
+      return NextResponse.json({ error: delErr.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, message: 'Usuario eliminado correctamente' })

@@ -158,6 +158,26 @@ export default function UsuariosPage() {
     setShowModal(true)
   }
 
+  // Fuera del modo mock, los cambios a `usuarios` pasan por /api/usuarios
+  // (valida sesión y permisos en el servidor; el navegador ya no escribe rol/activo directo).
+  const actualizarUsuario = async (userId: string, cambios: Record<string, unknown>): Promise<string | null> => {
+    if (isMock) {
+      const { error } = await supabase.from('usuarios').update(cambios).eq('id', userId)
+      return error ? error.message : null
+    }
+    try {
+      const res = await fetch('/api/usuarios', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, cambios })
+      })
+      const data = await res.json().catch(() => ({}))
+      return !res.ok || data.error ? (data.error || 'Error en el servidor') : null
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Error de conexión con el servidor'
+    }
+  }
+
   const guardarUsuario = async () => {
     if (!form.nombre.trim() || !form.email.trim()) {
       toast.error('Nombre y Correo son obligatorios')
@@ -168,17 +188,15 @@ export default function UsuariosPage() {
 
     if (editUser) {
       // EDITAR
-      const { error } = await supabase.from('usuarios')
-        .update({
-          nombre: form.nombre.trim(),
-          email: form.email.trim(),
-          rol: form.rol,
-          activo: form.activo
-        })
-        .eq('id', editUser.id)
+      const error = await actualizarUsuario(editUser.id, {
+        nombre: form.nombre.trim(),
+        email: form.email.trim(),
+        rol: form.rol,
+        activo: form.activo
+      })
 
       if (error) {
-        setErrorEnvio(error.message)
+        setErrorEnvio(error)
         toast.error('Error al actualizar el usuario')
         return
       }
@@ -284,12 +302,10 @@ export default function UsuariosPage() {
   // Activar/Desactivar
   const toggleActivo = async (u: Usuario) => {
     const nuevoEstado = !u.activo
-    const { error } = await supabase.from('usuarios')
-      .update({ activo: nuevoEstado })
-      .eq('id', u.id)
+    const error = await actualizarUsuario(u.id, { activo: nuevoEstado })
 
     if (error) {
-      toast.error('Error al cambiar estado del usuario')
+      toast.error(`Error al cambiar estado del usuario: ${error}`)
       return
     }
     toast.success(`Usuario ${nuevoEstado ? 'activado' : 'desactivado'}`)
@@ -302,7 +318,7 @@ export default function UsuariosPage() {
       return
     }
     try {
-      const res = await fetch(`/api/usuarios?id=${u.id}&email=${encodeURIComponent(u.email)}`, { method: 'DELETE' })
+      const res = await fetch(`/api/usuarios?id=${u.id}`, { method: 'DELETE' })
       const data = await res.json()
       if (!res.ok || data.error) {
         toast.error(data.error || 'Error al eliminar el usuario')
