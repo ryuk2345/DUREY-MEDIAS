@@ -18,52 +18,82 @@
 
 BEGIN;
 
--- 1. Egresos de prueba (migración 004, sección "INSERTAR EGRESOS DE PRUEBA")
-DELETE FROM egresos_adicionales
- WHERE (concepto, monto, categoria) IN (
-   ('Pago de alquiler local agosto', 2500.00, 'alquiler'),
-   ('Recibo de luz del taller', 450.00, 'servicios'),
-   ('Pago de planilla semanal tejedores', 1800.00, 'planilla')
- );
+-- Cada limpieza se salta si su tabla no existe en esta base (por ejemplo, si la
+-- migración 013 de Calendario nunca se aplicó). Así un módulo ausente no bloquea
+-- la limpieza de los demás.
+DO $$
+DECLARE
+  v_borrados INTEGER;
+BEGIN
+  -- 1. Egresos de prueba (migración 004, sección "INSERTAR EGRESOS DE PRUEBA")
+  IF to_regclass('public.egresos_adicionales') IS NOT NULL THEN
+    DELETE FROM egresos_adicionales
+     WHERE (concepto, monto, categoria) IN (
+       ('Pago de alquiler local agosto', 2500.00, 'alquiler'),
+       ('Recibo de luz del taller', 450.00, 'servicios'),
+       ('Pago de planilla semanal tejedores', 1800.00, 'planilla')
+     );
+    GET DIAGNOSTICS v_borrados = ROW_COUNT;
+    RAISE NOTICE 'Egresos de prueba borrados: %', v_borrados;
+  END IF;
 
--- 2. Eventos de ejemplo del calendario (migración 013), sin autor real
-DELETE FROM eventos_calendario
- WHERE creado_por IS NULL
-   AND (titulo, creado_por_nombre) IN (
-     ('Reunión de Coordinación de Producción', 'Administración'),
-     ('Mantenimiento Preventivo Máquinas M01 y M02', 'Supervisión'),
-     ('Entrega Programada Pedido Mayorista', 'Ventas / Despacho')
-   );
+  -- 2. Eventos de ejemplo del calendario (migración 013), sin autor real
+  IF to_regclass('public.eventos_calendario') IS NOT NULL THEN
+    DELETE FROM eventos_calendario
+     WHERE creado_por IS NULL
+       AND (titulo, creado_por_nombre) IN (
+         ('Reunión de Coordinación de Producción', 'Administración'),
+         ('Mantenimiento Preventivo Máquinas M01 y M02', 'Supervisión'),
+         ('Entrega Programada Pedido Mayorista', 'Ventas / Despacho')
+       );
+    GET DIAGNOSTICS v_borrados = ROW_COUNT;
+    RAISE NOTICE 'Eventos de ejemplo borrados: %', v_borrados;
+  ELSE
+    RAISE NOTICE 'La tabla eventos_calendario no existe (falta la migración 013): se omite';
+  END IF;
 
--- 3. Repuestos de ejemplo (migración 004) que nunca se movieron
-DELETE FROM repuestos
- WHERE (nombre, stock_actual, costo_unitario) IN (
-   ('Sensor de aguja M8', 15, 45.00),
-   ('Plancha de hormado T1', 3, 250.00),
-   ('Correa dentada de motor', 8, 35.00),
-   ('Agujas tejedora calibre 12', 200, 1.50)
- );
+  -- 3. Repuestos de ejemplo (migración 004) que nunca se movieron
+  IF to_regclass('public.repuestos') IS NOT NULL THEN
+    DELETE FROM repuestos
+     WHERE (nombre, stock_actual, costo_unitario) IN (
+       ('Sensor de aguja M8', 15, 45.00),
+       ('Plancha de hormado T1', 3, 250.00),
+       ('Correa dentada de motor', 8, 35.00),
+       ('Agujas tejedora calibre 12', 200, 1.50)
+     );
+    GET DIAGNOSTICS v_borrados = ROW_COUNT;
+    RAISE NOTICE 'Repuestos de ejemplo borrados: %', v_borrados;
+  END IF;
 
--- 4. Hilos de ejemplo (migración 003) con el stock inventado intacto y sin uso
-DELETE FROM materia_prima mp
- WHERE (mp.material, mp.color, mp.stock_kg) IN (
-   ('Algodón', 'Blanco', 150.000),
-   ('Algodón', 'Negro', 120.000),
-   ('Algodón', 'Rojo', 2.000),
-   ('Lana', 'Roja', 0.000),
-   ('Lycra', 'Blanco', 50.000)
- )
-   AND NOT EXISTS (SELECT 1 FROM compras_materia_prima c WHERE c.materia_prima_id = mp.id)
-   AND NOT EXISTS (SELECT 1 FROM movimientos_materia_prima m WHERE m.materia_prima_id = mp.id)
-   AND NOT EXISTS (SELECT 1 FROM catalogo_medias cm WHERE cm.materia_prima_id = mp.id);
+  -- 4. Hilos de ejemplo (migración 003) con el stock inventado intacto y sin uso
+  IF to_regclass('public.materia_prima') IS NOT NULL THEN
+    DELETE FROM materia_prima mp
+     WHERE (mp.material, mp.color, mp.stock_kg) IN (
+       ('Algodón', 'Blanco', 150.000),
+       ('Algodón', 'Negro', 120.000),
+       ('Algodón', 'Rojo', 2.000),
+       ('Lana', 'Roja', 0.000),
+       ('Lycra', 'Blanco', 50.000)
+     )
+       AND NOT EXISTS (SELECT 1 FROM compras_materia_prima c WHERE c.materia_prima_id = mp.id)
+       AND NOT EXISTS (SELECT 1 FROM movimientos_materia_prima m WHERE m.materia_prima_id = mp.id)
+       AND NOT EXISTS (SELECT 1 FROM catalogo_medias cm WHERE cm.materia_prima_id = mp.id);
+    GET DIAGNOSTICS v_borrados = ROW_COUNT;
+    RAISE NOTICE 'Hilos de ejemplo borrados: %', v_borrados;
+  END IF;
 
--- 5. Proveedores de ejemplo (migración 003) con RUC ficticio y sin compras
-DELETE FROM proveedores p
- WHERE (p.nombre, p.ruc) IN (
-   ('Hilados del Sur', '20123456789'),
-   ('Textiles Andinos', '20987654321')
- )
-   AND NOT EXISTS (SELECT 1 FROM compras_materia_prima c WHERE c.proveedor_id = p.id);
+  -- 5. Proveedores de ejemplo (migración 003) con RUC ficticio y sin compras
+  IF to_regclass('public.proveedores') IS NOT NULL THEN
+    DELETE FROM proveedores p
+     WHERE (p.nombre, p.ruc) IN (
+       ('Hilados del Sur', '20123456789'),
+       ('Textiles Andinos', '20987654321')
+     )
+       AND NOT EXISTS (SELECT 1 FROM compras_materia_prima c WHERE c.proveedor_id = p.id);
+    GET DIAGNOSTICS v_borrados = ROW_COUNT;
+    RAISE NOTICE 'Proveedores de ejemplo borrados: %', v_borrados;
+  END IF;
+END $$;
 
 COMMIT;
 
