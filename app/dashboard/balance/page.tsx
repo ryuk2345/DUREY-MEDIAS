@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -316,7 +315,7 @@ export default function BalancePage() {
                     cx="50%"
                     cy="50%"
                     outerRadius={80}
-                    label={({ nombre, percent }) => `${nombre} ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }) => `${name} ${(Number(percent ?? 0) * 100).toFixed(0)}%`}
                     labelLine={false}
                   >
                     {desgloseCategorias.map((_, index) => (

@@ -1,4 +1,3 @@
-  // @ts-nocheck
 'use client'
 
 // Maquinas Page - Control Center with ConfirmDialog
@@ -282,9 +281,11 @@ export default function MaquinasPage() {
 
     try {
       // 1. Limpiar posibles asignaciones vinculadas en disenos_maquinas
-      try {
-        await supabase.from('disenos_maquinas').delete().eq('maquina_id', m.id)
-      } catch (e) {}
+      const { error: errDisenos } = await supabase.from('disenos_maquinas').delete().eq('maquina_id', m.id)
+      if (errDisenos) {
+        toast.error(`No se pudieron quitar los diseños asignados a ${m.codigo}: ${errDisenos.message}`)
+        return
+      }
 
       // 2. Eliminar máquina en DB
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m.id)

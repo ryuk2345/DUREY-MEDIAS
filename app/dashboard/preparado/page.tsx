@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -184,8 +183,13 @@ export default function PreparadoPage() {
       return
     }
 
-    await supabase.from('cronograma_preparado')
+    const { error: errLimpiar } = await supabase.from('cronograma_preparado')
       .delete().eq('semana', semanaSeleccionada).eq('anio', anioSeleccionado)
+    if (errLimpiar) {
+      toast.error(`No se pudo preparar la semana destino: ${errLimpiar.message}`)
+      setSaving(false)
+      return
+    }
 
     const nuevos = origen.map(item => ({
       semana: semanaSeleccionada,

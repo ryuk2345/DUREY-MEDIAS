@@ -1,0 +1,17 @@
+{
+  "usuarios": [
+    { "id": "65a2de1b-03f2-4b95-82c2-cc2e3ffc30bb", "nombre": "Admin General", "email": "admin@durey.com", "rol": "admin", "activo": true, "estado": "disponible", "auth_id": "65a2de1b-03f2-4b95-82c2-cc2e3ffc30bb" },
+    { "id": "tej1", "nombre": "Tejedor Prueba", "email": "tej@durey.com", "rol": "tejedor", "activo": true, "estado": "disponible" },
+    { "id": "tec1", "nombre": "alexander", "email": "alexander@durey.com", "rol": "tecnico", "activo": true, "estado": "disponible" }
+  ],
+  "marcas_maquinas": [{ "id": "b1", "nombre": "ANGE" }],
+  "maquinas": [
+    { "id": "m1", "codigo": "ANGE01", "tipo": "tejedora", "marca_id": "b1", "estado": "activa", "marca": { "id": "b1", "nombre": "ANGE" } },
+    { "id": "m2", "codigo": "ANGE02", "tipo": "tejedora", "marca_id": "b1", "estado": "activa", "marca": { "id": "b1", "nombre": "ANGE" } },
+    { "id": "m3", "codigo": "ANGE03", "tipo": "tejedora", "marca_id": "b1", "estado": "mantenimiento", "marca": { "id": "b1", "nombre": "ANGE" } }
+  ],
+  "catalogo_medias": [
+    { "id": "media1", "codigo": "TST-1", "modelo": "Clasica", "publico": "adulto", "talla": "M", "estado": "activo", "peso_docena_g": 400, "materia_prima_id": "mp1" }
+  ],
+  "materia_prima": [{ "id": "mp1", "material": "Algodón", "color": "Blanco", "stock_kg": 20 }]
+}

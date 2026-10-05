@@ -78,10 +78,16 @@ export default function Sidebar({ userRol, userName }: SidebarProps) {
   }, [mobileOpen])
 
   const handleLogout = async () => {
+    // Primero borrar la cookie de sesión del servidor (httpOnly): sin esto la sesión sigue activa.
+    // Antes iba después de signOut() en el mismo try, y si signOut fallaba nunca se ejecutaba.
     try {
-      await supabase.auth.signOut()
-      await fetch('/api/auth/logout', { method: 'POST' })
-    } catch (e) {}
+      const res = await fetch('/api/auth/logout', { method: 'POST' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    } catch {
+      toast.error('No se pudo cerrar la sesión. Revisa tu conexión e inténtalo de nuevo.')
+      return
+    }
+    await supabase.auth.signOut().catch(() => { /* la sesión de Supabase Auth es opcional */ })
     document.cookie = 'durey_mock_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     document.cookie = 'durey_demo_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'
     document.cookie = 'durey_demo_name=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;'

@@ -484,7 +484,8 @@ export default function MateriaPrimaPage() {
           const { error } = await supabase.from('proveedores').delete().eq('id', prov.id)
           if (error) throw error
         } else {
-          await supabase.from('proveedores').delete().eq('nombre', prov.nombre)
+          const { error } = await supabase.from('proveedores').delete().eq('nombre', prov.nombre)
+          if (error) throw error
         }
       }
       const list = proveedores.filter(p => p.id !== prov.id && p.nombre !== prov.nombre)
@@ -574,12 +575,13 @@ export default function MateriaPrimaPage() {
 
         // Registrar costo de repuestos como egreso si es salida
         if (adjustRepuestoForm.tipo === 'salida') {
-          await supabase.from('egresos_adicionales').insert({
+          const { error: errEgreso } = await supabase.from('egresos_adicionales').insert({
             concepto: `Consumo repuesto: ${selectedRepuesto.nombre} (${cant} uds.) — ${adjustRepuestoForm.motivo || 'Mantenimiento'}`,
             monto: cant * selectedRepuesto.costo_unitario,
             categoria: 'repuestos',
             fecha: new Date().toISOString().split('T')[0]
           })
+          if (errEgreso) throw new Error(`El stock se actualizó pero no se registró el egreso: ${errEgreso.message}`)
         }
       } else {
         const list = repuestos.map(r => r.id === selectedRepuesto.id ? { ...r, stock_actual: newStock } : r)

@@ -179,6 +179,15 @@ const SEMILLAS = {
 // Singleton en el servidor para almacenar en memoria durante ejecución
 let globalDb: any = null;
 
+// Los tests de navegador (DUREY_MOCK_DB_E2E=1) usan mock_db.e2e.json para no
+// modificar el mock_db.json del repositorio. Las rutas son literales a propósito:
+// una ruta dinámica hace que el build empaquete todo el proyecto en el servidor.
+function rutaMockDb(path: { join: (...p: string[]) => string }) {
+  return process.env.DUREY_MOCK_DB_E2E === '1'
+    ? path.join(process.cwd(), 'mock_db.e2e.json')
+    : path.join(process.cwd(), 'mock_db.json');
+}
+
 export async function getMockDb() {
   const isServer = typeof window === 'undefined';
 
@@ -187,7 +196,7 @@ export async function getMockDb() {
 
     const fs = require('fs');
     const path = require('path');
-    const filePath = path.join(process.cwd(), 'mock_db.json');
+    const filePath = rutaMockDb(path);
 
     if (fs.existsSync(filePath)) {
       try {
@@ -256,7 +265,7 @@ export async function saveMockDb(db: any) {
     globalDb = db;
     const fs = require('fs');
     const path = require('path');
-    const filePath = path.join(process.cwd(), 'mock_db.json');
+    const filePath = rutaMockDb(path);
     fs.writeFileSync(filePath, JSON.stringify(db, null, 2));
   } else {
     localStorage.setItem('durey_mock_db', JSON.stringify(db));

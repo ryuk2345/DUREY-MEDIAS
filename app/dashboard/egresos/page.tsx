@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -185,7 +184,8 @@ export default function EgresosPage() {
     if (!confirm('¿Estás seguro de eliminar este registro de egreso?')) return
 
     try {
-      await supabase.from('egresos_adicionales').delete().eq('id', id)
+      const { error } = await supabase.from('egresos_adicionales').delete().eq('id', id)
+      if (error) throw error
       const filtered = egresos.filter(e => e.id !== id)
       setEgresos(filtered)
       localStorage.setItem('durey_egresos_adicionales', JSON.stringify(filtered))
