@@ -85,48 +85,30 @@ export default function MantenimientoPage() {
     }
 
     setProcesando(true)
-    // 1. Insertar reporte de avería
-    const { data: nuevaAveria, error: avErr } = await supabase.from('averias_maquinas').insert({
-      maquina_id: averiaForm.maquina_id,
-      reportado_por_id: null,
-      descripcion_operador: averiaForm.descripcion,
-      estado: 'pendiente',
-    }).select().single()
+    const reportadoPorId = document.cookie.split('; ').find(r => r.startsWith('durey_user_id='))?.split('=')[1] || null
 
-    if (avErr) {
-      toast.error(`Error al reportar la avería: ${avErr.message}`)
-      setProcesando(false)
+    // Misma operación atómica que usa Máquinas: avería + máquina malograda + cierre del turno activo
+    const { data, error } = await supabase.rpc('reportar_averia_maquina', {
+      p_maquina_id: averiaForm.maquina_id,
+      p_tipo_averia: null,
+      p_descripcion: averiaForm.descripcion,
+      p_asignado_a: null,
+      p_reportado_por_id: reportadoPorId
+    })
+    setProcesando(false)
+
+    if (error) {
+      toast.error(`Error al reportar la avería: ${error.message}`)
+      cargarDatos()
       return
     }
 
-    // 2. Cambiar estado a malograda
-    await supabase.from('maquinas').update({ estado: 'malograda' }).eq('id', averiaForm.maquina_id)
-
-    // 3. Buscar y cerrar turnos activos para esta máquina (para evitar registros de producción inválidos)
-    const { data: turnoMaq } = await supabase.from('turno_maquinas')
-      .select('id, turno_id, turnos_produccion(id, tejedor_id, estado)')
-      .eq('maquina_id', averiaForm.maquina_id)
-      .eq('turnos_produccion.estado', 'activo')
-      .maybeSingle()
-
-    if (turnoMaq && turnoMaq.turnos_produccion) {
-      const turnoId = turnoMaq.turno_id
-      const tejedorId = turnoMaq.turnos_produccion.tejedor_id
-
-      // Cerrar el turno de tejido
-      await supabase.from('turnos_produccion').update({ estado: 'cerrado' }).eq('id', turnoId)
-      
-      // Liberar al tejedor
-      if (tejedorId) {
-        await supabase.from('usuarios').update({ estado: 'disponible' }).eq('id', tejedorId)
-      }
+    if (data?.turnos_cerrados > 0) {
       toast.warning('⚠️ Turno activo de la máquina cerrado de forma automática. Operador liberado.')
     }
-
-    toast.error(`Avería reportada — Máquina marcada como MALOGRADA`, { icon: '⚠️' })
+    toast.success('Avería reportada — Máquina marcada como MALOGRADA')
     setShowAveriaModal(false)
     setAveriaForm({ maquina_id: '', descripcion: '' })
-    setProcesando(false)
     cargarDatos()
   }
 
@@ -142,11 +124,15 @@ export default function MantenimientoPage() {
     }
 
     setProcesando(true)
-    await supabase.from('maquinas').update({ estado: 'mantenimiento' }).eq('id', maq.id)
-    await supabase.from('averias_maquinas').update({ estado: 'en_reparacion' }).eq('id', averia.id)
+    const { error } = await supabase.rpc('iniciar_reparacion_averia', { p_averia_id: averia.id })
+    setProcesando(false)
+    if (error) {
+      toast.error(`No se pudo iniciar la reparación: ${error.message}`)
+      cargarDatos()
+      return
+    }
 
     toast.info('🔧 Reparación iniciada. Máquina en estado MANTENIMIENTO.')
-    setProcesando(false)
     cargarDatos()
   }
 
@@ -164,20 +150,22 @@ export default function MantenimientoPage() {
     }
 
     setProcesando(true)
-    await supabase.from('reparaciones').insert({
-      averia_id: averiaSeleccionada.id,
-      tecnico_id: null,
-      descripcion_tecnico: reparacionForm.descripcion_tecnico,
-      costo_repuestos: parseFloat(reparacionForm.costo_repuestos || '0'),
-      costo_mano_obra: parseFloat(reparacionForm.costo_mano_obra || '0'),
+    const { error } = await supabase.rpc('registrar_reparacion_averia', {
+      p_averia_id: averiaSeleccionada.id,
+      p_descripcion_tecnico: reparacionForm.descripcion_tecnico,
+      p_costo_repuestos: parseFloat(reparacionForm.costo_repuestos || '0'),
+      p_costo_mano_obra: parseFloat(reparacionForm.costo_mano_obra || '0'),
+      p_tecnico_id: null
     })
-
-    await supabase.from('averias_maquinas').update({ estado: 'resuelto' }).eq('id', averiaSeleccionada.id)
-    await supabase.from('maquinas').update({ estado: 'activa' }).eq('id', maq.id)
+    setProcesando(false)
+    if (error) {
+      toast.error(`No se pudo registrar la reparación: ${error.message}`)
+      cargarDatos()
+      return
+    }
 
     toast.success('Reparación registrada — Máquina habilitada (Activa)')
     setShowRepararModal(false)
-    setProcesando(false)
     cargarDatos()
   }
 

@@ -5,7 +5,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { listarUsuarios, actualizarEstadoUsuario } from '@/lib/api/usuarios'
+import { listarUsuarios } from '@/lib/api/usuarios'
+import { formatearFecha } from '@/lib/utils'
 import {
   Cpu, Plus, Search, Trash2, Edit2, Loader2, X, Check,
   AlertTriangle, CheckCircle, Wrench, PauseCircle, Clock,
@@ -97,12 +98,12 @@ export default function MaquinasPage() {
   const supabase = createClient()
 
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
+  // No pone loading=true: tras la carga inicial, las recargas actualizan sin ocultar la pantalla
   const cargarDatos = useCallback(async () => {
-    setLoading(true)
     const [maq, mar, tec, av] = await Promise.all([
       supabase.from('maquinas').select('*, marca:marcas_maquinas(nombre)').order('codigo'),
       supabase.from('marcas_maquinas').select('*').order('nombre'),
-      listarUsuarios({ rol: 'tecnico', campos: '*', activo: 'all' }),
+      listarUsuarios({ rol: 'tecnico', campos: 'id,nombre,email,estado' }).catch((e: Error) => e),
       supabase.from('averias_maquinas').select(`
         *, maquina:maquinas(codigo, tipo)
       `).order('fecha_reporte', { ascending: false }).limit(10)
@@ -127,12 +128,14 @@ export default function MaquinasPage() {
     setTecnicos((Array.isArray(tec) ? tec : []) as unknown as Tecnico[])
     setAveriasTimeline((av.data ?? []) as unknown as AveriaTimeline[])
 
-    if (maqData.length > 0 && !reporteForm.maquina_id) {
-      setReporteForm(prev => ({ ...prev, maquina_id: maqData[0].id }))
+    // Preseleccionar una máquina a la que se le pueda reportar falla (activa u ocupada)
+    const reportable = maqData.find(m => m.estado === 'activa' || m.estado === 'ocupada') ?? maqData[0]
+    if (reportable) {
+      setReporteForm(prev => (prev.maquina_id ? prev : { ...prev, maquina_id: reportable.id }))
     }
 
     setLoading(false)
-  }, [reporteForm.maquina_id])
+  }, [])
 
   const abrirMaquinaModal = (maquina: any = null) => {
     setErrorEnvio(null)
@@ -176,92 +179,42 @@ export default function MaquinasPage() {
 
     if (!reporteForm.descripcion.trim()) { toast.error('Ingresa la descripción detallada del síntoma'); return }
 
-    setEnviandoReporte(true)
-
     const maqObj = maquinas.find(m => m.id === reporteForm.maquina_id)
     if (maqObj) {
       const v = validarTransicionEstadoMaquina(maqObj.estado as any, 'malograda')
       if (!v.valido) {
         toast.error(`Error de transición: ${v.error}`)
-        setEnviandoReporte(false)
         return
       }
     }
 
+    setEnviandoReporte(true)
     const tecObj = tecnicos.find(t => t.id === reporteForm.tecnico_asignado)
+    const reportadoPorId = document.cookie.split('; ').find(r => r.startsWith('durey_user_id='))?.split('=')[1] || null
 
-    const nuevoReporte = {
-      maquina_id: reporteForm.maquina_id,
-      tipo_averia: reporteForm.tipo_averia,
-      descripcion_operador: `${maqObj?.codigo || ''}: ${reporteForm.descripcion.trim()}`,
-      estado: 'pendiente',
-      asignado_a: tecObj ? tecObj.nombre : 'Por Asignar',
-      nivel: 'CRÍTICO',
-      fecha_reporte: new Date().toISOString()
-    }
-
-    const { error } = await supabase.from('averias_maquinas').insert(nuevoReporte)
+    // Una sola operación atómica: avería + máquina malograda + cierre del turno activo
+    const { data, error } = await supabase.rpc('reportar_averia_maquina', {
+      p_maquina_id: reporteForm.maquina_id,
+      p_tipo_averia: reporteForm.tipo_averia,
+      p_descripcion: `${maqObj?.codigo || ''}: ${reporteForm.descripcion.trim()}`,
+      p_asignado_a: tecObj ? tecObj.nombre : null,
+      p_reportado_por_id: reportadoPorId
+    })
+    setEnviandoReporte(false)
 
     if (error) {
-      toast.error(`Error al enviar el reporte crítico: ${error.message || JSON.stringify(error)}`)
-      setEnviandoReporte(false)
+      toast.error(`No se pudo enviar el reporte: ${error.message}`)
+      cargarDatos()
       return
     }
 
-    // Actualizar estado de máquina a 'malograda'
-    const { error: errorMaq } = await supabase.from('maquinas').update({
-      estado: 'malograda',
-      detalle_estado: `FALLA ${reporteForm.tipo_averia}`
-    }).eq('id', reporteForm.maquina_id)
-
-    if (errorMaq) {
-      toast.error(`Error al actualizar estado de máquina: ${errorMaq.message}`)
-      setEnviandoReporte(false)
-      return
+    if (data?.turnos_cerrados > 0) {
+      toast.warning('Se cerró automáticamente el turno activo de la máquina y se liberó al operador.')
     }
+    toast.success(`Reporte crítico enviado para ${maqObj?.codigo || 'la máquina'}.`, { duration: 4000 })
 
-    // Buscar y cerrar turnos activos para esta máquina (para evitar registros de producción inválidos)
-    const { data: turnoMaq, error: errorTurnoMaq } = await supabase.from('turno_maquinas')
-      .select('id, turno_id, turnos_produccion(id, tejedor_id, estado)')
-      .eq('maquina_id', reporteForm.maquina_id)
-      .eq('turnos_produccion.estado', 'activo')
-      .maybeSingle()
-
-    if (errorTurnoMaq) {
-      toast.error(`Error al buscar turnos activos: ${errorTurnoMaq.message}`)
-      setEnviandoReporte(false)
-      return
-    }
-
-    if (turnoMaq && turnoMaq.turnos_produccion) {
-      const turnoId = turnoMaq.turno_id
-      const tejedorId = turnoMaq.turnos_produccion.tejedor_id
-
-      // Cerrar el turno de tejido
-      const { error: errorTurno } = await supabase.from('turnos_produccion').update({ estado: 'cerrado' }).eq('id', turnoId)
-      if (errorTurno) {
-        toast.error(`Error al cerrar turno de tejido: ${errorTurno.message}`)
-        setEnviandoReporte(false)
-        return
-      }
-      
-      // Liberar al tejedor
-      if (tejedorId) {
-        try {
-          await actualizarEstadoUsuario(tejedorId, 'disponible')
-        } catch (errorTejedor: any) {
-          toast.error(`Error al liberar tejedor: ${errorTejedor.message}`)
-          setEnviandoReporte(false)
-          return
-        }
-      }
-      toast.warning('⚠️ Turno activo de la máquina cerrado de forma automática. Operador liberado.')
-    }
-
-    toast.error(`⚠️ Reporte Crítico enviado para ${maqObj?.codigo || 'la máquina'}. Notificación enviada al equipo técnico.`, { duration: 4000 })
-
-    setReporteForm(prev => ({ ...prev, descripcion: '' }))
-    setEnviandoReporte(false)
+    // Limpiar el formulario; cargarDatos preselecciona otra máquina reportable
+    setReporteForm(prev => ({ ...prev, descripcion: '', maquina_id: '' }))
     cargarDatos()
   }
 
@@ -383,11 +336,16 @@ export default function MaquinasPage() {
            (a.asignado_a && a.asignado_a.toLowerCase().includes(term))
   })
 
-  // Obtener máquina representativa de cada estado para las 4 tarjetas superiores
-  const maqOperativa = maquinas.find(m => m.estado === 'activa') || { codigo: 'M01', eficiencia: 98, detalle_estado: 'EFICIENCIA: 98%' }
-  const maqMalograda = maquinas.find(m => m.estado === 'malograda') || { codigo: 'M06', detalle_estado: 'ROTURA DE AGUJA' }
-  const maqMantenimiento = maquinas.find(m => m.estado === 'mantenimiento') || { codigo: 'M03', detalle_estado: 'PREVENTIVO EN CURSO' }
-  const maqStandby = maquinas.find(m => m.estado === 'standby' || m.estado === 'inactiva') || { codigo: 'M02', detalle_estado: 'SIN HILO (SET UP)' }
+  // Tarjetas superiores: conteo real por estado (sin máquinas ficticias)
+  const resumenEstado = (estados: string[]) => {
+    const lista = maquinas.filter(m => estados.includes(m.estado))
+    const codigos = lista.slice(0, 3).map(m => m.codigo).join(', ') + (lista.length > 3 ? ` +${lista.length - 3}` : '')
+    return { total: lista.length, codigos, detalle: lista[0]?.detalle_estado || '' }
+  }
+  const resumenOperativas = resumenEstado(['activa', 'ocupada'])
+  const resumenMalogradas = resumenEstado(['malograda'])
+  const resumenMantenimiento = resumenEstado(['mantenimiento'])
+  const resumenStandby = resumenEstado(['standby', 'inactiva'])
 
   return (
     <div className="space-y-6 animate-fadeInUp pb-12">
@@ -448,9 +406,9 @@ export default function MaquinasPage() {
                 </span>
               </div>
               <div>
-                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">MÁQUINA {maqOperativa.codigo}</p>
+                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider truncate">{resumenOperativas.codigos || 'NINGUNA'}</p>
                 <p className="text-xl font-black text-emerald-400 font-mono tracking-tight mt-0.5">
-                  EFICIENCIA: {maqOperativa.eficiencia || 98}%
+                  {resumenOperativas.total} MÁQUINA(S)
                 </p>
               </div>
             </div>
@@ -466,9 +424,9 @@ export default function MaquinasPage() {
                 </span>
               </div>
               <div>
-                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">MÁQUINA {maqMalograda.codigo}</p>
+                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider truncate">{resumenMalogradas.codigos || 'NINGUNA'}</p>
                 <p className="text-lg font-black text-red-400 tracking-tight mt-0.5 uppercase">
-                  {maqMalograda.detalle_estado || 'ROTURA DE AGUJA'}
+                  {resumenMalogradas.total === 0 ? 'SIN FALLAS' : resumenMalogradas.total === 1 ? (resumenMalogradas.detalle || '1 MÁQUINA') : `${resumenMalogradas.total} MÁQUINAS`}
                 </p>
               </div>
             </div>
@@ -484,9 +442,9 @@ export default function MaquinasPage() {
                 </span>
               </div>
               <div>
-                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">MÁQUINA {maqMantenimiento.codigo}</p>
+                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider truncate">{resumenMantenimiento.codigos || 'NINGUNA'}</p>
                 <p className="text-lg font-black text-cyan-300 tracking-tight mt-0.5 uppercase">
-                  {maqMantenimiento.detalle_estado || 'PREVENTIVO EN CURSO'}
+                  {resumenMantenimiento.total === 0 ? 'SIN MANTENIMIENTOS' : `${resumenMantenimiento.total} MÁQUINA(S)`}
                 </p>
               </div>
             </div>
@@ -502,9 +460,9 @@ export default function MaquinasPage() {
                 </span>
               </div>
               <div>
-                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">MÁQUINA {maqStandby.codigo}</p>
+                <p className="text-slate-400 text-[10px] uppercase font-bold tracking-wider truncate">{resumenStandby.codigos || 'NINGUNA'}</p>
                 <p className="text-lg font-black text-slate-300 tracking-tight mt-0.5 uppercase">
-                  {maqStandby.detalle_estado || 'SIN HILO (SET UP)'}
+                  {resumenStandby.total === 0 ? 'SIN MÁQUINAS' : `${resumenStandby.total} MÁQUINA(S)`}
                 </p>
               </div>
             </div>
@@ -652,7 +610,7 @@ export default function MaquinasPage() {
                             {a.descripcion_operador.split('—')[0] || a.descripcion_operador}
                           </h3>
                           <span className="text-[10px] text-slate-400 font-mono">
-                            {a.fecha_reporte}
+                            {formatearFecha(a.fecha_reporte)}
                           </span>
                         </div>
 
@@ -667,7 +625,7 @@ export default function MaquinasPage() {
                             {a.nivel || (esCritico ? 'CRÍTICO' : 'RESUELTO')}
                           </span>
                           <span className="text-[11px] text-slate-400">
-                            Asignado a: <strong className="text-slate-200">{a.asignado_a || 'Pedro Técnico'}</strong>
+                            Asignado a: <strong className="text-slate-200">{a.asignado_a || 'Sin asignar'}</strong>
                           </span>
                         </div>
                       </div>
@@ -687,7 +645,7 @@ export default function MaquinasPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {tecnicos.length === 0 ? (
-                    <p className="text-slate-500 text-xs col-span-2 text-center py-4">Cargando personal técnico...</p>
+                    <p className="text-slate-500 text-xs col-span-2 text-center py-4">No hay técnicos activos registrados</p>
                   ) : tecnicos.map(t => (
                     <div key={t.id} className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
@@ -697,9 +655,11 @@ export default function MaquinasPage() {
                         <div>
                           <p className="font-bold text-white text-xs uppercase">{t.nombre}</p>
                           <p className="text-[10px] text-slate-400 uppercase font-semibold">{t.especialidad || 'Mantenimiento de Planta'}</p>
-                          <span className="text-[10px] font-mono text-emerald-400 font-bold block mt-0.5">
-                            {t.telefono || '+51 987 654 321'}
-                          </span>
+                          {(t.telefono || t.email) && (
+                            <span className="text-[10px] font-mono text-emerald-400 font-bold block mt-0.5">
+                              {t.telefono || t.email}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -707,14 +667,17 @@ export default function MaquinasPage() {
                         <span className={`badge text-[9px] font-bold uppercase ${
                           t.estado === 'disponible' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
                         }`}>
-                          {t.estado === 'disponible' ? 'DISPONIBLE' : 'EN REPARACIÓN'}
+                          {t.estado === 'disponible' ? 'DISPONIBLE' : 'OCUPADO'}
                         </span>
-                        <a
-                          href={`tel:${t.telefono || '987654321'}`}
-                          className="btn-primary text-[10px] py-1 px-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold border-none rounded-xl flex items-center gap-1"
-                        >
-                          <Phone className="w-3 h-3" /> CONTACTAR
-                        </a>
+                        {/* Teléfono si existe; si no, correo. Sin datos de contacto no se muestra el botón. */}
+                        {(t.telefono || t.email) && (
+                          <a
+                            href={t.telefono ? `tel:${t.telefono}` : `mailto:${t.email}`}
+                            className="btn-primary text-[10px] py-1 px-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold border-none rounded-xl flex items-center gap-1"
+                          >
+                            <Phone className="w-3 h-3" /> CONTACTAR
+                          </a>
+                        )}
                       </div>
                     </div>
                   ))}
