@@ -10,6 +10,7 @@ export async function POST() {
   response.cookies.set('durey_user_id', '', { path: '/', maxAge: 0 })
   response.cookies.set('durey_user_logged', '', { path: '/', maxAge: 0 })
   response.cookies.set('durey_mock_session', '', { path: '/', maxAge: 0 })
+  response.cookies.set('durey_db_token', '', { path: '/', maxAge: 0 })
 
   return response
 }

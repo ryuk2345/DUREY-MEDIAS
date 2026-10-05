@@ -52,6 +52,7 @@ Cualquier modificación al schema de la base de datos (nueva tabla, nueva column
 - [ ] `supabase/migrations/0XX_nombre_descriptivo.sql` — nueva migración numerada (nunca modificar migraciones anteriores)
 - [ ] Script siempre dentro de `BEGIN; ... COMMIT;`
 - [ ] Migrar datos existentes ANTES de agregar constraints nuevos
+- [ ] Permisos: `GRANT` solo a `authenticated` y `service_role`, **nunca a `anon`** (la migración 026 cerró la base a quien no inició sesión; `tests/e2e/12-sesion-base-de-datos.test.ts` lo verifica). Tablas nuevas: `ENABLE ROW LEVEL SECURITY` + política `durey_usuarios_con_sesion` como en la 026
 
 ### Tipos TypeScript
 - [ ] Si hay un tipo `interface` o `type` en la página que usa esa tabla → actualizar el campo afectado
