@@ -4,6 +4,7 @@
 
 import { ejecutarRpcProduccion, RPC_PRODUCCION } from './mockRpcProduccion'
 import { ejecutarRpcProcesos, RPC_PROCESOS } from './mockRpcProcesos'
+import { ejecutarRpcMateriaPrima, RPC_MATERIA_PRIMA } from './mockRpcMateriaPrima'
 
 const SEMILLAS = {
   usuarios: [
@@ -707,9 +708,11 @@ export function createMockClient() {
       return new MockQueryBuilder(tableName);
     },
     async rpc(fnName: string, params: any) {
-      if ([...RPC_PRODUCCION, ...RPC_PROCESOS].includes(fnName as never)) {
+      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA].includes(fnName as never)) {
         const db = await getMockDb();
-        const resultado = (ejecutarRpcProduccion(db, fnName, params) ?? ejecutarRpcProcesos(db, fnName, params))!;
+        const resultado = (ejecutarRpcProduccion(db, fnName, params)
+          ?? ejecutarRpcProcesos(db, fnName, params)
+          ?? ejecutarRpcMateriaPrima(db, fnName, params))!;
         if (!resultado.error) await saveMockDb(db);
         return resultado;
       }

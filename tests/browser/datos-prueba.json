@@ -93,7 +93,8 @@
       "id": "mp1",
       "material": "Algodón",
       "color": "Blanco",
-      "stock_kg": 20
+      "stock_kg": 20,
+      "tipo_empaque": "cono"
     }
   ],
   "ubicaciones": [
@@ -102,6 +103,13 @@
       "nombre": "Salón A",
       "tipo": "salon",
       "activo": true
+    }
+  ],
+  "proveedores": [
+    {
+      "id": "prov1",
+      "nombre": "Proveedor Prueba",
+      "ruc": "20000000001"
     }
   ]
 }
