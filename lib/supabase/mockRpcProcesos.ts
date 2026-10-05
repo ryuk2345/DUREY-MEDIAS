@@ -11,6 +11,7 @@ import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoR
 
 export const RPC_PROCESOS = [
   'registrar_venta',
+  'registrar_cobro_cuotas',
   'despachar_venta',
   'almacenar_paquete',
   'iniciar_lote_remallado',
@@ -20,6 +21,21 @@ export const RPC_PROCESOS = [
 
 const hoy = () => new Date().toISOString().split('T')[0]
 const num = (v: unknown) => Number(v ?? 0) || 0
+const METODOS_PAGO = ['efectivo', 'yape', 'plin', 'transferencia']
+
+/** Igual que _sumar_a_caja en SQL: suma a la caja abierta de hoy (prefiere la de la vendedora). */
+function sumarACaja(db: Db, asesoraId: string | null, metodo: string, monto: number, esVenta: boolean) {
+  if (monto <= 0) return
+  const abiertas = tabla(db, 'cajas_diarias').filter(c => c.fecha === hoy() && c.estado === 'abierta')
+  const caja = abiertas.find(c => (c.asesora_id ?? null) === (asesoraId ?? null)) ?? abiertas[0]
+  if (!caja) return
+  const campo = `${esVenta ? 'ventas' : 'cobros'}_${metodo === 'efectivo' ? 'efectivo' : 'digital'}`
+  caja[campo] = num(caja[campo]) + monto
+}
+
+function registrarCobro(db: Db, c: { venta_id: string; cuota_id?: string | null; asesora_id: string | null; monto: number; metodo_pago: string }) {
+  tabla(db, 'cobros').push({ id: nuevoId(), cuota_id: null, ...c, estado_validacion: 'validado', fecha: hoy(), created_at: new Date().toISOString() })
+}
 
 /** Misma regla que _siguiente_codigo en SQL: max(filas + base, mayor número existente + 1). */
 function siguienteSecuencia(codigos: string[], base: number) {
@@ -34,6 +50,9 @@ function registrarVenta(db: Db, p: any) {
   if (!p.p_asesora_id) throw new ErrorNegocio('Selecciona la vendedora / asesora encargada')
   if (!String(cliente.nombre ?? '').trim()) throw new ErrorNegocio('Ingresa el nombre o razón social del cliente')
   if (!String(cliente.numero_documento ?? '').trim()) throw new ErrorNegocio('Ingresa el DNI o RUC del cliente')
+  if (!['directo', 'cuotas'].includes(p.p_tipo_pago)) throw new ErrorNegocio('Tipo de pago inválido')
+  const metodo = p.p_metodo_pago ?? 'efectivo'
+  if (!METODOS_PAGO.includes(metodo)) throw new ErrorNegocio('Método de pago inválido')
   if (!Array.isArray(items) || items.length === 0) throw new ErrorNegocio('Agrega al menos un producto a la venta')
   if (items.some(i => !i.catalogo_media_id || num(i.docenas) <= 0 || num(i.precio_docena) < 0)) {
     throw new ErrorNegocio('Cada producto necesita una media, docenas mayores a 0 y un precio válido')
@@ -82,7 +101,36 @@ function registrarVenta(db: Db, p: any) {
       })
     }
   }
-  return { venta_id: ventaId, codigo_venta: codigo, total_soles: total }
+  // Cobro al momento de la venta: total (contado) o adelanto (cuotas)
+  const cobrado = p.p_tipo_pago === 'directo' ? total : adelanto
+  if (cobrado > 0) {
+    registrarCobro(db, { venta_id: ventaId, asesora_id: p.p_asesora_id, monto: cobrado, metodo_pago: metodo })
+    sumarACaja(db, p.p_asesora_id, metodo, cobrado, true)
+  }
+  return { venta_id: ventaId, codigo_venta: codigo, total_soles: total, monto_cobrado: cobrado }
+}
+
+function registrarCobroCuotas(db: Db, p: any) {
+  const ids: string[] = Array.isArray(p.p_cuota_ids) ? p.p_cuota_ids : []
+  if (ids.length === 0) throw new ErrorNegocio('Selecciona al menos una cuota')
+  if (!METODOS_PAGO.includes(p.p_metodo_pago)) throw new ErrorNegocio('Método de pago inválido')
+  const cuotas = ids.map(id => tabla(db, 'cuotas').find(q => q.id === id))
+  if (cuotas.some(q => !q)) throw new ErrorNegocio('Una de las cuotas no existe')
+  for (const q of cuotas) {
+    if (q.estado === 'pagada') {
+      const venta = tabla(db, 'ventas').find(v => v.id === q.venta_id)
+      throw new ErrorNegocio(`La cuota N° ${q.numero_cuota} de la venta ${venta?.codigo_venta ?? ''} ya está pagada`)
+    }
+  }
+  let total = 0
+  for (const q of cuotas) {
+    const venta = tabla(db, 'ventas').find(v => v.id === q.venta_id)
+    Object.assign(q, { estado: 'pagada', metodo_pago: p.p_metodo_pago, comprobante_url: p.p_comprobante_url ?? null })
+    registrarCobro(db, { venta_id: q.venta_id, cuota_id: q.id, asesora_id: p.p_asesora_id ?? venta?.asesora_id ?? null, monto: num(q.monto), metodo_pago: p.p_metodo_pago })
+    total += num(q.monto)
+  }
+  sumarACaja(db, p.p_asesora_id ?? null, p.p_metodo_pago, total, false)
+  return total
 }
 
 const ESTADOS_EN_STOCK = ['almacenado', 'pendiente_almacenar']
@@ -248,6 +296,7 @@ function registrarProduccionPlanchado(db: Db, p: any) {
 export function ejecutarRpcProcesos(db: Db, fnName: string, params: any): ResultadoRpc | null {
   return ejecutarHandler({
     registrar_venta: registrarVenta,
+    registrar_cobro_cuotas: registrarCobroCuotas,
     despachar_venta: despacharVenta,
     almacenar_paquete: almacenarPaquete,
     iniciar_lote_remallado: iniciarLoteRemallado,

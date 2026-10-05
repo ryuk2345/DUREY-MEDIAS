@@ -15,6 +15,8 @@ interface KPI {
   cuentas_por_cobrar: number
   costos_produccion: number
   gastos_mantenimiento: number
+  compras_materia_prima: number
+  egresos_adicionales: number
 }
 
 
@@ -23,7 +25,7 @@ interface DeudaAtrasada { venta: string; cliente: string; asesora: string; monto
 interface TejedorTop { nombre: string; docenas: number }
 
 export default function AdminPage() {
-  const [kpis, setKpis] = useState<KPI>({ ingresos_recaudados: 0, cuentas_por_cobrar: 0, costos_produccion: 0, gastos_mantenimiento: 0 })
+  const [kpis, setKpis] = useState<KPI>({ ingresos_recaudados: 0, cuentas_por_cobrar: 0, costos_produccion: 0, gastos_mantenimiento: 0, compras_materia_prima: 0, egresos_adicionales: 0 })
   const [ventasMes, setVentasMes] = useState<VentaMes[]>([])
   const [deudasAtrasadas, setDeudasAtrasadas] = useState<DeudaAtrasada[]>([])
   const [topTejedores, setTopTejedores] = useState<TejedorTop[]>([])
@@ -35,19 +37,26 @@ export default function AdminPage() {
     const hoy = new Date()
     const inicioMes = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`
 
-    const [cobros, cuotasPend, reparaciones] = await Promise.all([
+    const [cobros, cuotasPend, reparaciones, comprasMes, egresosMes] = await Promise.all([
       supabase.from('cobros').select('monto').gte('fecha', inicioMes).eq('estado_validacion', 'validado'),
-      supabase.from('cuotas').select('monto').eq('estado', 'pendiente'),
+      supabase.from('cuotas').select('monto').neq('estado', 'pagada'),
       supabase.from('reparaciones').select('costo_total').gte('fecha_reparacion', inicioMes),
+      supabase.from('compras_materia_prima').select('costo_total').eq('estado', 'recibida').gte('fecha', inicioMes),
+      supabase.from('egresos_adicionales').select('monto').gte('fecha', inicioMes),
     ])
 
     if (cobros.error) toast.error(`Error al cargar cobros del mes: ${cobros.error.message}`)
     if (cuotasPend.error) toast.error(`Error al cargar cuotas pendientes: ${cuotasPend.error.message}`)
     if (reparaciones.error) toast.error(`Error al cargar reparaciones: ${reparaciones.error.message}`)
+    if (comprasMes.error) toast.error(`Error al cargar compras del mes: ${comprasMes.error.message}`)
+    if (egresosMes.error) toast.error(`Error al cargar egresos del mes: ${egresosMes.error.message}`)
 
-    const ingresosRecaudados = (cobros.data ?? []).reduce((s, c) => s + c.monto, 0)
-    const cuentasCobrar = (cuotasPend.data ?? []).reduce((s, c) => s + c.monto, 0)
-    const gastosMantenimiento = (reparaciones.data ?? []).reduce((s, r) => s + (r.costo_total ?? 0), 0)
+    // Number(): los NUMERIC de Postgres llegan como texto y "+" los concatenaría
+    const ingresosRecaudados = (cobros.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
+    const cuentasCobrar = (cuotasPend.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
+    const gastosMantenimiento = (reparaciones.data ?? []).reduce((s, r) => s + Number(r.costo_total ?? 0), 0)
+    const comprasMateriaPrima = (comprasMes.data ?? []).reduce((s, c) => s + Number(c.costo_total ?? 0), 0)
+    const egresosAdicionales = (egresosMes.data ?? []).reduce((s, e) => s + Number(e.monto ?? 0), 0)
 
     // Costos de producción del mes
     const { data: prodData, error: prodErr } = await supabase
@@ -59,7 +68,7 @@ export default function AdminPage() {
 
     const costosProd = (prodData ?? []).reduce((s, r) => {
       const costo = (r.catalogo_media as {costo_produccion_docena: number})?.costo_produccion_docena ?? 0
-      return s + r.docenas_producidas * costo
+      return s + Number(r.docenas_producidas ?? 0) * Number(costo)
     }, 0)
 
     setKpis({
@@ -67,6 +76,8 @@ export default function AdminPage() {
       cuentas_por_cobrar: cuentasCobrar,
       costos_produccion: costosProd,
       gastos_mantenimiento: gastosMantenimiento,
+      compras_materia_prima: comprasMateriaPrima,
+      egresos_adicionales: egresosAdicionales,
     })
     
     // Calcular ingresos y costos reales para los últimos 6 meses dinámicamente
@@ -89,24 +100,21 @@ export default function AdminPage() {
     }
 
     const promesasMeses = mesesFiltro.map(async (m) => {
-      const [cobRes, prodRes, repRes, compRes, egrRes] = await Promise.all([
+      const [cobRes, repRes, compRes, egrRes] = await Promise.all([
         supabase.from('cobros').select('monto').eq('estado_validacion', 'validado').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
-        supabase.from('reportes_produccion').select('docenas_producidas, catalogo_media:catalogo_medias(costo_produccion_docena)').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
         supabase.from('reparaciones').select('costo_total').gte('fecha_reparacion', m.inicio).lt('fecha_reparacion', m.finSiguiente),
-        supabase.from('compras_materia_prima').select('costo_total').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
+        supabase.from('compras_materia_prima').select('costo_total').eq('estado', 'recibida').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
         supabase.from('egresos_adicionales').select('monto').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
       ])
 
+      // Misma definición que Balance: dinero cobrado − (compras recibidas + reparaciones + egresos).
+      // El costo estándar de producción no se suma: duplicaría lo ya pagado en materia prima.
       const ingresos = (cobRes.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
-      const costProd = (prodRes.data ?? []).reduce((s, r) => {
-        const c = (r.catalogo_media as any)?.costo_produccion_docena ?? 0
-        return s + Number(r.docenas_producidas ?? 0) * c
-      }, 0)
       const costManto = (repRes.data ?? []).reduce((s, r) => s + Number(r.costo_total ?? 0), 0)
       const costMat = (compRes.data ?? []).reduce((s, c) => s + Number(c.costo_total ?? 0), 0)
       const costEgr = (egrRes.data ?? []).reduce((s, e) => s + Number(e.monto ?? 0), 0)
 
-      const costosTotales = costProd + costManto + costMat + costEgr
+      const costosTotales = costManto + costMat + costEgr
 
       return {
         mes: m.nombreMes,
@@ -158,8 +166,16 @@ export default function AdminPage() {
 
   useEffect(() => { cargarKPIs() }, [cargarKPIs])
 
-  const gananciaNeta = kpis.ingresos_recaudados - (kpis.costos_produccion + kpis.gastos_mantenimiento)
+  // Misma definición que el módulo Balance (y que el gráfico de 6 meses)
+  const egresosMes = kpis.compras_materia_prima + kpis.gastos_mantenimiento + kpis.egresos_adicionales
+  const gananciaNeta = kpis.ingresos_recaudados - egresosMes
   const isPositivo = gananciaNeta >= 0
+
+  // Variación real de ingresos contra el mes anterior (antes era el texto fijo "+12%")
+  const ingresosMesAnterior = ventasMes.length >= 2 ? ventasMes[ventasMes.length - 2].ventas : 0
+  const variacionIngresos = ingresosMesAnterior > 0
+    ? `${kpis.ingresos_recaudados >= ingresosMesAnterior ? '+' : ''}${(((kpis.ingresos_recaudados - ingresosMesAnterior) / ingresosMesAnterior) * 100).toFixed(1)}% vs mes anterior`
+    : 'Sin ingresos el mes anterior'
 
   const kpiCards = [
     { 
@@ -169,7 +185,7 @@ export default function AdminPage() {
       color: isPositivo ? 'text-emerald-400' : 'text-rose-400', 
       bg: isPositivo ? 'bg-emerald-500/10' : 'bg-rose-500/10', 
       border: isPositivo ? 'border-emerald-500/25' : 'border-rose-500/25', 
-      trend: isPositivo ? 'Balance Positivo' : 'Déficit del Mes' 
+      trend: `Egresos del mes: ${formatearMoneda(egresosMes)}` 
     },
     { 
       label: 'Ingresos Recaudados', 
@@ -178,7 +194,7 @@ export default function AdminPage() {
       color: 'text-violet-400', 
       bg: 'bg-violet-500/10', 
       border: 'border-violet-500/20', 
-      trend: '+12% vs mes anterior' 
+      trend: variacionIngresos 
     },
     { 
       label: 'Cuentas por Cobrar', 
@@ -190,13 +206,13 @@ export default function AdminPage() {
       trend: `${deudasAtrasadas.length} cuotas vencidas` 
     },
     { 
-      label: 'Costos de Producción', 
+      label: 'Costo Estándar Tejido', 
       value: formatearMoneda(kpis.costos_produccion), 
       icon: <Package className="w-5 h-5" />, 
       color: 'text-sky-400', 
       bg: 'bg-sky-500/10', 
       border: 'border-sky-500/20', 
-      trend: 'Fábrica (Tejido)' 
+      trend: 'Referencia: docenas × costo/docena' 
     },
     { 
       label: 'Gastos Mantenimiento', 

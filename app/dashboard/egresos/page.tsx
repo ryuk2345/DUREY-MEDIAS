@@ -101,10 +101,12 @@ export default function EgresosPage() {
         supabase.from('reparaciones').select('costo_total')
       ])
 
-      const localEgresos = JSON.parse(localStorage.getItem('durey_egresos_adicionales') || '[]')
-      const remoteEgresos = egrRes.data ?? []
-      const mergedEgresos = remoteEgresos.length > 0 ? remoteEgresos : localEgresos
-      setEgresos(mergedEgresos)
+      // La base es la única fuente: antes, si no había egresos en la base se mostraban
+      // copias guardadas en este navegador (que el Balance terminaba sumando).
+      if (egrRes.error) toast.error(`Error al cargar egresos: ${egrRes.error.message}`)
+      if (comprasRes.error) toast.error(`Error al cargar compras: ${comprasRes.error.message}`)
+      if (repRes.error) toast.error(`Error al cargar reparaciones: ${repRes.error.message}`)
+      setEgresos(egrRes.data ?? [])
 
       const comprasCosto = (comprasRes.data ?? [])
         .filter(c => c.estado === 'recibida')
@@ -115,9 +117,8 @@ export default function EgresosPage() {
         .reduce((s, r) => s + (Number(r.costo_total) || 0), 0)
       setTotalReparaciones(repCosto)
     } catch (err: any) {
-      console.error('Error al cargar egresos:', err)
-      const localEgresos = JSON.parse(localStorage.getItem('durey_egresos_adicionales') || '[]')
-      setEgresos(localEgresos)
+      toast.error(`Error al cargar egresos: ${err.message}`)
+      setEgresos([])
     } finally {
       setLoading(false)
     }
@@ -155,14 +156,10 @@ export default function EgresosPage() {
         comprobante_url: nuevoEgreso.comprobante_url
       })
 
-      if (error) {
-        console.warn('Fallback a local para egresos_adicionales:', error.message)
-      }
+      // Antes un error se ignoraba y el gasto quedaba solo en este navegador como "registrado"
+      if (error) throw error
 
-      const updated = [nuevoEgreso, ...egresos]
-      setEgresos(updated)
-      localStorage.setItem('durey_egresos_adicionales', JSON.stringify(updated))
-
+      await cargarDatos()
       toast.success('💸 Gasto operativo registrado exitosamente')
       setShowAddModal(false)
       setForm({
@@ -186,9 +183,7 @@ export default function EgresosPage() {
     try {
       const { error } = await supabase.from('egresos_adicionales').delete().eq('id', id)
       if (error) throw error
-      const filtered = egresos.filter(e => e.id !== id)
-      setEgresos(filtered)
-      localStorage.setItem('durey_egresos_adicionales', JSON.stringify(filtered))
+      setEgresos(egresos.filter(e => e.id !== id))
       toast.success('Egreso eliminado')
     } catch (err: any) {
       toast.error('Error al eliminar: ' + err.message)

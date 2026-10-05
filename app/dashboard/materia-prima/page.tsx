@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient, usaBaseMock } from '@/lib/supabase/client'
+import { esStockBajoMateriaPrima } from '@/lib/domain/inventario'
 import { toast } from 'sonner'
 import { 
   Database, Plus, Check, X, RefreshCw, Truck, FileText, AlertTriangle, 
@@ -246,7 +247,14 @@ export default function MateriaPrimaPage() {
       setRepairsTotal(totalReparaciones)
 
     } catch (err: any) {
-      console.warn('Supabase error, falling back to LocalStorage:', err.message)
+      // Con una base real, un error se muestra como error. Antes el módulo pasaba en
+      // silencio a datos guardados solo en este navegador y las compras/pagos que se
+      // registraban ahí nunca llegaban a la base. Solo en desarrollo local (mock) se usa.
+      if (!usaBaseMock()) {
+        toast.error(`No se pudo cargar Materia Prima: ${err.message}`)
+        setUsingFallback(false)
+        return
+      }
       setUsingFallback(true)
       
       // Cargar desde LocalStorage
@@ -288,9 +296,9 @@ export default function MateriaPrimaPage() {
       setCuotasCompras(cuotasMapeadas)
       setMovimientos(movsMapeados)
       
-      // Valores de ventas y reparaciones simulados
-      setVentasTotal(18500)
-      setRepairsTotal(1250)
+      // Sin base no hay ventas ni reparaciones que mostrar (antes: S/ 18,500 y S/ 1,250 inventados)
+      setVentasTotal(0)
+      setRepairsTotal(0)
     } finally {
       setLoading(false)
     }
@@ -967,11 +975,7 @@ export default function MateriaPrimaPage() {
   }
 
   // ── CALCULAR SUB-LISTAS POR TIPO DE EMPAQUE Y ALERTAS ESPECÍFICAS ──────────
-  const isItemCritical = (h: MateriaPrima) => {
-    const empaque = h.tipo_empaque || 'cono'
-    const stock = Number(h.stock_kg || 0)
-    return empaque === 'caja' ? stock <= 4 : empaque === 'bolsa' ? stock <= 4 : stock <= 10
-  }
+  const isItemCritical = (h: MateriaPrima) => esStockBajoMateriaPrima(Number(h.stock_kg || 0), h.tipo_empaque)
 
   const getItemThreshold = (empaque?: 'bolsa' | 'cono' | 'caja') => {
     return empaque === 'cono' ? 10 : 4

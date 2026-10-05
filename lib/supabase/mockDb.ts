@@ -337,6 +337,10 @@ class MockQueryBuilder {
         filters.push(item => values.includes(item[column]));
         return queryObj;
       },
+      neq(column: string, value: any) {
+        filters.push(item => item[column] !== value);
+        return queryObj;
+      },
       gt(column: string, value: any) {
         filters.push(item => item[column] > value);
         return queryObj;
@@ -416,37 +420,37 @@ class MockQueryBuilder {
         if (self.tableName === 'maquinas') {
           result = result.map(m => ({
             ...m,
-            marca: db.marcas_maquinas.find((br: any) => br.id === m.marca_id) || { nombre: 'Angies' }
+            marca: db.marcas_maquinas.find((br: any) => br.id === m.marca_id) || null
           }));
         } else if (self.tableName === 'paquetes') {
           result = result.map(p => ({
             ...p,
             preparador: db.usuarios.find((u: any) => u.id === p.preparador_id) || null,
-            catalogo_media: db.catalogo_medias.find((c: any) => c.id === p.catalogo_media_id) || { codigo: 'c1' },
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === p.catalogo_media_id) || null,
             ubicacion: db.ubicaciones.find((u: any) => u.id === p.ubicacion_id) || null
           }));
         } else if (self.tableName === 'ventas') {
           result = result.map(v => ({
             ...v,
-            cliente: db.clientes.find((c: any) => c.id === v.cliente_id) || { nombre: 'Cliente General', numero_documento: '12345678' },
-            asesora: db.usuarios.find((u: any) => u.id === v.asesora_id) || { nombre: 'Sofia Vendedora' },
+            cliente: db.clientes.find((c: any) => c.id === v.cliente_id) || null,
+            asesora: db.usuarios.find((u: any) => u.id === v.asesora_id) || null,
             items_venta: db.items_venta.filter((i: any) => i.venta_id === v.id).map((i: any) => ({
               ...i,
-              catalogo_media: db.catalogo_medias.find((c: any) => c.id === i.catalogo_media_id) || { codigo: 'c1', modelo: 'Tobillera', publico: 'Niño' }
+              catalogo_media: db.catalogo_medias.find((c: any) => c.id === i.catalogo_media_id) || null
             }))
           }));
         } else if (self.tableName === 'lotes_remallado') {
           result = result.map(l => ({
             ...l,
-            catalogo_media: db.catalogo_medias.find((c: any) => c.id === l.catalogo_media_id) || { codigo: 'c1' },
-            remalladora: db.usuarios.find((u: any) => u.id === l.remalladora_id) || { nombre: 'Ana Remalladora' },
-            maquina_remalladora: db.maquinas.find((m: any) => m.id === l.maquina_remalladora_id) || { codigo: 'M05' }
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === l.catalogo_media_id) || null,
+            remalladora: db.usuarios.find((u: any) => u.id === l.remalladora_id) || null,
+            maquina_remalladora: db.maquinas.find((m: any) => m.id === l.maquina_remalladora_id) || null
           }));
         } else if (self.tableName === 'averias_maquinas') {
           result = result.map(a => ({
             ...a,
-            maquina: db.maquinas.find((m: any) => m.id === a.maquina_id) || { codigo: 'M01', tipo: 'tejedora' },
-            reportado_por: db.usuarios.find((u: any) => u.id === a.reportado_por_id) || { nombre: 'Carlos Tejedor' },
+            maquina: db.maquinas.find((m: any) => m.id === a.maquina_id) || null,
+            reportado_por: db.usuarios.find((u: any) => u.id === a.reportado_por_id) || null,
             reparaciones: db.reparaciones.filter((r: any) => r.averia_id === a.id)
           }));
         } else if (self.tableName === 'disenos') {
@@ -458,14 +462,14 @@ class MockQueryBuilder {
               .filter((dm: any) => dm.diseno_id === d.id && dm.activo)
               .map((dm: any) => ({
                 ...dm,
-                maquina: db.maquinas?.find((m: any) => m.id === dm.maquina_id) || { codigo: 'M01', tipo: 'tejedora' }
+                maquina: db.maquinas?.find((m: any) => m.id === dm.maquina_id) || null
               }))
           }));
         } else if (self.tableName === 'cuotas') {
           result = result.map(q => {
-            const v = db.ventas.find((v: any) => v.id === q.venta_id) || { codigo_venta: 'V-1001', cliente_id: '1', asesora_id: '8' };
-            const c = db.clientes.find((c: any) => c.id === v.cliente_id) || { nombre: 'Cliente General' };
-            const a = db.usuarios.find((u: any) => u.id === v.asesora_id) || db.usuarios.find((u: any) => u.rol === 'vendedora') || { id: '8', nombre: 'Sofia Vendedora' };
+            const v = db.ventas.find((v: any) => v.id === q.venta_id) || {};
+            const c = db.clientes.find((c: any) => c.id === v.cliente_id) || null;
+            const a = db.usuarios.find((u: any) => u.id === v.asesora_id) || null;
             return {
               ...q,
               venta: {
@@ -473,18 +477,18 @@ class MockQueryBuilder {
                 codigo_venta: v.codigo_venta,
                 total_soles: v.total_soles,
                 cliente: c,
-                asesora: { id: a.id || '8', nombre: a.nombre || 'Sofia Vendedora' }
+                asesora: a ? { id: a.id, nombre: a.nombre } : null
               }
             };
           });
         } else if (self.tableName === 'reportes_produccion') {
           result = result.map(r => {
-            const t = db.turnos_produccion.find((t: any) => t.id === r.turno_id) || { tejedor_id: '3' };
-            const tej = db.usuarios.find((u: any) => u.id === t.tejedor_id) || { nombre: 'Carlos Tejedor' };
+            const t = db.turnos_produccion.find((t: any) => t.id === r.turno_id) || {};
+            const tej = db.usuarios.find((u: any) => u.id === t.tejedor_id) || null;
             return {
               ...r,
-              maquina: db.maquinas.find((m: any) => m.id === r.maquina_id) || { codigo: 'M01' },
-              catalogo_media: db.catalogo_medias.find((c: any) => c.id === r.catalogo_media_id) || { codigo: 'c1' },
+              maquina: db.maquinas.find((m: any) => m.id === r.maquina_id) || null,
+              catalogo_media: db.catalogo_medias.find((c: any) => c.id === r.catalogo_media_id) || null,
               turno: {
                 ...t,
                 tejedor: tej
@@ -494,17 +498,17 @@ class MockQueryBuilder {
         } else if (self.tableName === 'turnos_produccion') {
           result = result.map(t => ({
             ...t,
-            tejedor: db.usuarios.find((u: any) => u.id === t.tejedor_id) || { nombre: 'Tejedor Desconocido' },
+            tejedor: db.usuarios.find((u: any) => u.id === t.tejedor_id) || null,
             turno_maquinas: db.turno_maquinas.filter((tm: any) => tm.turno_id === t.id).map((tm: any) => ({
               ...tm,
-              maquina: db.maquinas.find((m: any) => m.id === tm.maquina_id) || { codigo: 'M01' },
-              catalogo_media: db.catalogo_medias.find((c: any) => c.id === tm.catalogo_media_id) || { codigo: 'c1' }
+              maquina: db.maquinas.find((m: any) => m.id === tm.maquina_id) || null,
+              catalogo_media: db.catalogo_medias.find((c: any) => c.id === tm.catalogo_media_id) || null
             }))
           }));
         } else if (self.tableName === 'reportes_remallado') {
           result = result.map(r => {
-            const l = db.lotes_remallado.find((l: any) => l.id === r.lote_id) || { catalogo_media_id: 'c1' };
-            const c = db.catalogo_medias.find((c: any) => c.id === l.catalogo_media_id) || { codigo: 'c1' };
+            const l = db.lotes_remallado.find((l: any) => l.id === r.lote_id) || {};
+            const c = db.catalogo_medias.find((c: any) => c.id === l.catalogo_media_id) || null;
             return {
               ...r,
               lote: {
@@ -515,45 +519,45 @@ class MockQueryBuilder {
         } else if (self.tableName === 'reportes_planchado') {
           result = result.map(r => ({
             ...r,
-            planchador: db.usuarios.find((u: any) => u.id === r.planchador_id) || { nombre: 'Mario Planchador' },
-            catalogo_media: db.catalogo_medias.find((c: any) => c.id === r.catalogo_media_id) || { codigo: 'c1' }
+            planchador: db.usuarios.find((u: any) => u.id === r.planchador_id) || null,
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === r.catalogo_media_id) || null
           }));
         } else if (self.tableName === 'cronograma_planchado') {
           result = result.map(cr => ({
             ...cr,
-            planchador: db.usuarios.find((u: any) => u.id === cr.planchador_id) || { nombre: 'Mario Planchador' }
+            planchador: db.usuarios.find((u: any) => u.id === cr.planchador_id) || null
           }));
         } else if (self.tableName === 'stock_listo_planchar') {
           result = result.map(s => ({
             ...s,
-            catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || { id: 'c1', codigo: 'c1', talla: 'única', publico: 'Niño' }
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || null
           }));
         } else if (self.tableName === 'stock_listo_voltear') {
           result = result.map(s => ({
             ...s,
-            catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || { id: 'c1', codigo: 'c1', talla: 'única', publico: 'Niño' }
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || null
           }));
         } else if (self.tableName === 'lotes_volteado') {
           result = result.map(lv => ({
             ...lv,
-            volteador: db.usuarios.find((u: any) => u.id === lv.volteador_id) || { nombre: 'Tomas Volteador' },
-            catalogo_media: db.catalogo_medias.find((c: any) => c.id === lv.catalogo_media_id) || { id: 'c1', codigo: 'c1', talla: 'única', publico: 'Niño' }
+            volteador: db.usuarios.find((u: any) => u.id === lv.volteador_id) || null,
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === lv.catalogo_media_id) || null
           }));
         } else if (self.tableName === 'reportes_volteado') {
           result = result.map(rv => ({
             ...rv,
-            volteador: db.usuarios.find((u: any) => u.id === rv.volteador_id) || { nombre: 'Tomas Volteador' },
-            catalogo_media: db.catalogo_medias.find((c: any) => c.id === rv.catalogo_media_id) || { id: 'c1', codigo: 'c1', talla: 'única', publico: 'Niño' }
+            volteador: db.usuarios.find((u: any) => u.id === rv.volteador_id) || null,
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === rv.catalogo_media_id) || null
           }));
         } else if (self.tableName === 'asignaciones_turno') {
           result = result.map(a => ({
             ...a,
-            operador: db.usuarios.find((u: any) => u.id === a.operador_id) || { nombre: 'Operador' }
+            operador: db.usuarios.find((u: any) => u.id === a.operador_id) || null
           }));
         } else if (self.tableName === 'minidepositos') {
           result = result.map(m => ({
             ...m,
-            catalogo_media: db.catalogo_medias.find((c: any) => c.id === m.catalogo_media_id) || { id: 'c1', codigo: 'tobillera-niño-con_diseño-10-13' }
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === m.catalogo_media_id) || null
           }));
         }
 

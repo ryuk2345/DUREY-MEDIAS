@@ -153,62 +153,45 @@ export default function AlmacenPage() {
     const raw = inputEscaner.trim()
     setInputEscaner('')
 
-    let info: EscaneoMasterBagInfo | null = null
-
-    // 1. Intentar parsear si es cadena JSON proveniente del QR del Saco Maestro
+    // El QR (JSON) o la etiqueta solo sirven para identificar el saco: las cantidades
+    // se toman SIEMPRE del saco registrado en Preparado. Antes, si el QR no traía
+    // docenas o el código no existía, se inventaba un saco de 10 docenas de
+    // "tobillera-dama-diseño-única" y se cargaba al stock real.
+    let codigo = raw.toUpperCase()
     if (raw.startsWith('{') && raw.endsWith('}')) {
       try {
         const parsed = JSON.parse(raw)
-        const paqExistente = paquetes.find(p => p.codigo_paquete === parsed.codigo_saco)
-
-        info = {
-          codigo_saco: parsed.codigo_saco,
-          preparador_nombre: parsed.preparador_nombre || 'Lucia Preparadora',
-          salon_destino_id: parsed.salon_destino_id || ubicaciones[0]?.id || '',
-          salon_destino_nombre: parsed.salon_destino_nombre || 'Salón A',
-          total_docenas: parsed.total_docenas || 10,
-          total_pares: parsed.total_pares || 120,
-          items: parsed.items || [{ sku: 'SKU-MED-01', codigo: 'tobillera-dama-diseño-única', docenas: 10, pares: 120 }],
-          paqueteId: paqExistente?.id
-        }
-      } catch (err) {
-        console.error('Error parseando JSON de QR:', err)
+        codigo = String(parsed.codigo_saco ?? '').trim().toUpperCase()
+      } catch {
+        codigo = ''
+      }
+      if (!codigo) {
+        toast.error('El QR escaneado no contiene un código de saco válido')
+        return
       }
     }
 
-    // 2. Si es lectura directa del código de barras (ej. B-1005 o PKG-1005)
-    if (!info) {
-      const codeClean = raw.toUpperCase()
-      const paqMatch = paquetes.find(p => p.codigo_paquete.toUpperCase() === codeClean)
+    const paqMatch = paquetes.find(p => p.codigo_paquete.toUpperCase() === codigo)
+    if (!paqMatch) {
+      toast.error(`El saco ${codigo} no está registrado. Regístralo en Preparado o usa "Ingreso Directo de Stock".`)
+      return
+    }
 
-      if (paqMatch) {
-        info = {
-          codigo_saco: paqMatch.codigo_paquete,
-          preparador_nombre: paqMatch.preparador?.nombre || 'Empacador de Turno',
-          salon_destino_id: paqMatch.ubicacion?.id || ubicaciones[0]?.id || '',
-          salon_destino_nombre: paqMatch.ubicacion?.nombre || 'Salón A',
-          total_docenas: paqMatch.docenas,
-          total_pares: paqMatch.total_pares || convertirDocenasAPares(paqMatch.docenas),
-          items: paqMatch.detalles_contenido || [{
-            sku: paqMatch.catalogo_media?.sku || 'SKU-VARIADO',
-            codigo: paqMatch.catalogo_media?.codigo || 'Medias Variadas',
-            docenas: paqMatch.docenas,
-            pares: paqMatch.total_pares || convertirDocenasAPares(paqMatch.docenas)
-          }],
-          paqueteId: paqMatch.id
-        }
-      } else {
-        // Generar estructura al vuelo para simulación de lectura de saco nuevo
-        info = {
-          codigo_saco: codeClean,
-          preparador_nombre: 'Lucia Preparadora',
-          salon_destino_id: ubicaciones[0]?.id || '',
-          salon_destino_nombre: ubicaciones[0]?.nombre || 'Salón A',
-          total_docenas: 10,
-          total_pares: 120,
-          items: [{ sku: 'SKU-TOB-DAM-DIS-UNI', codigo: 'tobillera-dama-diseño-única', docenas: 10, pares: 120 }]
-        }
-      }
+    const salonDestino = paqMatch.ubicacion ?? ubicaciones[0] ?? null
+    const info: EscaneoMasterBagInfo | null = {
+      codigo_saco: paqMatch.codigo_paquete,
+      preparador_nombre: paqMatch.preparador?.nombre || 'Sin preparador registrado',
+      salon_destino_id: salonDestino?.id || '',
+      salon_destino_nombre: salonDestino?.nombre || 'Sin salón',
+      total_docenas: paqMatch.docenas,
+      total_pares: paqMatch.total_pares || convertirDocenasAPares(paqMatch.docenas),
+      items: paqMatch.detalles_contenido || [{
+        sku: paqMatch.catalogo_media?.sku || paqMatch.catalogo_media?.codigo || 'Sin SKU',
+        codigo: paqMatch.catalogo_media?.codigo || 'Sin código',
+        docenas: paqMatch.docenas,
+        pares: paqMatch.total_pares || convertirDocenasAPares(paqMatch.docenas)
+      }],
+      paqueteId: paqMatch.id
     }
 
     if (info) {
@@ -318,7 +301,7 @@ export default function AlmacenPage() {
       paquetesSalon.forEach(p => {
         if (p.detalles_contenido && p.detalles_contenido.length > 0) {
           p.detalles_contenido.forEach(item => {
-            const key = item.sku || item.codigo || 'SKU-VARIADO'
+            const key = item.sku || item.codigo || 'Sin SKU'
             if (!skuMap[key]) {
               skuMap[key] = { sku: key, codigo: item.codigo || key, docenas: 0, pares: 0 }
             }
@@ -326,7 +309,7 @@ export default function AlmacenPage() {
             skuMap[key].pares += item.pares || convertirDocenasAPares(item.docenas) || 0
           })
         } else {
-          const key = p.catalogo_media?.sku || p.catalogo_media?.codigo || 'SKU-MEDIAS'
+          const key = p.catalogo_media?.sku || p.catalogo_media?.codigo || 'Sin SKU'
           if (!skuMap[key]) {
             skuMap[key] = { sku: key, codigo: p.catalogo_media?.codigo || key, docenas: 0, pares: 0 }
           }
@@ -652,16 +635,16 @@ export default function AlmacenPage() {
               ) : paquetesFiltrados.map(p => (
                 <tr key={p.id}>
                   <td><code className="text-cyan-300 font-mono text-xs bg-cyan-500/10 px-2.5 py-1 rounded-lg border border-cyan-500/20 font-bold">{p.codigo_paquete}</code></td>
-                  <td><span className="badge badge-info font-bold">📍 {p.ubicacion?.nombre || 'Salón A'}</span></td>
+                  <td><span className="badge badge-info font-bold">📍 {p.ubicacion?.nombre || 'Sin salón'}</span></td>
                   <td className="text-slate-300 text-xs font-mono">
                     {p.detalles_contenido && p.detalles_contenido.length > 0 ? (
                       p.detalles_contenido.map((i, idx) => (
                         <div key={idx} className="truncate">
-                          <strong className="text-emerald-300">{i.sku || 'SKU-MEDIA'}</strong> ({i.docenas} doc.)
+                          <strong className="text-emerald-300">{i.sku || i.codigo || 'Sin SKU'}</strong> ({i.docenas} doc.)
                         </div>
                       ))
                     ) : (
-                      <span className="text-slate-200 font-bold">{p.catalogo_media?.sku || p.catalogo_media?.codigo || 'SKU-VARIADO'}</span>
+                      <span className="text-slate-200 font-bold">{p.catalogo_media?.sku || p.catalogo_media?.codigo || 'Sin SKU'}</span>
                     )}
                   </td>
                   <td className="font-bold text-white font-mono">{p.docenas} doc.</td>

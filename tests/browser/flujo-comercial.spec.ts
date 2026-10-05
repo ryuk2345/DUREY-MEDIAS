@@ -36,6 +36,15 @@ test('Almacén: ingreso directo de stock al salón', async ({ page }) => {
   await expect(page.getByText(/3 docenas \(36 pares\)/)).toBeVisible()
 })
 
+test('Almacén: escanear un código que no existe NO crea stock (antes inventaba 10 docenas)', async ({ page }) => {
+  await page.goto('/dashboard/almacen')
+  const escaner = page.getByPlaceholder(/Apunta la pistola escáner/)
+  await escaner.fill('B-9999')
+  await escaner.press('Enter')
+  await expect(page.getByText(/El saco B-9999 no está registrado/)).toBeVisible()
+  await expect(page.getByText('B-9999', { exact: true })).toHaveCount(0)
+})
+
 test('Ventas: registrar una venta genera el código V-1001', async ({ page }) => {
   await page.goto('/dashboard/ventas')
   await page.getByRole('button', { name: /Nueva Venta/ }).click()

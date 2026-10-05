@@ -5,85 +5,65 @@ import { cookies } from 'next/headers'
 import StockNotification from '@/components/layout/StockNotification'
 import EventNotificationBanner from '@/components/layout/EventNotificationBanner'
 import { verifySupabaseJWT } from '@/lib/auth/jwt'
+import { normalizarRol } from '@/lib/auth/roles'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies()
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
   const isMock = !url || url.includes('tu-proyecto') || url.includes('placeholder') || !url.includes('.supabase.co')
 
-  let userName = 'Administrador'
-  let userRol = 'admin'
-  let isAuthenticated = false
+  // Nombre y rol solo desde fuentes verificadas (JWT firmado, sesión mock local o perfil
+  // activo en la base). Antes se aceptaba la cookie durey_user_role, que el usuario
+  // puede editar, y los valores por defecto eran "Administrador"/"admin".
+  let userName = ''
+  let rolSesion: string | null = null
 
   const authToken = cookieStore.get('durey_auth_token')?.value
-  const roleCookie = cookieStore.get('durey_user_role')?.value
-  const loggedCookie = cookieStore.get('durey_user_logged')?.value
   const nameCookie = cookieStore.get('durey_user_name')?.value
 
-  // 🚀 FAST-PATH: Verificar JWT en 0.1ms sin llamadas de red
   if (authToken) {
     const decoded = await verifySupabaseJWT(authToken)
     if (decoded) {
-      userName = decoded.nombre || (nameCookie ? decodeURIComponent(nameCookie) : 'Usuario')
-      userRol = decoded.rol
-      isAuthenticated = true
+      userName = decoded.nombre
+      rolSesion = decoded.rol
     }
   }
 
-  if (!isAuthenticated && isMock) {
+  if (!rolSesion && isMock) {
     const mockSession = cookieStore.get('durey_mock_session')?.value
     if (mockSession) {
       try {
         const parsed = JSON.parse(decodeURIComponent(mockSession))
         userName = parsed.nombre || 'Usuario'
-        userRol = parsed.rol || 'admin'
-        isAuthenticated = true
-      } catch (e) {
-        isAuthenticated = false
+        rolSesion = parsed.rol ?? null
+      } catch {
+        rolSesion = null
       }
-    } else if (loggedCookie && roleCookie) {
-      userName = nameCookie ? decodeURIComponent(nameCookie) : 'Administrador'
-      userRol = roleCookie
-      isAuthenticated = true
     }
-  } else if (!isAuthenticated) {
+  } else if (!rolSesion) {
     try {
       const supabase = await createClient()
       const { data } = await supabase.auth.getUser()
       const user = data?.user
-
       if (user) {
-        let { data: perfil } = await supabase
+        const { data: perfil } = await supabase
           .from('usuarios')
           .select('nombre, rol, activo')
           .or(`auth_id.eq.${user.id}${user.email ? `,email.eq.${user.email.toLowerCase()}` : ''}`)
           .limit(1)
           .maybeSingle()
-
-        if (perfil && perfil.activo) {
+        if (perfil?.activo) {
           userName = perfil.nombre || (nameCookie ? decodeURIComponent(nameCookie) : 'Usuario')
-          userRol = perfil.rol || roleCookie || 'admin'
-          isAuthenticated = true
-        } else if (roleCookie) {
-          userName = nameCookie ? decodeURIComponent(nameCookie) : 'Usuario'
-          userRol = roleCookie
-          isAuthenticated = true
+          rolSesion = perfil.rol
         }
-      } else if (loggedCookie && roleCookie) {
-        userName = nameCookie ? decodeURIComponent(nameCookie) : 'Administrador'
-        userRol = roleCookie
-        isAuthenticated = true
       }
-    } catch (e) {
-      if (loggedCookie && roleCookie) {
-        userName = nameCookie ? decodeURIComponent(nameCookie) : 'Administrador'
-        userRol = roleCookie
-        isAuthenticated = true
-      }
+    } catch {
+      rolSesion = null
     }
   }
 
-  if (!isAuthenticated) redirect('/login')
+  const userRol = normalizarRol(rolSesion)
+  if (!userRol) redirect('/login')
 
   return (
     <div className="flex min-h-screen">

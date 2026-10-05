@@ -340,6 +340,14 @@ export default function VolteadoPage() {
 
   return (
     <div className="space-y-6 animate-fadeInUp pb-12 text-xs">
+      {/* Flujo actual (migración 011): Remallado → Planchado directo. Volteado ya no recibe stock nuevo. */}
+      {!loading && stockListo.length === 0 && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs leading-relaxed">
+          <strong className="text-amber-300">Volteado no recibe stock nuevo.</strong> El remallado terminado se envía
+          directamente a <strong>Planchado</strong> (cambio de flujo de la migración 011). Aquí solo se pueden terminar
+          los lotes de volteado que ya estaban en proceso.
+        </div>
+      )}
       {/* ── BARRA SUPERIOR E INFORMACIÓN DEL ÁREA DE VOLTEADO ( Turning ) ────── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 glass p-6 rounded-3xl border border-white/[0.08]">
         <div>

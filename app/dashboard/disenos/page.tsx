@@ -145,30 +145,10 @@ export default function DisenosPage() {
       // Procesar Máquinas Reales
       setMaquinas(maquinasRes.data || [])
 
-      // Procesar Diseños (Combinación garantizada sin pérdida)
-      let dbDisenos: Diseno[] = []
-      if (!disenosRes.error && disenosRes.data && Array.isArray(disenosRes.data)) {
-        dbDisenos = disenosRes.data as any
-      }
-
-      let localDisenos: Diseno[] = []
-      const local = localStorage.getItem('durey_disenos_fallback')
-      if (local) {
-        try {
-          const parsed = JSON.parse(local)
-          if (Array.isArray(parsed)) localDisenos = parsed
-        } catch (e) {}
-      }
-
-      const mapa = new Map<string, Diseno>()
-      localDisenos.forEach(d => { if (d.codigo || d.id) mapa.set(d.id || d.codigo, d) })
-      dbDisenos.forEach(d => { if (d.codigo || d.id) mapa.set(d.id || d.codigo, d) })
-      const mergedDisenos = Array.from(mapa.values())
-
-      setDisenos(mergedDisenos)
-      if (mergedDisenos.length > 0) {
-        localStorage.setItem('durey_disenos_fallback', JSON.stringify(mergedDisenos))
-      }
+      // Solo diseños de la base. Antes se mezclaban con una copia del navegador y
+      // reaparecían diseños eliminados o se mostraban diseños que nunca se guardaron.
+      if (disenosRes.error) toast.error(`Error al cargar diseños: ${disenosRes.error.message}`)
+      setDisenos((disenosRes.data ?? []) as Diseno[])
 
       // 2. Obtener usuario actual en bloque aislado (no interrumpe la carga de datos)
       try {
@@ -353,7 +333,6 @@ export default function DisenosPage() {
 
       const updated = [newDiseno, ...disenos.filter(d => d.id !== createdId && d.codigo !== newDiseno.codigo)]
       setDisenos(updated)
-      localStorage.setItem('durey_disenos_fallback', JSON.stringify(updated))
 
       toast.success('✅ Diseño y orden de muestra registrados correctamente')
       setShowCreateModal(false)
@@ -384,25 +363,9 @@ export default function DisenosPage() {
         p_maquina_ids: asignarMaquinaIds
       })
 
-      if (rpcErr) {
-        console.warn('RPC falló, actualizando localmente:', rpcErr)
-        const updated = disenos.map(d => {
-          if (d.id === selectedDiseno.id) {
-            return {
-              ...d,
-              asignaciones: asignarMaquinaIds.map(mId => ({
-                id: `asig-${Date.now()}-${mId}`,
-                maquina_id: mId,
-                activo: true,
-                maquina: maquinas.find(m => m.id === mId) as any
-              }))
-            }
-          }
-          return d
-        })
-        setDisenos(updated)
-        localStorage.setItem('durey_disenos_fallback', JSON.stringify(updated))
-      }
+      // Antes, si fallaba, se cambiaba solo en pantalla y se mostraba "actualizado"
+      if (rpcErr) throw rpcErr
+      await cargarDatos()
 
       toast.success('✅ Asignaciones de máquinas actualizadas')
       setShowAsignarModal(false)
@@ -436,11 +399,7 @@ export default function DisenosPage() {
         p_observaciones: statusForm.observaciones.trim() || null
       })
 
-      if (rpcErr) {
-        const updated = disenos.map(d => d.id === selectedDiseno.id ? { ...d, estado: statusForm.estado, observaciones: statusForm.observaciones } : d)
-        setDisenos(updated)
-        localStorage.setItem('durey_disenos_fallback', JSON.stringify(updated))
-      }
+      if (rpcErr) throw rpcErr
 
       toast.success(`✅ Estado actualizado a: ${ESTADO_CONFIG[statusForm.estado]?.label}`)
       setShowStatusModal(false)
@@ -491,24 +450,6 @@ export default function DisenosPage() {
     // Limpiar de estado React
     const updated = disenos.filter(item => item.id !== d.id && item.codigo !== d.codigo)
     setDisenos(updated)
-
-    // Limpiar de fallbacks en localStorage
-    localStorage.setItem('durey_disenos_fallback', JSON.stringify(updated))
-
-    // Limpiar de mockDb en browser
-    try {
-      const mockStr = localStorage.getItem('durey_mock_db')
-      if (mockStr) {
-        const parsed = JSON.parse(mockStr)
-        if (parsed.disenos) {
-          parsed.disenos = parsed.disenos.filter((item: any) => item.id !== d.id && item.codigo !== d.codigo)
-        }
-        if (parsed.disenos_maquinas) {
-          parsed.disenos_maquinas = parsed.disenos_maquinas.filter((item: any) => item.diseno_id !== d.id)
-        }
-        localStorage.setItem('durey_mock_db', JSON.stringify(parsed))
-      }
-    } catch (err) {}
 
     toast.success('Diseño eliminado correctamente')
   }

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { generarCodigoPaquete, getSemanaAnio, getDiaSemana, formatearRangoSemana } from '@/lib/utils'
-import { convertirDocenasAPares } from '@/lib/domain/packaging'
+import { convertirDocenasAPares, construirQrSacoMaestro, siguienteCodigoSaco } from '@/lib/domain/packaging'
 import QRCode from 'qrcode'
 import CustomSelect from '@/components/ui/CustomSelect'
 import Modal from '@/components/ui/Modal'
@@ -222,6 +222,21 @@ export default function PreparadoPage() {
   }
 
   // ── GENERAR BOLSA GRANDE / SACO MAESTRO CON CÓDIGO QR ─────────────────────
+  // Media que empacó el preparador: la elegida a mano o la que identifica su asignación del día.
+  // Sin coincidencia devuelve undefined (antes se tomaba el primer producto del catálogo).
+  const identificarMediaPreparador = (prepId: string) => {
+    const elegida = catalogo.find(c => c.id === mediaManualPorPreparador[prepId])
+    if (elegida) return elegida
+    const asignacion = cronograma.find(c => c.preparador_id === prepId && c.dia_semana === diaSeleccionado)
+    if (!asignacion) return undefined
+    const criterio = asignacion.valor_criterio.toLowerCase()
+    return catalogo.find(c =>
+      c.codigo.toLowerCase().includes(criterio) ||
+      c.talla.toLowerCase() === criterio ||
+      c.publico.toLowerCase() === criterio
+    )
+  }
+
   const abrirModalGenerarSacoMaestro = async (prep: Preparador) => {
     const dataPrep = produccionMasiva[prep.id]
     const docenasIngresadas = parseFloat(dataPrep?.empacadas || '0')
@@ -231,29 +246,31 @@ export default function PreparadoPage() {
       return
     }
 
-    // Identificar SKU seleccionado o asignado
-    const mediaIdManual = mediaManualPorPreparador[prep.id]
-    const asignacionDia = cronograma.find(c => c.preparador_id === prep.id && c.dia_semana === diaSeleccionado)
-    let mediaObj = catalogo.find(c => c.id === mediaIdManual)
-
-    if (!mediaObj && asignacionDia) {
-      mediaObj = catalogo.find(c =>
-        c.codigo.toLowerCase().includes(asignacionDia.valor_criterio.toLowerCase()) ||
-        c.talla.toLowerCase() === asignacionDia.valor_criterio.toLowerCase() ||
-        c.publico.toLowerCase() === asignacionDia.valor_criterio.toLowerCase()
-      )
+    const mediaObj = identificarMediaPreparador(prep.id)
+    // Antes, si no se identificaba la media, se usaba en silencio el primer producto
+    // del catálogo y el saco quedaba registrado con un producto equivocado.
+    if (!mediaObj) {
+      toast.error(`Selecciona la media que empacó ${prep.nombre}: no hay una asignación del día que la identifique`)
+      return
     }
-
-    if (!mediaObj) mediaObj = catalogo[0]
 
     const skuMedia = mediaObj.sku || `SKU-${mediaObj.codigo.toUpperCase()}`
     const totalPares = Math.round(convertirDocenasAPares(docenasIngresadas))
 
     // Código de Saco Maestro (B-1005 / PKG-2005)
-    const { count } = await supabase.from('paquetes').select('*', { count: 'exact', head: true })
-    const codigoSaco = `B-${(count ?? 0) + 1005}`
+    // Basado en los códigos existentes (contar filas repetía códigos tras eliminar sacos)
+    const { data: codigosRes, error: codigosErr } = await supabase.from('paquetes').select('codigo_paquete')
+    if (codigosErr) {
+      toast.error(`No se pudo generar el código del saco: ${codigosErr.message}`)
+      return
+    }
+    const codigoSaco = siguienteCodigoSaco((codigosRes ?? []).map((r: { codigo_paquete: string }) => r.codigo_paquete))
 
     const salonA = ubicaciones.find(u => u.nombre.toLowerCase().includes('salón a') || u.nombre.toLowerCase().includes('salon a')) || ubicaciones[0]
+    if (!salonA) {
+      toast.error('No hay salones registrados en Almacén para recibir el saco')
+      return
+    }
 
     const items = [
       {
@@ -265,27 +282,24 @@ export default function PreparadoPage() {
       }
     ]
 
-    const qrPayloadObj = {
-      tipo: 'saco_maestro',
+    const qrPayloadJson = construirQrSacoMaestro({
       codigo_saco: codigoSaco,
       preparador_id: prep.id,
       preparador_nombre: prep.nombre,
-      salon_destino_id: salonA?.id || '',
-      salon_destino_nombre: salonA?.nombre || 'Salón A',
+      salon_destino_id: salonA.id,
+      salon_destino_nombre: salonA.nombre,
       total_docenas: docenasIngresadas,
       total_pares: totalPares,
       items: items.map(i => ({ sku: i.sku, codigo: i.codigo, docenas: i.docenas, pares: i.pares }))
-    }
-
-    const qrPayloadJson = JSON.stringify(qrPayloadObj)
+    })
     const qrDataURL = await QRCode.toDataURL(qrPayloadJson, { width: 300, margin: 2 })
 
     setSacoMaestroActual({
       codigo_saco: codigoSaco,
       preparador_id: prep.id,
       preparador_nombre: prep.nombre,
-      salon_destino_id: salonA?.id || '',
-      salon_destino_nombre: salonA?.nombre || 'Salón A',
+      salon_destino_id: salonA.id,
+      salon_destino_nombre: salonA.nombre,
       items,
       totalDocenas: docenasIngresadas,
       totalPares,
@@ -395,13 +409,13 @@ export default function PreparadoPage() {
 
   const verQR = async (p: Paquete) => {
     setPaqueteQR(p)
-    const payload = JSON.stringify({
-      tipo: 'saco_maestro',
+    // Misma estructura que la etiqueta original (antes la reimpresión usaba otros nombres de campo)
+    const payload = construirQrSacoMaestro({
       codigo_saco: p.codigo_paquete,
-      salon_destino: p.ubicacion?.nombre || 'Salón A',
-      preparador: p.preparador?.nombre || 'Lucia Preparadora',
-      docenas: p.docenas,
-      pares: p.total_pares || convertirDocenasAPares(p.docenas)
+      preparador_nombre: p.preparador?.nombre ?? null,
+      salon_destino_nombre: p.ubicacion?.nombre ?? null,
+      total_docenas: p.docenas,
+      total_pares: p.total_pares
     })
     const url = await QRCode.toDataURL(payload, { width: 300, margin: 2 })
     setQrDataURL(url)
@@ -523,17 +537,7 @@ export default function PreparadoPage() {
             const asignacionDia = cronograma.find(c => c.preparador_id === prep.id && c.dia_semana === diaSeleccionado)
             const inputVals = produccionMasiva[prep.id] || { empacadas: '', defectuosas: '' }
 
-            const mediaIdManual = mediaManualPorPreparador[prep.id]
-            let mediaAsignadaObj = catalogo.find(c => c.id === mediaIdManual)
-
-            if (!mediaAsignadaObj && asignacionDia) {
-              mediaAsignadaObj = catalogo.find(c =>
-                c.codigo.toLowerCase().includes(asignacionDia.valor_criterio.toLowerCase()) ||
-                c.talla.toLowerCase() === asignacionDia.valor_criterio.toLowerCase() ||
-                c.publico.toLowerCase() === asignacionDia.valor_criterio.toLowerCase()
-              )
-            }
-            if (!mediaAsignadaObj) mediaAsignadaObj = catalogo[0]
+            const mediaAsignadaObj = identificarMediaPreparador(prep.id)
 
             const docenasNum = parseFloat(inputVals.empacadas || '0')
             const paresCalculados = Math.round(convertirDocenasAPares(docenasNum))
@@ -657,11 +661,11 @@ export default function PreparadoPage() {
               ) : paquetes.map(p => (
                 <tr key={p.id}>
                   <td><code className="text-emerald-300 font-mono text-xs bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 font-bold">{p.codigo_paquete}</code></td>
-                  <td className="font-mono text-xs text-slate-200">{p.catalogo_media?.sku || p.catalogo_media?.codigo || 'SKU-VARIOS'}</td>
-                  <td className="text-white text-xs font-semibold">{p.preparador?.nombre || 'Lucia Preparadora'}</td>
+                  <td className="font-mono text-xs text-slate-200">{p.catalogo_media?.sku || p.catalogo_media?.codigo || 'Sin SKU'}</td>
+                  <td className="text-white text-xs font-semibold">{p.preparador?.nombre || 'Sin preparador registrado'}</td>
                   <td className="font-bold text-white font-mono">{p.docenas} doc.</td>
                   <td className="font-black text-emerald-400 font-mono">{p.total_pares || convertirDocenasAPares(p.docenas)} pares</td>
-                  <td><span className="badge badge-info font-bold">📍 {p.ubicacion?.nombre || 'Salón A'}</span></td>
+                  <td><span className="badge badge-info font-bold">📍 {p.ubicacion?.nombre || 'Sin salón'}</span></td>
                   <td>
                     <span className={`badge ${p.estado === 'almacenado' ? 'badge-success' : 'badge-warning'}`}>
                       {p.estado === 'almacenado' ? 'Almacenado en Salón' : 'Pendiente de Almacenar'}
@@ -713,7 +717,7 @@ export default function PreparadoPage() {
                 value={sacoMaestroActual?.salon_destino_id || ''}
                 onChange={val => {
                   const ub = ubicaciones.find(u => u.id === val)
-                  setSacoMaestroActual(prev => prev ? ({ ...prev, salon_destino_id: val, salon_destino_nombre: ub?.nombre || 'Salón A' }) : null)
+                  setSacoMaestroActual(prev => prev ? ({ ...prev, salon_destino_id: val, salon_destino_nombre: ub?.nombre || '' }) : null)
                 }}
                 options={ubicaciones.map(u => ({
                   value: u.id,
@@ -770,7 +774,7 @@ export default function PreparadoPage() {
         open={Boolean(showQRModal && paqueteQR)}
         onClose={() => setShowQRModal(false)}
         title={paqueteQR ? `Saco Maestro ${paqueteQR.codigo_paquete}` : 'Saco Maestro'}
-        subtitle={paqueteQR ? `Salón Destino: ${paqueteQR.ubicacion?.nombre || 'Salón A'}` : undefined}
+        subtitle={paqueteQR ? `Salón Destino: ${paqueteQR.ubicacion?.nombre || 'Sin salón'}` : undefined}
         maxWidth="sm"
         footer={
           <button onClick={() => setShowQRModal(false)} className="btn-primary w-full justify-center py-2 text-xs bg-emerald-600 border-none font-bold">

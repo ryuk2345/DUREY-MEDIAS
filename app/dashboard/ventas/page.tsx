@@ -81,6 +81,8 @@ export default function VentasPage() {
   const [buscandoCliente, setBuscandoCliente] = useState(false)
   const [carrito, setCarrito] = useState<CarritoItem[]>([])
   const [tipoPago, setTipoPago] = useState<'directo' | 'cuotas'>('directo')
+  // Medio con el que se cobra al vender (total al contado o adelanto): queda en `cobros` y en la caja del día
+  const [metodoPagoVenta, setMetodoPagoVenta] = useState<'efectivo' | 'yape' | 'plin' | 'transferencia'>('efectivo')
 
   // Adelanto y Financiación
   const [montoAdelanto, setMontoAdelanto] = useState<string>('0')
@@ -250,8 +252,8 @@ export default function VentasPage() {
     })
 
     deudasPendientesOnly.forEach(d => {
-      const vendNombre = d.venta?.asesora?.nombre || 'Sofia Vendedora'
-      const vendId = d.venta?.asesora?.id || '8'
+      const vendNombre = d.venta?.asesora?.nombre || 'Sin vendedora asignada'
+      const vendId = d.venta?.asesora?.id || 'sin_vendedora'
       const key = vendNombre.toLowerCase().trim()
       const clienteId = d.venta?.cliente?.id || d.venta?.cliente?.numero_documento || 'sin_cliente'
 
@@ -343,15 +345,19 @@ export default function VentasPage() {
 
     const ids = cuotasToLiquidate.map(q => q.id)
 
-    const { error } = await supabase.from('cuotas').update({
-      estado: 'pagada',
-      metodo_pago: cobroForm.metodo,
-      comprobante_url: cobroForm.fotoPreview || null
-    }).in('id', ids)
+    // Una sola operación atómica: cuotas pagadas + cobros validados + caja del día.
+    // Rechaza cuotas ya pagadas (antes un doble clic podía cobrarlas dos veces).
+    const { error } = await supabase.rpc('registrar_cobro_cuotas', {
+      p_cuota_ids: ids,
+      p_metodo_pago: cobroForm.metodo,
+      p_comprobante_url: cobroForm.fotoPreview || null,
+      p_asesora_id: cuotasToLiquidate[0]?.venta?.asesora?.id || null
+    })
 
     if (error) {
-      toast.error('Error al procesar el registro de cobro')
+      toast.error(`No se pudo registrar el cobro: ${error.message}`)
       setCobroForm(prev => ({ ...prev, procesando: false }))
+      cargarDatos()
       return
     }
 
@@ -577,6 +583,7 @@ export default function VentasPage() {
       p_cuotas: tipoPago === 'cuotas'
         ? cronogramaCuotas.map(c => ({ numero_cuota: c.numero_cuota, monto: c.monto, fecha_vencimiento: c.fecha_vencimiento }))
         : null,
+      p_metodo_pago: metodoPagoVenta,
     })
 
     if (error || !resultadoVenta) {
@@ -608,6 +615,7 @@ export default function VentasPage() {
     setCarrito([])
     setClienteSeleccionadoId('')
     setMontoAdelanto('0')
+    setMetodoPagoVenta('efectivo')
     setClienteForm({ id: '', tipo_documento: 'dni', numero_documento: '', nombre: '', telefono: '', direccion: '' })
     setGuardandoVenta(false)
     cargarDatos()
@@ -750,7 +758,7 @@ export default function VentasPage() {
                         <p className="text-slate-400 text-[11px] font-mono">{v.cliente?.numero_documento || '—'}</p>
                       </td>
                       <td className="text-slate-200 text-xs font-semibold">
-                        <span className="badge badge-neutral text-[10px]">👩‍💼 {v.asesora?.nombre || 'Sofia Vendedora'}</span>
+                        <span className="badge badge-neutral text-[10px]">👩‍💼 {v.asesora?.nombre || 'Sin vendedora asignada'}</span>
                       </td>
                       <td className="text-slate-300 text-xs font-mono">
                         {v.cliente?.telefono ? `📞 ${v.cliente.telefono}` : <span className="text-slate-600">—</span>}
@@ -1054,7 +1062,7 @@ export default function VentasPage() {
                                     clienteActivoObj.cliente.nombre,
                                     clienteActivoObj.cliente.numero_documento,
                                     clienteActivoObj.cliente.telefono,
-                                    vendedoraActivaObj?.vendedora.nombre || 'Sofia Vendedora',
+                                    vendedoraActivaObj?.vendedora.nombre || 'Sin vendedora asignada',
                                     0,
                                     [{ numero_cuota: q.numero_cuota, fecha_vencimiento: q.fecha_vencimiento, monto: q.monto }],
                                     q.venta?.total_soles || q.monto
@@ -1332,6 +1340,24 @@ export default function VentasPage() {
                 <button onClick={() => setTipoPago('cuotas')} className={`flex-1 py-2.5 rounded-xl border font-bold text-xs transition-all ${tipoPago === 'cuotas' ? 'border-amber-400 bg-amber-500/10 text-amber-300' : 'border-white/10 text-slate-400 hover:border-white/20'}`}>
                   <Calendar className="w-4 h-4 inline mr-1.5" /> Crédito en Cuotas
                 </button>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                  Medio de pago {tipoPago === 'cuotas' ? 'del adelanto' : 'del total'}
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['efectivo', 'yape', 'plin', 'transferencia'] as const).map(m => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMetodoPagoVenta(m)}
+                      className={`py-2 rounded-xl border text-[11px] font-bold capitalize transition-all ${metodoPagoVenta === m ? 'border-emerald-400 bg-emerald-500/10 text-emerald-300' : 'border-white/10 text-slate-400 hover:border-white/20'}`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {tipoPago === 'cuotas' && (

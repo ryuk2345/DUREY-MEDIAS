@@ -6,19 +6,6 @@ import { Shirt, Lock, Mail, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 
-const ACUENTAS_RAPIDAS_MOCK = [
-  { rol: 'admin', nombre: 'Administrador General', email: 'admin@durey.com', pass: 'durey2026' },
-  { rol: 'supervisor', nombre: 'Supervisor Durey', email: 'supervisor@durey.com', pass: 'durey2026' },
-  { rol: 'operador', nombre: 'Carlos Operador', email: 'operador@durey.com', pass: 'durey2026' },
-  { rol: 'vendedora', nombre: 'Sofia Vendedora', email: 'vendedora@durey.com', pass: 'durey2026' },
-  { rol: 'tecnico', nombre: 'Pedro Técnico', email: 'tecnico@durey.com', pass: 'durey2026' },
-  // Legacy — compatible con datos históricos
-  { rol: 'almacenero', nombre: 'Juan Almacenero', email: 'almacenero@durey.com', pass: 'durey2026' },
-  { rol: 'tejedor', nombre: 'Tejedor Operario', email: 'tejedor@durey.com', pass: 'durey2026' },
-  { rol: 'planchador', nombre: 'Carlos Planchador', email: 'planchador@durey.com', pass: 'durey2026' },
-  { rol: 'preparador', nombre: 'Lucia Preparadora', email: 'preparador@durey.com', pass: 'durey2026' },
-]
-
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

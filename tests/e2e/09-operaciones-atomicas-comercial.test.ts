@@ -158,3 +158,44 @@ describe('registrar_produccion_planchado', () => {
     expect(db).toEqual(antes)
   })
 })
+
+describe('cobros reales y caja diaria (migración 023)', () => {
+  const hoy = new Date().toISOString().split('T')[0]
+
+  beforeEach(() => {
+    db.cobros = []
+    db.cajas_diarias = [{ id: 'caja1', asesora_id: 'vend1', fecha: hoy, estado: 'abierta', saldo_inicial: 100, ventas_efectivo: 0, ventas_digital: 0, cobros_efectivo: 0, cobros_digital: 0 }]
+  })
+
+  it('una venta al contado registra el cobro del total y lo suma a la caja', () => {
+    const r = venta({ p_metodo_pago: 'efectivo' })
+    expect(r.data).toMatchObject({ monto_cobrado: 200 })
+    expect(db.cobros).toHaveLength(1)
+    expect(db.cobros[0]).toMatchObject({ monto: 200, estado_validacion: 'validado', metodo_pago: 'efectivo' })
+    expect(db.cajas_diarias[0].ventas_efectivo).toBe(200)
+  })
+
+  it('una venta a cuotas cobra solo el adelanto; cada cuota se cobra una sola vez', () => {
+    const r = venta({
+      p_tipo_pago: 'cuotas', p_monto_adelanto: 50, p_metodo_pago: 'yape',
+      p_cuotas: [{ numero_cuota: 1, monto: 150, fecha_vencimiento: '2026-11-01' }],
+    })
+    expect(r.data).toMatchObject({ monto_cobrado: 50 })
+    expect(db.cajas_diarias[0].ventas_digital).toBe(50)
+
+    const cuotaId = db.cuotas[0].id
+    expect(rpc('registrar_cobro_cuotas', { p_cuota_ids: [cuotaId], p_metodo_pago: 'efectivo', p_asesora_id: 'vend1' }).data).toBe(150)
+    expect(db.cuotas[0].estado).toBe('pagada')
+    expect(db.cajas_diarias[0].cobros_efectivo).toBe(150)
+    expect(db.cobros).toHaveLength(2)
+
+    expect(rpc('registrar_cobro_cuotas', { p_cuota_ids: [cuotaId], p_metodo_pago: 'efectivo' }).error?.message).toContain('ya está pagada')
+    expect(db.cobros).toHaveLength(2)
+  })
+
+  it('[NEGOCIO] rechaza un método de pago inválido sin guardar nada', () => {
+    const antes = structuredClone(db)
+    expect(venta({ p_metodo_pago: 'bitcoin' }).error?.message).toContain('Método de pago')
+    expect(db).toEqual(antes)
+  })
+})

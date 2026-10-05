@@ -85,18 +85,8 @@ export default function EventNotificationBanner({ userRol }: EventNotificationBa
 
       const { data, error } = await query
 
-      let listaEventos: Evento[] = []
-      if (!error && data && data.length > 0) {
-        listaEventos = data
-      } else {
-        // Fallback a localStorage
-        const local = JSON.parse(localStorage.getItem('durey_eventos_calendario') || '[]')
-        listaEventos = local.filter((ev: any) => {
-          const matchFecha = ev.fecha >= hoyStr && ev.fecha <= en3DiasStr
-          const matchVis = ev.visibilidad === 'compartido' || ev.creado_por === currentUserId
-          return matchFecha && matchVis
-        })
-      }
+      // Solo eventos de la base (antes se avisaba de eventos viejos guardados en el navegador)
+      const listaEventos: Evento[] = error ? [] : (data ?? [])
 
       if (listaEventos.length > 0) {
         setEventosProximos(listaEventos)
