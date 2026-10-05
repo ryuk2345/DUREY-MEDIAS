@@ -54,16 +54,6 @@ interface Marca {
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 // 5MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg']
 
-function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID()
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = (Math.random() * 16) | 0
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
-  })
-}
-
 const ESTADO_CONFIG = {
   en_muestra: { label: 'En Muestra', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: Clock },
   aprobada: { label: 'Aprobada', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: CheckCircle2 },
@@ -218,26 +208,19 @@ export default function DisenosPage() {
   }
 
   // ── SUBIR FOTO A SUPABASE STORAGE ────────────────────────────────────────
-  const subirFotoStorage = async (codigo: string, file: File): Promise<string | null> => {
-    try {
-      const fileExt = file.name.split('.').pop() || 'jpg'
-      const filePath = `${codigo}_${Date.now()}.${fileExt}`
+  const subirFotoStorage = async (codigo: string, file: File): Promise<string> => {
+    const fileExt = file.name.split('.').pop() || 'jpg'
+    const filePath = `${codigo}_${Date.now()}.${fileExt}`
 
-      const { error: uploadError } = await supabase.storage
-        .from('disenos')
-        .upload(filePath, file, { cacheControl: '3600', upsert: true })
+    const { error: uploadError } = await supabase.storage
+      .from('disenos')
+      .upload(filePath, file, { cacheControl: '3600', upsert: true })
+    // Antes, si fallaba, se guardaba la vista previa (blob:) como foto: una dirección que
+    // solo existe en esa pestaña, y en los demás equipos la foto aparecía rota.
+    if (uploadError) throw new Error(`No se pudo subir la foto: ${uploadError.message}`)
 
-      if (uploadError) {
-        console.warn('Fallo subida a storage, usando fallback preview:', uploadError)
-        return null
-      }
-
-      const { data } = supabase.storage.from('disenos').getPublicUrl(filePath)
-      return data.publicUrl
-    } catch (e) {
-      console.warn('Error en storage:', e)
-      return null
-    }
+    const { data } = supabase.storage.from('disenos').getPublicUrl(filePath)
+    return data.publicUrl
   }
 
   // ── REGISTRAR DISEÑO Y ASIGNACIONES (RPC ATÓMICO) ─────────────────────────
@@ -253,9 +236,6 @@ export default function DisenosPage() {
       let fotoUrl: string | null = null
       if (selectedFile) {
         fotoUrl = await subirFotoStorage(createForm.codigo, selectedFile)
-        if (!fotoUrl && filePreview) {
-          fotoUrl = filePreview // Fallback base64 / blob preview si no hay storage conectado
-        }
       }
 
       // 1. Invocar RPC transaccional
@@ -272,43 +252,10 @@ export default function DisenosPage() {
         p_maquina_ids: createForm.maquina_ids
       })
 
-      let createdId = generateUUID()
-      if (!rpcErr && disenoId) {
-        createdId = disenoId
-      } else {
-        // Fallback directo a tablas
-        try {
-          const { data: insData, error: insErr } = await supabase.from('disenos').insert({
-            codigo: createForm.codigo.trim(),
-            nombre: createForm.nombre.trim(),
-            foto_url: fotoUrl,
-            color_muestra: createForm.color_muestra.trim(),
-            marca_id: createForm.marca_id || null,
-            disenador_id: currentUser?.id || null,
-            orden_muestra: createForm.orden_muestra.trim(),
-            cantidad_muestra: parseInt(createForm.cantidad_muestra) || 1,
-            observaciones: createForm.observaciones.trim() || null,
-            estado: 'en_muestra'
-          }).select('*').single()
-
-          if (insErr) throw insErr
-          if (insData?.id) createdId = insData.id
-
-          if (createForm.maquina_ids.length > 0) {
-            for (const mId of createForm.maquina_ids) {
-              const { error: asigErr } = await supabase.from('disenos_maquinas').insert({
-                diseno_id: createdId,
-                maquina_id: mId,
-                activo: true
-              })
-              if (asigErr) throw asigErr
-            }
-          }
-        } catch (dbErr) {
-          // Antes se ignoraba y el diseño quedaba solo en el navegador como si se hubiera guardado
-          throw new Error(`No se pudo guardar en la base de datos: ${dbErr instanceof Error ? dbErr.message : (dbErr as { message?: string })?.message || rpcErr?.message || 'error desconocido'}`)
-        }
-      }
+      // Una sola operación atómica (diseño + asignaciones). Antes, si fallaba, se intentaba
+      // por partes y podía quedar el diseño sin sus máquinas.
+      if (rpcErr) throw rpcErr
+      const createdId: string = disenoId
 
       const newDiseno: Diseno = {
         id: createdId,

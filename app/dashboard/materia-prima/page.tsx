@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { createClient, usaBaseMock } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import { esStockBajoMateriaPrima } from '@/lib/domain/inventario'
 import { toast } from 'sonner'
 import { 
@@ -96,7 +96,6 @@ export default function MateriaPrimaPage() {
   const [empaqueTab, setEmpaqueTab] = useState<'todos' | 'bolsas' | 'conos' | 'cajas'>('todos')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [usingFallback, setUsingFallback] = useState(false)
   
   // Data lists
   const [stockHilos, setStockHilos] = useState<MateriaPrima[]>([])
@@ -157,48 +156,9 @@ export default function MateriaPrimaPage() {
 
   const supabase = createClient()
 
-  // ── LIMPIEZA Y ALMACENAMIENTO LOCAL VACÍO (FALLBACK LOCALSTORAGE) ─────────
-  const initLocalStorageData = () => {
-    if (typeof window === 'undefined') return
-    
-    // Si tenían datos mock antiguos con IDs 'h1', 'r1', 'p1', 'e1', limpiarlos
-    const rawHilos = localStorage.getItem('durey_materia_prima')
-    if (!rawHilos || rawHilos.includes('"id":"h1"')) {
-      localStorage.setItem('durey_materia_prima', JSON.stringify([]))
-    }
-    
-    const rawProv = localStorage.getItem('durey_proveedores')
-    if (!rawProv || rawProv.includes('"id":"p1"')) {
-      localStorage.setItem('durey_proveedores', JSON.stringify([]))
-    }
-    
-    const rawRep = localStorage.getItem('durey_repuestos')
-    if (!rawRep || rawRep.includes('"id":"r1"')) {
-      localStorage.setItem('durey_repuestos', JSON.stringify([]))
-    }
-
-    const rawEgr = localStorage.getItem('durey_egresos_adicionales')
-    if (!rawEgr || rawEgr.includes('"id":"e1"')) {
-      localStorage.setItem('durey_egresos_adicionales', JSON.stringify([]))
-    }
-
-    if (!localStorage.getItem('durey_compras')) {
-      localStorage.setItem('durey_compras', JSON.stringify([]))
-    }
-
-    if (!localStorage.getItem('durey_cuotas_compras')) {
-      localStorage.setItem('durey_cuotas_compras', JSON.stringify([]))
-    }
-
-    if (!localStorage.getItem('durey_movimientos')) {
-      localStorage.setItem('durey_movimientos', JSON.stringify([]))
-    }
-  }
-
-  // ── CARGAR DATOS (CON RESILIENCIA A LOCALSTORAGE) ─────────────────────────
+  // ── CARGAR DATOS (solo desde la base de datos) ────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    initLocalStorageData()
     try {
       // 1. Intentar cargar desde Supabase
       const [hilosRes, provRes, comprasRes, movRes, repRes, cuotasRes, egresosRes, ventasRes, repairsRes] = await Promise.all([
@@ -227,10 +187,8 @@ export default function MateriaPrimaPage() {
         supabase.from('reparaciones').select('costo_total')
       ])
 
-      // Si hay error de esquema (tablas no creadas), forzar fallback
-      if (hilosRes.error || provRes.error || repRes.error) {
-        throw new Error('Tablas no encontradas en base de datos. Usando almacenamiento local alternativo.')
-      }
+      const conError = [hilosRes, provRes, comprasRes, movRes, repRes, cuotasRes, egresosRes, ventasRes, repairsRes].find(r => r.error)
+      if (conError?.error) throw conError.error
 
       setStockHilos(hilosRes.data ?? [])
       setProveedores(provRes.data ?? [])
@@ -239,7 +197,6 @@ export default function MateriaPrimaPage() {
       setRepuestos(repRes.data ?? [])
       setCuotasCompras((cuotasRes.data ?? []) as unknown as CuotaCompra[])
       setEgresosAdicionales(egresosRes.data ?? [])
-      setUsingFallback(false)
       
       const totalRecaudadoVentas = (ventasRes.data ?? []).reduce((s, c) => s + c.monto, 0)
       const totalReparaciones = (repairsRes.data ?? []).reduce((s, r) => s + (Number(r.costo_total) || 0), 0)
@@ -247,58 +204,9 @@ export default function MateriaPrimaPage() {
       setRepairsTotal(totalReparaciones)
 
     } catch (err: any) {
-      // Con una base real, un error se muestra como error. Antes el módulo pasaba en
-      // silencio a datos guardados solo en este navegador y las compras/pagos que se
-      // registraban ahí nunca llegaban a la base. Solo en desarrollo local (mock) se usa.
-      if (!usaBaseMock()) {
-        toast.error(`No se pudo cargar Materia Prima: ${err.message}`)
-        setUsingFallback(false)
-        return
-      }
-      setUsingFallback(true)
-      
-      // Cargar desde LocalStorage
-      const localHilos = JSON.parse(localStorage.getItem('durey_materia_prima') || '[]')
-      const localProv = JSON.parse(localStorage.getItem('durey_proveedores') || '[]')
-      const localRep = JSON.parse(localStorage.getItem('durey_repuestos') || '[]')
-      const localEgresos = JSON.parse(localStorage.getItem('durey_egresos_adicionales') || '[]')
-      const localCompras = JSON.parse(localStorage.getItem('durey_compras') || '[]')
-      const localCuotas = JSON.parse(localStorage.getItem('durey_cuotas_compras') || '[]')
-      const localMovs = JSON.parse(localStorage.getItem('durey_movimientos') || '[]')
-
-      // Mapear relaciones simuladas en compras
-      const comprasMapeadas = localCompras.map((c: any) => ({
-        ...c,
-        proveedores: localProv.find((p: any) => p.id === c.proveedor_id),
-        materia_prima: localHilos.find((h: any) => h.id === c.materia_prima_id)
-      }))
-
-      // Mapear relaciones simuladas en cuotas
-      const cuotasMapeadas = localCuotas.map((q: any) => {
-        const cmp = comprasMapeadas.find((c: any) => c.id === q.compra_id)
-        return {
-          ...q,
-          compra: cmp
-        }
-      })
-
-      // Mapear relaciones simuladas en movimientos
-      const movsMapeados = localMovs.map((m: any) => ({
-        ...m,
-        materia_prima: localHilos.find((h: any) => h.id === m.materia_prima_id)
-      }))
-
-      setStockHilos(localHilos)
-      setProveedores(localProv)
-      setRepuestos(localRep)
-      setEgresosAdicionales(localEgresos)
-      setCompras(comprasMapeadas)
-      setCuotasCompras(cuotasMapeadas)
-      setMovimientos(movsMapeados)
-      
-      // Sin base no hay ventas ni reparaciones que mostrar (antes: S/ 18,500 y S/ 1,250 inventados)
-      setVentasTotal(0)
-      setRepairsTotal(0)
+      // Un error se muestra como error. Antes el módulo pasaba a datos guardados solo
+      // en este navegador y lo que se registraba ahí nunca llegaba a la base.
+      toast.error(`No se pudo cargar Materia Prima: ${err.message}`)
     } finally {
       setLoading(false)
     }
@@ -307,11 +215,6 @@ export default function MateriaPrimaPage() {
   useEffect(() => {
     cargarDatos()
   }, [cargarDatos])
-
-  // Helper para guardar localmente
-  const saveToLocal = (key: string, data: any) => {
-    localStorage.setItem(key, JSON.stringify(data))
-  }
 
   // ── REGISTRAR / EDITAR HILO O MATERIA PRIMA ───────────────────────────────
   const handleAddHilo = async (e: React.FormEvent) => {
@@ -325,21 +228,20 @@ export default function MateriaPrimaPage() {
 
     try {
       if (editingHilo) {
-        if (!usingFallback) {
-          // Una sola operación: cambia nombre/color/empaque y solo toca el stock si se
-          // modificó (conteo físico), dejando un movimiento 'ajuste_inventario'.
-          // Antes reescribía el stock con el valor viejo de la pantalla y, sin id válido,
-          // editaba por nombre de material (todos los hilos de ese material a la vez).
-          const { error } = await supabase.rpc('editar_materia_prima', {
-            p_id: editingHilo.id,
-            p_material: hiloForm.material.trim(),
-            p_color: hiloForm.color.trim(),
-            p_tipo_empaque: hiloForm.tipo_empaque || 'cono',
-            p_stock_anterior: Number(editingHilo.stock_kg || 0),
-            p_stock_nuevo: parseFloat(hiloForm.stock_kg || '0')
-          })
-          if (error) throw error
-        }
+        // Una sola operación: cambia nombre/color/empaque y solo toca el stock si se
+        // modificó (conteo físico), dejando un movimiento 'ajuste_inventario'.
+        // Antes reescribía el stock con el valor viejo de la pantalla y, sin id válido,
+        // editaba por nombre de material (todos los hilos de ese material a la vez).
+        const { error } = await supabase.rpc('editar_materia_prima', {
+          p_id: editingHilo.id,
+          p_material: hiloForm.material.trim(),
+          p_color: hiloForm.color.trim(),
+          p_tipo_empaque: hiloForm.tipo_empaque || 'cono',
+          p_stock_anterior: Number(editingHilo.stock_kg || 0),
+          p_stock_nuevo: parseFloat(hiloForm.stock_kg || '0')
+        })
+        if (error) throw error
+      
         const list = stockHilos.map(x => x.id === editingHilo.id ? {
           ...x,
           material: hiloForm.material.trim(),
@@ -348,12 +250,10 @@ export default function MateriaPrimaPage() {
           tipo_empaque: hiloForm.tipo_empaque || 'cono'
         } : x)
         setStockHilos(list)
-        if (usingFallback) saveToLocal('durey_materia_prima', list)
 
         toast.success('✏️ Insumo actualizado correctamente')
       } else {
         const newHilo = {
-          id: Math.random().toString(),
           material: hiloForm.material.trim(),
           color: hiloForm.color.trim(),
           stock_kg: parseFloat(hiloForm.stock_kg || '0'),
@@ -361,18 +261,14 @@ export default function MateriaPrimaPage() {
           created_at: new Date().toISOString()
         }
 
-        if (!usingFallback) {
-          const { error } = await supabase.from('materia_prima').insert({
-            material: newHilo.material,
-            color: newHilo.color,
-            stock_kg: newHilo.stock_kg,
-            tipo_empaque: newHilo.tipo_empaque
-          })
-          if (error) throw error
-        } else {
-          const list = [...stockHilos, newHilo]
-          saveToLocal('durey_materia_prima', list)
-        }
+        const { error } = await supabase.from('materia_prima').insert({
+          material: newHilo.material,
+          color: newHilo.color,
+          stock_kg: newHilo.stock_kg,
+          tipo_empaque: newHilo.tipo_empaque
+        })
+        if (error) throw error
+      
 
         const empaqueName = newHilo.tipo_empaque === 'caja' ? '📦 Caja' : newHilo.tipo_empaque === 'bolsa' ? '🛍️ Bolsa' : '🧵 Cono'
         toast.success(`${empaqueName} registrado exitosamente en el almacén`)
@@ -411,13 +307,9 @@ export default function MateriaPrimaPage() {
     const empaqueName = h.tipo_empaque === 'caja' ? 'caja' : h.tipo_empaque === 'bolsa' ? 'bolsa' : 'cono'
     if (!confirm(`¿Estás seguro de eliminar el registro de ${empaqueName} "${h.material} ${h.color}"?`)) return
     try {
-      if (!usingFallback) {
-        const { error } = await supabase.from('materia_prima').delete().eq('id', h.id)
-        if (error) throw error
-      } else {
-        const list = stockHilos.filter(x => x.id !== h.id)
-        saveToLocal('durey_materia_prima', list)
-      }
+      const { error } = await supabase.from('materia_prima').delete().eq('id', h.id)
+      if (error) throw error
+    
       toast.success('Insumo eliminado correctamente')
       cargarDatos()
     } catch (err: any) {
@@ -435,7 +327,6 @@ export default function MateriaPrimaPage() {
 
     setSaving(true)
     const newProv = {
-      id: Math.random().toString(),
       nombre: proveedorForm.nombre.trim(),
       ruc: proveedorForm.ruc.trim(),
       contacto: proveedorForm.contacto.trim(),
@@ -443,18 +334,14 @@ export default function MateriaPrimaPage() {
     }
 
     try {
-      if (!usingFallback) {
-        const { error } = await supabase.from('proveedores').insert({
-          nombre: newProv.nombre,
-          ruc: newProv.ruc || null,
-          contacto: newProv.contacto || null,
-          telefono: newProv.telefono || null
-        })
-        if (error) throw error
-      } else {
-        const list = [...proveedores, newProv]
-        saveToLocal('durey_proveedores', list)
-      }
+      const { error } = await supabase.from('proveedores').insert({
+        nombre: newProv.nombre,
+        ruc: newProv.ruc || null,
+        contacto: newProv.contacto || null,
+        telefono: newProv.telefono || null
+      })
+      if (error) throw error
+    
 
       toast.success('🏢 Proveedor registrado exitosamente')
       setShowAddProveedorModal(false)
@@ -481,19 +368,8 @@ export default function MateriaPrimaPage() {
     }
 
     try {
-      if (!usingFallback) {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prov.id)
-        if (isUuid) {
-          const { error } = await supabase.from('proveedores').delete().eq('id', prov.id)
-          if (error) throw error
-        } else {
-          const { error } = await supabase.from('proveedores').delete().eq('nombre', prov.nombre)
-          if (error) throw error
-        }
-      }
-      const list = proveedores.filter(p => p.id !== prov.id && p.nombre !== prov.nombre)
-      setProveedores(list)
-      saveToLocal('durey_proveedores', list)
+      const { error } = await supabase.from('proveedores').delete().eq('id', prov.id)
+      if (error) throw error
       toast.success(`Proveedor "${prov.nombre}" eliminado`)
       cargarDatos()
     } catch (err: any) {
@@ -520,7 +396,6 @@ export default function MateriaPrimaPage() {
 
     setSaving(true)
     const newRep = {
-      id: Math.random().toString(),
       nombre: repuestoForm.nombre.trim(),
       stock_actual: parseInt(repuestoForm.stock_actual || '0'),
       costo_unitario: parseFloat(repuestoForm.costo_unitario),
@@ -528,17 +403,13 @@ export default function MateriaPrimaPage() {
     }
 
     try {
-      if (!usingFallback) {
-        const { error } = await supabase.from('repuestos').insert({
-          nombre: newRep.nombre,
-          stock_actual: newRep.stock_actual,
-          costo_unitario: newRep.costo_unitario
-        })
-        if (error) throw error
-      } else {
-        const list = [...repuestos, newRep]
-        saveToLocal('durey_repuestos', list)
-      }
+      const { error } = await supabase.from('repuestos').insert({
+        nombre: newRep.nombre,
+        stock_actual: newRep.stock_actual,
+        costo_unitario: newRep.costo_unitario
+      })
+      if (error) throw error
+    
 
       toast.success('🔧 Repuesto registrado en inventario')
       setShowAddRepuestoModal(false)
@@ -564,37 +435,18 @@ export default function MateriaPrimaPage() {
 
     setSaving(true)
     const cant = parseInt(adjustRepuestoForm.cantidad)
-    const delta = adjustRepuestoForm.tipo === 'ingreso' ? cant : -cant
-    const newStock = Math.max(0, selectedRepuesto.stock_actual + delta)
 
     try {
-      if (!usingFallback) {
-        // Una sola operación: stock relativo al actual + gasto si es salida.
-        // Antes una salida mayor al stock lo dejaba en 0 y registraba el gasto completo.
-        const { error } = await supabase.rpc('ajustar_stock_repuesto', {
-          p_repuesto_id: selectedRepuesto.id,
-          p_tipo: adjustRepuestoForm.tipo,
-          p_cantidad: cant,
-          p_motivo: adjustRepuestoForm.motivo || null
-        })
-        if (error) throw error
-      } else {
-        const list = repuestos.map(r => r.id === selectedRepuesto.id ? { ...r, stock_actual: newStock } : r)
-        saveToLocal('durey_repuestos', list)
-
-        if (adjustRepuestoForm.tipo === 'salida') {
-          const egresos = JSON.parse(localStorage.getItem('durey_egresos_adicionales') || '[]')
-          egresos.push({
-            id: Math.random().toString(),
-            concepto: `Consumo repuesto: ${selectedRepuesto.nombre} (${cant} uds.) — ${adjustRepuestoForm.motivo || 'Mantenimiento'}`,
-            monto: cant * selectedRepuesto.costo_unitario,
-            categoria: 'repuestos',
-            fecha: new Date().toISOString().split('T')[0],
-            created_at: new Date().toISOString()
-          })
-          saveToLocal('durey_egresos_adicionales', egresos)
-        }
-      }
+      // Una sola operación: stock relativo al actual + gasto si es salida.
+      // Antes una salida mayor al stock lo dejaba en 0 y registraba el gasto completo.
+      const { error } = await supabase.rpc('ajustar_stock_repuesto', {
+        p_repuesto_id: selectedRepuesto.id,
+        p_tipo: adjustRepuestoForm.tipo,
+        p_cantidad: cant,
+        p_motivo: adjustRepuestoForm.motivo || null
+      })
+      if (error) throw error
+    
 
       toast.success('🔧 Stock de repuesto ajustado correctamente')
       setShowAdjustRepuestoModal(false)
@@ -611,13 +463,9 @@ export default function MateriaPrimaPage() {
   const handleEliminarRepuesto = async (rep: Repuesto) => {
     if (!confirm(`¿Estás seguro de eliminar el repuesto "${rep.nombre}"? Esta acción no se puede deshacer.`)) return
     try {
-      if (!usingFallback) {
-        const { error } = await supabase.from('repuestos').delete().eq('id', rep.id)
-        if (error) throw error
-      } else {
-        const list = repuestos.filter(r => r.id !== rep.id)
-        saveToLocal('durey_repuestos', list)
-      }
+      const { error } = await supabase.from('repuestos').delete().eq('id', rep.id)
+      if (error) throw error
+    
       toast.success('Repuesto eliminado correctamente')
       cargarDatos()
     } catch (err: any) {
@@ -648,13 +496,9 @@ export default function MateriaPrimaPage() {
         nombre: repuestoForm.nombre.trim(),
         costo_unitario: parseFloat(repuestoForm.costo_unitario)
       }
-      if (!usingFallback) {
-        const { error } = await supabase.from('repuestos').update(updatedData).eq('id', editingRepuesto.id)
-        if (error) throw error
-      } else {
-        const list = repuestos.map(r => r.id === editingRepuesto.id ? { ...r, ...updatedData } : r)
-        saveToLocal('durey_repuestos', list)
-      }
+      const { error } = await supabase.from('repuestos').update(updatedData).eq('id', editingRepuesto.id)
+      if (error) throw error
+    
       toast.success('✏️ Repuesto actualizado correctamente')
       setShowAddRepuestoModal(false)
       setEditingRepuesto(null)
@@ -677,7 +521,6 @@ export default function MateriaPrimaPage() {
 
     setSaving(true)
     const newEgreso = {
-      id: Math.random().toString(),
       concepto: egresoForm.concepto.trim(),
       monto: parseFloat(egresoForm.monto),
       categoria: egresoForm.categoria,
@@ -686,18 +529,14 @@ export default function MateriaPrimaPage() {
     }
 
     try {
-      if (!usingFallback) {
-        const { error } = await supabase.from('egresos_adicionales').insert({
-          concepto: newEgreso.concepto,
-          monto: newEgreso.monto,
-          categoria: newEgreso.categoria,
-          fecha: newEgreso.fecha
-        })
-        if (error) throw error
-      } else {
-        const list = [...egresosAdicionales, newEgreso]
-        saveToLocal('durey_egresos_adicionales', list)
-      }
+      const { error } = await supabase.from('egresos_adicionales').insert({
+        concepto: newEgreso.concepto,
+        monto: newEgreso.monto,
+        categoria: newEgreso.categoria,
+        fecha: newEgreso.fecha
+      })
+      if (error) throw error
+    
 
       toast.success('💸 Egreso registrado correctamente')
       setShowAddEgresoModal(false)
@@ -720,7 +559,6 @@ export default function MateriaPrimaPage() {
 
     setSaving(true)
     const newComp = {
-      id: Math.random().toString(),
       proveedor_id: compraForm.proveedor_id,
       materia_prima_id: compraForm.materia_prima_id,
       cantidad_kg: parseFloat(compraForm.cantidad_kg),
@@ -734,46 +572,18 @@ export default function MateriaPrimaPage() {
     }
 
     try {
-      if (!usingFallback) {
-        // Una sola operación: compra + cronograma de cuotas (que suma exacto el total)
-        const { error } = await supabase.rpc('registrar_compra_materia_prima', {
-          p_proveedor_id: newComp.proveedor_id,
-          p_materia_prima_id: newComp.materia_prima_id,
-          p_cantidad_kg: newComp.cantidad_kg,
-          p_costo_total: newComp.costo_total,
-          p_condicion_pago: newComp.condicion_pago,
-          p_metodo_pago: newComp.metodo_pago,
-          p_cuotas_num: compraForm.condicion_pago === 'pago_diferido' ? parseInt(compraForm.cuotas_num) : null
-        })
-        if (error) throw error
-      } else {
-        const list = JSON.parse(localStorage.getItem('durey_compras') || '[]')
-        list.push(newComp)
-        saveToLocal('durey_compras', list)
-
-        if (compraForm.condicion_pago === 'pago_diferido') {
-          const total = parseFloat(compraForm.costo_total)
-          const cuotasNum = parseInt(compraForm.cuotas_num) || 3
-          const montoCuota = total / cuotasNum
-          const listCuotas = JSON.parse(localStorage.getItem('durey_cuotas_compras') || '[]')
-          
-          const hoy = new Date()
-          for (let i = 1; i <= cuotasNum; i++) {
-            const due = new Date(hoy.getFullYear(), hoy.getMonth() + i, hoy.getDate())
-            listCuotas.push({
-              id: Math.random().toString(),
-              compra_id: newComp.id,
-              monto: parseFloat(montoCuota.toFixed(2)),
-              fecha_vencimiento: due.toISOString().split('T')[0],
-              estado: 'pendiente',
-              fecha_pago: null,
-              metodo_pago: null,
-              comprobante_url: null
-            })
-          }
-          saveToLocal('durey_cuotas_compras', listCuotas)
-        }
-      }
+      // Una sola operación: compra + cronograma de cuotas (que suma exacto el total)
+      const { error } = await supabase.rpc('registrar_compra_materia_prima', {
+        p_proveedor_id: newComp.proveedor_id,
+        p_materia_prima_id: newComp.materia_prima_id,
+        p_cantidad_kg: newComp.cantidad_kg,
+        p_costo_total: newComp.costo_total,
+        p_condicion_pago: newComp.condicion_pago,
+        p_metodo_pago: newComp.metodo_pago,
+        p_cuotas_num: compraForm.condicion_pago === 'pago_diferido' ? parseInt(compraForm.cuotas_num) : null
+      })
+      if (error) throw error
+    
 
       toast.success('📦 Orden de compra registrada. Pendiente de control de calidad.')
       setShowCompraModal(false)
@@ -812,57 +622,18 @@ export default function MateriaPrimaPage() {
     }
 
     setSaving(true)
-    const nuevoEstado = qcForm.aprobar ? 'recibida' : 'devuelta'
     const motivo = qcForm.aprobar ? null : qcForm.motivo_devolucion
 
     try {
-      if (!usingFallback) {
-        // Una sola operación: estado de la compra + stock (sumado al valor actual, no a
-        // uno leído antes) + movimiento. Rechaza una compra ya procesada.
-        const { error } = await supabase.rpc('procesar_control_calidad_compra', {
-          p_compra_id: selectedCompra.id,
-          p_aprobar: qcForm.aprobar,
-          p_motivo: motivo
-        })
-        if (error) throw error
-      } else {
-        // Fallback local
-        const list = JSON.parse(localStorage.getItem('durey_compras') || '[]')
-        const updated = list.map((c: any) => c.id === selectedCompra.id ? { ...c, estado: nuevoEstado, motivo_devolucion: motivo } : c)
-        saveToLocal('durey_compras', updated)
-
-        if (qcForm.aprobar) {
-          const hilos = stockHilos.map(h => {
-            if (h.id === selectedCompra.materia_prima_id) {
-              return { ...h, stock_kg: Number(h.stock_kg || 0) + Number(selectedCompra.cantidad_kg) }
-            }
-            return h
-          })
-          saveToLocal('durey_materia_prima', hilos)
-
-          const movs = JSON.parse(localStorage.getItem('durey_movimientos') || '[]')
-          movs.push({
-            id: Math.random().toString(),
-            materia_prima_id: selectedCompra.materia_prima_id,
-            tipo: 'ingreso_compra',
-            cantidad_kg: selectedCompra.cantidad_kg,
-            referencia_id: selectedCompra.id,
-            created_at: new Date().toISOString()
-          })
-          saveToLocal('durey_movimientos', movs)
-        } else {
-          const movs = JSON.parse(localStorage.getItem('durey_movimientos') || '[]')
-          movs.push({
-            id: Math.random().toString(),
-            materia_prima_id: selectedCompra.materia_prima_id,
-            tipo: 'devolucion',
-            cantidad_kg: selectedCompra.cantidad_kg,
-            referencia_id: selectedCompra.id,
-            created_at: new Date().toISOString()
-          })
-          saveToLocal('durey_movimientos', movs)
-        }
-      }
+      // Una sola operación: estado de la compra + stock (sumado al valor actual, no a
+      // uno leído antes) + movimiento. Rechaza una compra ya procesada.
+      const { error } = await supabase.rpc('procesar_control_calidad_compra', {
+        p_compra_id: selectedCompra.id,
+        p_aprobar: qcForm.aprobar,
+        p_motivo: motivo
+      })
+      if (error) throw error
+    
 
       toast.success(qcForm.aprobar ? '✅ Entrega aprobada e ingresada al inventario.' : '❌ Entrega devuelta al proveedor.')
       setShowQcModal(false)
@@ -883,29 +654,18 @@ export default function MateriaPrimaPage() {
     setSaving(true)
     const fecha = new Date().toISOString().split('T')[0]
     try {
-      if (!usingFallback) {
-        const { error } = await supabase
-          .from('cuotas_compras')
-          .update({
-            estado: 'pagada',
-            fecha_pago: fecha,
-            metodo_pago: payCuotaForm.metodo_pago,
-            comprobante_url: payCuotaForm.comprobante_url || null
-          })
-          .eq('id', selectedCuota.id)
-
-        if (error) throw error
-      } else {
-        const list = JSON.parse(localStorage.getItem('durey_cuotas_compras') || '[]')
-        const updated = list.map((q: any) => q.id === selectedCuota.id ? {
-          ...q,
+      const { error } = await supabase
+        .from('cuotas_compras')
+        .update({
           estado: 'pagada',
           fecha_pago: fecha,
           metodo_pago: payCuotaForm.metodo_pago,
           comprobante_url: payCuotaForm.comprobante_url || null
-        } : q)
-        saveToLocal('durey_cuotas_compras', updated)
-      }
+        })
+        .eq('id', selectedCuota.id)
+
+      if (error) throw error
+    
 
       toast.success('💸 Cuota de compra marcada como pagada')
       setShowPayCuotaModal(false)
@@ -1010,13 +770,6 @@ export default function MateriaPrimaPage() {
     <>
       <div className="space-y-6 animate-fadeInUp pb-12">
       {/* Fallback Banner */}
-      {usingFallback && (
-        <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-bold flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 animate-bounce flex-shrink-0" />
-          <span>Ejecutando en Modo de Almacenamiento Local (LocalStorage). Por favor, ejecuta las migraciones SQL `003` y `004` en tu Supabase SQL Editor para guardar en la nube.</span>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 glass p-6 rounded-3xl border border-white/[0.08]">
         <div className="flex items-center gap-3">

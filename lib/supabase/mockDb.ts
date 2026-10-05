@@ -714,6 +714,8 @@ class MockQueryBuilder {
   }
 }
 
+const archivosMock = new Map<string, string>();
+
 export function createMockClient() {
   return {
     from(tableName: string) {
@@ -960,6 +962,31 @@ export function createMockClient() {
       async signOut() {
         return { error: null };
       }
-    }
+    },
+    // Storage mínimo para desarrollo local: la "URL pública" es la foto como data URL, que
+    // se guarda tal cual en la fila del diseño y sigue funcionando al recargar.
+    storage: {
+      from(bucket: string) {
+        return {
+          async upload(path: string, file: Blob) {
+            try {
+              const dataUrl = await new Promise<string>((resolve, reject) => {
+                const lector = new FileReader();
+                lector.onload = () => resolve(String(lector.result));
+                lector.onerror = () => reject(lector.error);
+                lector.readAsDataURL(file);
+              });
+              archivosMock.set(`${bucket}/${path}`, dataUrl);
+              return { data: { path }, error: null };
+            } catch (e: any) {
+              return { data: null, error: { message: e?.message || 'No se pudo leer el archivo' } };
+            }
+          },
+          getPublicUrl(path: string) {
+            return { data: { publicUrl: archivosMock.get(`${bucket}/${path}`) ?? '' } };
+          },
+        };
+      },
+    },
   };
 }
