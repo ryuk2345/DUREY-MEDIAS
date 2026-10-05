@@ -280,7 +280,6 @@ export default function PlanchadoPage() {
     setSaving(true)
     const fechaHoy = new Date().toISOString().split('T')[0]
     const itemsToInsert: any[] = []
-    const stockToUpdate = new Map<string, number>()
 
     planchadores.forEach(p => {
       const info = planchadoresMediasMap.get(p.id)
@@ -301,10 +300,6 @@ export default function PlanchadoPage() {
               docenas_defectuosas: defectuosas,
               fecha: fechaHoy,
             })
-
-            const total = planchadas + defectuosas
-            const currentSub = stockToUpdate.get(m.catalogo_media_id) || 0
-            stockToUpdate.set(m.catalogo_media_id, currentSub + total)
           }
         }
       })
@@ -316,27 +311,15 @@ export default function PlanchadoPage() {
       return
     }
 
-    const { error: rErr } = await supabase.from('reportes_planchado').insert(itemsToInsert)
+    // Una sola operación atómica: reportes + descuento del stock listo para planchar
+    // (relativo al valor actual). No permite registrar más docenas de las que hay.
+    const { error: rErr } = await supabase.rpc('registrar_produccion_planchado', { p_items: itemsToInsert })
 
     if (rErr) {
-      toast.error('Error al guardar los reportes de producción')
+      toast.error(`No se pudo guardar la producción: ${rErr.message}`)
       setSaving(false)
+      cargarDatos()
       return
-    }
-
-    for (const [mediaId, cantDescontar] of stockToUpdate.entries()) {
-      const itemStock = stock.find(s => s.catalogo_media_id === mediaId)
-      if (itemStock) {
-        const { error: errStock } = await supabase.from('stock_listo_planchar')
-          .update({ docenas: Math.max(0, itemStock.docenas - cantDescontar) })
-          .eq('id', itemStock.id)
-        if (errStock) {
-          toast.error(`Los reportes se guardaron, pero no se pudo descontar el stock listo para planchar: ${errStock.message}. Avisa al supervisor antes de reintentar.`)
-          setSaving(false)
-          cargarDatos()
-          return
-        }
-      }
     }
 
     toast.success(`🎉 Producción del día ${diaSeleccionado.toUpperCase()} guardada exitosamente.`)
