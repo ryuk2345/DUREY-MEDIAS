@@ -6,9 +6,7 @@
  * cambios a medias. mockDb.ts guarda la base solo si no hubo error.
  */
 import { validarTransicionEstadoMaquina, type EstadoMaquina } from '@/lib/domain/machines'
-
-type Db = Record<string, any[]>
-type Resultado = { data: unknown; error: { message: string } | null }
+import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
 
 /** Kg de hilo reservados por máquina al cargar un lote: 15 docenas × peso de la docena. */
 export const DOCENAS_RESERVADAS_POR_MAQUINA = 15
@@ -21,19 +19,6 @@ export const RPC_PRODUCCION = [
   'iniciar_reparacion_averia',
   'registrar_reparacion_averia',
 ] as const
-
-class ErrorNegocio extends Error {}
-
-function nuevoId() {
-  return typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : 'mock-' + Math.random().toString(36).slice(2, 11)
-}
-
-function tabla(db: Db, nombre: string) {
-  if (!db[nombre]) db[nombre] = []
-  return db[nombre]
-}
 
 function exigirTransicion(maq: any, nuevo: EstadoMaquina, mensaje: string) {
   if (maq.estado === nuevo) throw new ErrorNegocio(mensaje)
@@ -234,7 +219,7 @@ function registrarReparacion(db: Db, p: any) {
  * Devuelve null si `fnName` no es de este módulo.
  * Ante un error de negocio no modifica `db`: todas las validaciones van antes de escribir.
  */
-export function ejecutarRpcProduccion(db: Db, fnName: string, params: any): Resultado | null {
+export function ejecutarRpcProduccion(db: Db, fnName: string, params: any): ResultadoRpc | null {
   const handlers: Record<string, (db: Db, p: any) => unknown> = {
     cargar_lote_produccion: cargarLote,
     cerrar_turno_produccion: cerrarTurno,
@@ -242,11 +227,5 @@ export function ejecutarRpcProduccion(db: Db, fnName: string, params: any): Resu
     iniciar_reparacion_averia: iniciarReparacion,
     registrar_reparacion_averia: registrarReparacion,
   }
-  const handler = handlers[fnName]
-  if (!handler) return null
-  try {
-    return { data: handler(db, params ?? {}), error: null }
-  } catch (e) {
-    return { data: null, error: { message: e instanceof Error ? e.message : String(e) } }
-  }
+  return ejecutarHandler(handlers, db, fnName, params)
 }

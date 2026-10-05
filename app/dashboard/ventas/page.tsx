@@ -11,7 +11,7 @@ import {
   ArrowLeft, ChevronDown, UserX, AlertTriangle, Eye, Camera, Zap, Image as ImageIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatearMoneda, formatearFecha, generarCodigoVenta } from '@/lib/utils'
+import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import { generarCronogramaCuotas } from '@/lib/domain/finance'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
@@ -560,75 +560,33 @@ export default function VentasPage() {
 
     setGuardandoVenta(true)
 
-    // Usar upsert para evitar errores de DNI/RUC duplicado y asegurar que siempre tengamos un ID válido
-    const { data: nuevoCliente, error: cErr } = await supabase.from('clientes').upsert({
-      tipo_documento: clienteForm.tipo_documento,
-      numero_documento: clienteForm.numero_documento.trim(),
-      nombre: clienteForm.nombre.trim(),
-      telefono: clienteForm.telefono ? clienteForm.telefono.trim() : '',
-      direccion: clienteForm.direccion ? clienteForm.direccion.trim() : '',
-    }, { onConflict: 'numero_documento' }).select().single()
+    // Una sola operación atómica: cliente + venta + productos + cuotas, con el código
+    // V-xxxx generado en la base (antes se calculaba contando filas y podía repetirse).
+    const { data: resultadoVenta, error } = await supabase.rpc('registrar_venta', {
+      p_cliente: {
+        tipo_documento: clienteForm.tipo_documento,
+        numero_documento: clienteForm.numero_documento.trim(),
+        nombre: clienteForm.nombre.trim(),
+        telefono: clienteForm.telefono ? clienteForm.telefono.trim() : '',
+        direccion: clienteForm.direccion ? clienteForm.direccion.trim() : '',
+      },
+      p_asesora_id: vendedoraSeleccionadaId,
+      p_tipo_pago: tipoPago,
+      p_monto_adelanto: adelantoNum,
+      p_items: carrito.map(i => ({ catalogo_media_id: i.catalogo_media_id, docenas: i.docenas, precio_docena: i.precio_docena })),
+      p_cuotas: tipoPago === 'cuotas'
+        ? cronogramaCuotas.map(c => ({ numero_cuota: c.numero_cuota, monto: c.monto, fecha_vencimiento: c.fecha_vencimiento }))
+        : null,
+    })
 
-    if (cErr || !nuevoCliente) {
-      toast.error(`Error al guardar datos del cliente: ${cErr?.message || 'Error al obtener el registro'}`)
+    if (error || !resultadoVenta) {
+      toast.error(`No se pudo registrar la venta: ${error?.message || 'sin respuesta del servidor'}. No se guardó nada.`)
       setGuardandoVenta(false)
       return
     }
-
-    const clienteId = nuevoCliente.id
-
-    const { count } = await supabase.from('ventas').select('*', { count: 'exact', head: true })
-    const codigoVenta = generarCodigoVenta((count ?? 0) + 1001)
-
-    const { data: venta, error } = await supabase.from('ventas').insert({
-      codigo_venta: codigoVenta,
-      cliente_id: clienteId,
-      asesora_id: vendedoraSeleccionadaId,
-      tipo_pago: tipoPago,
-      total_soles: totalCarrito,
-      monto_adelanto: adelantoNum,
-      estado: 'pendiente',
-    }).select().single()
-
-    if (error || !venta) { 
-      toast.error(`Error al registrar la venta: ${error?.message || 'Fallo en la inserción'}`)
-      setGuardandoVenta(false)
-      return 
-    }
-
-
-    // Sin productos la venta no sirve: si fallan, se deshace la venta (antes quedaba vacía)
-    const { error: errItems } = await supabase.from('items_venta').insert(
-      carrito.map(i => ({ venta_id: venta.id, catalogo_media_id: i.catalogo_media_id, docenas: i.docenas, precio_docena: i.precio_docena }))
-    )
-    if (errItems) {
-      const { error: errDeshacer } = await supabase.from('ventas').delete().eq('id', venta.id)
-      toast.error(errDeshacer
-        ? `No se guardaron los productos de la venta ${codigoVenta} (${errItems.message}) y no se pudo anularla. Elimínala en el historial antes de reintentar.`
-        : `No se pudo registrar la venta (productos): ${errItems.message}. No se guardó nada; intenta de nuevo.`)
-      setGuardandoVenta(false)
-      return
-    }
+    const codigoVenta = (resultadoVenta as { codigo_venta: string }).codigo_venta
 
     if (tipoPago === 'cuotas' && cronogramaCuotas.length > 0) {
-      const cuotasToInsert = cronogramaCuotas.map(c => ({
-        venta_id: venta.id,
-        numero_cuota: c.numero_cuota,
-        monto: c.monto,
-        fecha_vencimiento: c.fecha_vencimiento,
-        estado: 'pendiente'
-      }))
-      const { error: errCuotas } = await supabase.from('cuotas').insert(cuotasToInsert)
-      if (errCuotas) {
-        const { error: errDeshacerItems } = await supabase.from('items_venta').delete().eq('venta_id', venta.id)
-        const { error: errDeshacerVenta } = errDeshacerItems ? { error: errDeshacerItems } : await supabase.from('ventas').delete().eq('id', venta.id)
-        toast.error(errDeshacerVenta
-          ? `No se guardaron las cuotas de la venta ${codigoVenta} (${errCuotas.message}) y no se pudo anularla. Elimínala en el historial antes de reintentar.`
-          : `No se pudo registrar el cronograma de cuotas: ${errCuotas.message}. No se guardó la venta; intenta de nuevo.`)
-        setGuardandoVenta(false)
-        return
-      }
-
       const vendObj = vendedoras.find(v => v.id === vendedoraSeleccionadaId)
 
       if (confirm(`Venta a crédito generada. ¿Deseas imprimir el Cronograma de Pagos para el cliente ${clienteForm.nombre}?`)) {
@@ -637,7 +595,7 @@ export default function VentasPage() {
           clienteForm.nombre,
           clienteForm.numero_documento,
           clienteForm.telefono,
-          vendObj?.nombre || 'Sofia Vendedora',
+          vendObj?.nombre || 'Vendedora',
           adelantoNum,
           cronogramaCuotas,
           totalCarrito

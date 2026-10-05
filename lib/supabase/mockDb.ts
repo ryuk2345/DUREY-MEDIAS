@@ -3,6 +3,7 @@
 // Guardando el estado en durey-app/mock_db.json (Servidor) y localStorage (Cliente)
 
 import { ejecutarRpcProduccion, RPC_PRODUCCION } from './mockRpcProduccion'
+import { ejecutarRpcProcesos, RPC_PROCESOS } from './mockRpcProcesos'
 
 const SEMILLAS = {
   usuarios: [
@@ -702,9 +703,9 @@ export function createMockClient() {
       return new MockQueryBuilder(tableName);
     },
     async rpc(fnName: string, params: any) {
-      if ((RPC_PRODUCCION as readonly string[]).includes(fnName)) {
+      if ([...RPC_PRODUCCION, ...RPC_PROCESOS].includes(fnName as never)) {
         const db = await getMockDb();
-        const resultado = ejecutarRpcProduccion(db, fnName, params)!;
+        const resultado = (ejecutarRpcProduccion(db, fnName, params) ?? ejecutarRpcProcesos(db, fnName, params))!;
         if (!resultado.error) await saveMockDb(db);
         return resultado;
       }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { listarUsuarios, actualizarEstadoUsuario } from '@/lib/api/usuarios'
+import { listarUsuarios } from '@/lib/api/usuarios'
 import {
   Scissors, Send, ArrowRightLeft, Loader2, X,
   AlertTriangle, CheckCircle2, Package, User, Cpu,
@@ -198,24 +198,15 @@ export default function RemalladoMonitorPage() {
       }
     }
 
-    // 1. Crear el lote de remallado
-    const { error: loteErr } = await supabase.from('lotes_remallado').insert({
-      catalogo_media_id: catalogo_media_id,
-      remalladora_id: remalladora_id,
-      maquina_remalladora_id: maquina_id,
-      docenas_asignadas: numDocenas,
-      docenas_pendientes: numDocenas,
-      estado: 'en_proceso',
+    // Una sola operación atómica: lote + máquina ocupada + operadora ocupada
+    const { error: loteErr } = await supabase.rpc('iniciar_lote_remallado', {
+      p_maquina_id: maquina_id,
+      p_remalladora_id: remalladora_id,
+      p_catalogo_media_id: catalogo_media_id,
+      p_docenas: numDocenas
     })
-
-    if (loteErr) { toast.error('Error al iniciar lote de remallado'); return }
-
-    // 2. Marcar máquina y operadora como ocupadas
-    await actualizarEstadoUsuario(remalladora_id, 'ocupada').catch((e: Error) =>
-      toast.warning(`No se pudo marcar a la remalladora como ocupada: ${e.message}`))
-    const { error: errMaq } = await supabase.from('maquinas').update({ estado: 'ocupada' }).eq('id', maquina_id)
-    if (errMaq) {
-      toast.error(`El lote se creó, pero no se pudo marcar la máquina como ocupada: ${errMaq.message}`)
+    if (loteErr) {
+      toast.error(`No se pudo iniciar el lote de remallado: ${loteErr.message}`)
       cargarDatos()
       return
     }
@@ -297,36 +288,18 @@ export default function RemalladoMonitorPage() {
       return
     }
 
-    const { error: errOrigen } = await supabase.from('lotes_remallado')
-      .update({ docenas_pendientes: loteOrigen.docenas_pendientes - docsTraspaso })
-      .eq('id', lote_origen_id)
-    if (errOrigen) { toast.error(`No se pudo realizar el traspaso: ${errOrigen.message}`); return }
-
-    const { error: errDestino } = await supabase.from('lotes_remallado').insert({
-      catalogo_media_id: loteOrigen.catalogo_media_id,
-      remalladora_id: remalladora_destino_id,
-      maquina_remalladora_id: maquina_destino_id,
-      docenas_asignadas: docsTraspaso,
-      docenas_pendientes: docsTraspaso,
-      estado: 'en_proceso',
+    // Una sola operación atómica: resta del origen + lote destino + máquina y operadora ocupadas.
+    // Antes, si fallaba el lote destino, las docenas ya restadas al origen se perdían.
+    const { error: errTraspaso } = await supabase.rpc('traspasar_lote_remallado', {
+      p_lote_origen_id: lote_origen_id,
+      p_remalladora_destino_id: remalladora_destino_id,
+      p_maquina_destino_id: maquina_destino_id,
+      p_docenas: docsTraspaso
     })
-    if (errDestino) {
-      // Devolver las docenas al lote de origen para no perderlas
-      const { error: errDevolver } = await supabase.from('lotes_remallado')
-        .update({ docenas_pendientes: loteOrigen.docenas_pendientes })
-        .eq('id', lote_origen_id)
-      toast.error(errDevolver
-        ? `No se pudo crear el lote destino (${errDestino.message}) y el lote de origen quedó con ${docsTraspaso} docenas menos. Corrígelo antes de reintentar.`
-        : `No se pudo crear el lote destino; el traspaso se canceló: ${errDestino.message}`)
+    if (errTraspaso) {
+      toast.error(`No se pudo realizar el traspaso: ${errTraspaso.message}`)
       cargarDatos()
       return
-    }
-
-    await actualizarEstadoUsuario(remalladora_destino_id, 'ocupada').catch((e: Error) =>
-      toast.warning(`No se pudo marcar a la remalladora destino como ocupada: ${e.message}`))
-    const { error: errMaqDestino } = await supabase.from('maquinas').update({ estado: 'ocupada' }).eq('id', maquina_destino_id)
-    if (errMaqDestino) {
-      toast.error(`Traspaso hecho, pero no se pudo marcar la máquina destino como ocupada: ${errMaqDestino.message}`)
     }
 
     toast.success(`Traspaso exitoso: ${docsTraspaso} docenas transferidas`)

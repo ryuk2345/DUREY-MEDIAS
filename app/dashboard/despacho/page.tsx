@@ -8,7 +8,7 @@ import {
   Calendar, User, ArrowRight
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatearFecha, formatearMoneda, generarCodigoGuia } from '@/lib/utils'
+import { formatearFecha, formatearMoneda } from '@/lib/utils'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
 
@@ -234,56 +234,14 @@ export default function DespachoPage() {
     }
     setProcesando(true)
     try {
-      const { count } = await supabase.from('guias_remision').select('*', { count: 'exact', head: true })
-      const codigoGuia = generarCodigoGuia((count ?? 0) + 9001)
-
-      // 1. Descontar paquetes del almacén → pasan a 'entregado' directamente
-      for (const linea of lineas) {
-        let faltantes = linea.docenas_escaneadas
-        const { data: paqDisp, error: errPaq } = await supabase
-          .from('paquetes').select('id, docenas')
-          .eq('catalogo_media_id', linea.catalogo_media_id)
-          .in('estado', ['almacenado', 'pendiente_almacenar'])
-          .order('created_at', { ascending: true })
-        if (errPaq) throw errPaq
-
-        for (const paq of paqDisp ?? []) {
-          if (faltantes <= 0) break
-          const { error: errUpd } = await supabase.from('paquetes')
-            .update({ venta_id: ventaSeleccionada.id, estado: 'entregado', ubicacion_id: null })
-            .eq('id', paq.id)
-          if (errUpd) throw errUpd
-          faltantes -= Number(paq.docenas)
-        }
-      }
-
-      // 2. Registrar guía como entregado (no hay tránsito — sale de tienda y el cliente se encarga)
-      const hoy = new Date().toISOString().split('T')[0]
-      const { error: errorGuia } = await supabase.from('guias_remision').insert({
-        codigo_guia: codigoGuia,
-        venta_id: ventaSeleccionada.id,
-        agencia: agenciaSeleccionada,
-        estado: 'entregado',        // cerrado directo
-        fecha_despacho: hoy,
-        fecha_entrega: hoy,         // mismo día — el seguimiento lo lleva el cliente
+      // Una sola operación atómica: comprueba stock, entrega paquetes, genera la guía
+      // (código GR-xxxx en la base), cierra la venta y registra la salida en el kárdex.
+      const { data: codigoGuia, error } = await supabase.rpc('despachar_venta', {
+        p_venta_id: ventaSeleccionada.id,
+        p_agencia: agenciaSeleccionada,
+        p_lineas: lineas.map(l => ({ catalogo_media_id: l.catalogo_media_id, docenas: l.docenas_escaneadas })),
       })
-      if (errorGuia) throw errorGuia
-
-      // 3. Cerrar la venta
-      const { error: errVenta } = await supabase.from('ventas')
-        .update({ estado: 'entregado' })
-        .eq('id', ventaSeleccionada.id)
-      if (errVenta) throw errVenta
-
-      // 4. Registrar movimiento de salida
-      const { error: errMov } = await supabase.from('movimientos_stock').insert(
-        lineas.map(l => ({
-          tipo: 'salida_venta',
-          referencia: `Despacho ${ventaSeleccionada.codigo_venta} — ${agenciaSeleccionada}`,
-          docenas: l.docenas_escaneadas,
-        }))
-      )
-      if (errMov) throw errMov
+      if (error) throw error
 
       toast.success(`✅ Pedido ${ventaSeleccionada.codigo_venta} despachado. Guía ${codigoGuia} registrada en el Kárdex.`)
       setShowDespachoModal(false)
