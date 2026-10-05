@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import {
@@ -31,36 +32,18 @@ export default function BalancePage() {
   // 1. Validar rol admin
   useEffect(() => {
     async function checkRole() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          const cookieRole = document.cookie.split('; ').find(row => row.startsWith('durey_user_role='))?.split('=')[1]
-          if (cookieRole && cookieRole !== 'admin') {
-            router.push('/dashboard')
-            return
-          }
-          setUserRole(cookieRole || 'admin')
-          return
-        }
-        const { data: perfil } = await supabase
-          .from('usuarios')
-          .select('rol')
-          .eq('auth_id', user.id)
-          .single()
-
-        const rol = perfil?.rol || 'admin'
-        if (rol !== 'admin') {
-          toast.error('Acceso denegado: Este módulo es exclusivo de Administrador General.')
-          router.push('/dashboard')
-          return
-        }
-        setUserRole(rol)
-      } catch (e) {
-        setUserRole('admin')
+      // Rol de la sesión verificada; antes, sin usuario de Supabase Auth (siempre), se
+      // tomaba la cookie editable durey_user_role y por defecto se asumía 'admin'.
+      const usuario = await obtenerUsuarioActual()
+      if (usuario?.rol !== 'admin') {
+        toast.error('Acceso denegado: Este módulo es exclusivo de Administrador General.')
+        router.push('/dashboard')
+        return
       }
+      setUserRole(usuario.rol)
     }
     checkRole()
-  }, [router, supabase])
+  }, [router])
 
   // 2. Cargar datos financieros
   const cargarDatos = useCallback(async () => {

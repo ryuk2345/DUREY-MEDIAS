@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import {
   RotateCcw, Sparkles, Loader2, CheckCircle2, User, 
   Plus, X, Calendar, FileText, Search, Warehouse, ArrowRight, AlertTriangle
@@ -67,20 +68,17 @@ export default function VolteadoPage() {
   // Cargar rol de usuario
   useEffect(() => {
     async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setUserId(user.id)
-        const { data: profile } = await supabase.from('usuarios').select('rol, id').eq('email', user.email).single()
-        if (profile) {
-          setUserRol(profile.rol)
-          if (profile.rol === 'volteador') {
-            setAsignarForm(f => ({ ...f, volteador_id: profile.id }))
-          }
-        }
+      // Sesión verificada (antes supabase.auth.getUser(), que en este sistema siempre es null)
+      const usuario = await obtenerUsuarioActual()
+      if (!usuario) return
+      setUserId(usuario.id)
+      setUserRol(usuario.rol)
+      if (usuario.rol === 'volteador') {
+        setAsignarForm(f => ({ ...f, volteador_id: usuario.id }))
       }
     }
     loadUser()
-  }, [supabase])
+  }, [])
 
   // Cargar datos
   const cargarDatos = useCallback(async () => {

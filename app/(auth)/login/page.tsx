@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shirt, Lock, Mail, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
+import { olvidarUsuarioActual } from '@/lib/auth/usuarioActual'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -40,6 +41,7 @@ export default function LoginPage() {
       }
 
       const { user, debe_cambiar_password } = data
+      olvidarUsuarioActual() // por si antes había otra sesión en esta pestaña
 
       // 2. La sesión frente a la base la pone el servidor en la cookie durey_db_token
       //    (lib/auth/tokenDb.ts); el cliente de Supabase la manda en cada consulta.

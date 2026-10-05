@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import { listarUsuarios } from '@/lib/api/usuarios'
 import { formatearFecha } from '@/lib/utils'
 import {
@@ -189,7 +190,7 @@ export default function MaquinasPage() {
 
     setEnviandoReporte(true)
     const tecObj = tecnicos.find(t => t.id === reporteForm.tecnico_asignado)
-    const reportadoPorId = document.cookie.split('; ').find(r => r.startsWith('durey_user_id='))?.split('=')[1] || null
+    const reportadoPorId = (await obtenerUsuarioActual())?.id ?? null
 
     // Una sola operación atómica: avería + máquina malograda + cierre del turno activo
     const { data, error } = await supabase.rpc('reportar_averia_maquina', {
