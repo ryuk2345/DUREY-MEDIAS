@@ -64,29 +64,6 @@ export default function ClientesPage() {
   const [selectedClienteHistorial, setSelectedClienteHistorial] = useState<Cliente | null>(null)
 
   const supabase = createClient()
-  const isMock = typeof window !== 'undefined' && (
-    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL.includes('tu-proyecto') ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')
-  )
-
-  const loadFromLocal = (key: string, fallback: any[]) => {
-    try {
-      const d = localStorage.getItem(key)
-      return d ? JSON.parse(d) : fallback
-    } catch {
-      return fallback
-    }
-  }
-
-  const saveToLocal = (key: string, data: any) => {
-    try {
-      localStorage.setItem(key, JSON.stringify(data))
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
@@ -100,27 +77,21 @@ export default function ClientesPage() {
         supabase.from('cuotas').select('id, venta_id, numero_cuota, monto, fecha_vencimiento, estado')
       ])
 
+      // Solo la base: antes, en modo local se mezclaban copias guardadas en el navegador
+      // y cada cliente guardado se copiaba también al navegador.
       if (cliRes.error) toast.error(`Error cargando clientes: ${cliRes.error.message}`)
+      if (venRes.error) toast.error(`Error cargando ventas: ${venRes.error.message}`)
+      if (cuoRes.error) toast.error(`Error cargando cuotas: ${cuoRes.error.message}`)
 
-      let listaClientes = cliRes.data ?? []
-      let listaVentas = venRes.data ?? []
-      let listaCuotas = cuoRes.data ?? []
-
-      if (isMock) {
-        listaClientes = loadFromLocal('durey_clientes', listaClientes)
-        listaVentas = loadFromLocal('durey_ventas', listaVentas)
-        listaCuotas = loadFromLocal('durey_cuotas', listaCuotas)
-      }
-
-      setClientes(listaClientes)
-      setVentas(listaVentas)
-      setCuotas(listaCuotas)
+      setClientes(cliRes.data ?? [])
+      setVentas(venRes.data ?? [])
+      setCuotas(cuoRes.data ?? [])
     } catch (err: any) {
       toast.error(`Error al conectar con el servidor: ${err.message}`)
     } finally {
       setLoading(false)
     }
-  }, [supabase, isMock])
+  }, [supabase])
 
   useEffect(() => {
     cargarDatos()
@@ -239,56 +210,25 @@ export default function ClientesPage() {
     try {
       if (editingCliente) {
         // Actualización
-        if (!isMock) {
-          const { error } = await supabase.from('clientes').update({
-            tipo_documento: tipo,
-            numero_documento: doc,
-            nombre: clienteForm.nombre.trim(),
-            telefono: clienteForm.telefono.trim(),
-            direccion: clienteForm.direccion.trim()
-          }).eq('id', editingCliente.id)
-
-          if (error) throw error
-        }
-        const list = clientes.map(x => x.id === editingCliente.id ? {
-          ...x,
+        const { error } = await supabase.from('clientes').update({
           tipo_documento: tipo,
           numero_documento: doc,
           nombre: clienteForm.nombre.trim(),
-          telefono: clienteForm.telefono.trim(),
-          direccion: clienteForm.direccion.trim()
-        } : x)
-        setClientes(list)
-        saveToLocal('durey_clientes', list)
+          telefono: clienteForm.telefono.trim() || null,
+          direccion: clienteForm.direccion.trim() || null
+        }).eq('id', editingCliente.id)
+        if (error) throw error
         toast.success(`Cliente "${clienteForm.nombre}" actualizado`)
       } else {
         // Nuevo Cliente
-        const newCli = {
-          id: Math.random().toString(),
+        const { data: newCli, error } = await supabase.from('clientes').insert({
           tipo_documento: tipo,
           numero_documento: doc,
           nombre: clienteForm.nombre.trim(),
-          telefono: clienteForm.telefono.trim(),
-          direccion: clienteForm.direccion.trim(),
-          created_at: new Date().toISOString()
-        }
-
-        if (!isMock) {
-          const { data, error } = await supabase.from('clientes').insert({
-            tipo_documento: newCli.tipo_documento,
-            numero_documento: newCli.numero_documento,
-            nombre: newCli.nombre,
-            telefono: newCli.telefono || null,
-            direccion: newCli.direccion || null
-          }).select().single()
-
-          if (error) throw error
-          if (data) newCli.id = data.id
-        }
-
-        const list = [newCli, ...clientes]
-        setClientes(list)
-        saveToLocal('durey_clientes', list)
+          telefono: clienteForm.telefono.trim() || null,
+          direccion: clienteForm.direccion.trim() || null
+        }).select().single()
+        if (error) throw error
         toast.success(`Cliente "${newCli.nombre}" registrado exitosamente`)
       }
 
@@ -315,19 +255,8 @@ export default function ClientesPage() {
     }
 
     try {
-      if (!isMock) {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(c.id)
-        if (isUuid) {
-          const { error } = await supabase.from('clientes').delete().eq('id', c.id)
-          if (error) throw error
-        } else {
-          const { error } = await supabase.from('clientes').delete().eq('numero_documento', c.numero_documento)
-          if (error) throw error
-        }
-      }
-      const list = clientes.filter(x => x.id !== c.id)
-      setClientes(list)
-      saveToLocal('durey_clientes', list)
+      const { error } = await supabase.from('clientes').delete().eq('id', c.id)
+      if (error) throw error
       toast.success(`Cliente "${c.nombre}" eliminado`)
       cargarDatos()
     } catch (err: any) {
