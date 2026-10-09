@@ -95,7 +95,6 @@ export default function AlmacenPage() {
       const { error } = await supabase.from('ubicaciones').insert({
         nombre: nuevoSalonNombre.trim(),
         tipo: 'salon',
-        capacidad_max_bultos: 50,
         activo: true
       })
 

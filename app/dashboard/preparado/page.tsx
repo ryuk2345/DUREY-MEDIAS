@@ -11,6 +11,7 @@ import {
 import { toast } from 'sonner'
 import { generarCodigoPaquete, getSemanaAnio, getDiaSemana, formatearRangoSemana } from '@/lib/utils'
 import { convertirDocenasAPares, construirQrSacoMaestro, siguienteCodigoSaco } from '@/lib/domain/packaging'
+import { filtrarCatalogo } from '@/lib/domain/catalogo'
 import QRCode from 'qrcode'
 import CustomSelect from '@/components/ui/CustomSelect'
 import Modal from '@/components/ui/Modal'
@@ -39,7 +40,7 @@ interface Cronograma {
   preparador_id: string
   preparador?: { nombre: string }
 }
-interface CatalogoMedia { id: string; sku?: string; codigo: string; talla: string; publico: string }
+interface CatalogoMedia { id: string; sku?: string; codigo: string; talla: string; publico: string; modelo?: string; diseno_color?: string }
 
 interface SacoMaestroGenerado {
   codigo_saco: string
@@ -63,6 +64,8 @@ export default function PreparadoPage() {
   const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
   const [cronograma, setCronograma] = useState<Cronograma[]>([])
   const [catalogo, setCatalogo] = useState<CatalogoMedia[]>([])
+  // Texto del buscador de SKU de cada preparador
+  const [busquedaSku, setBusquedaSku] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -110,7 +113,7 @@ export default function PreparadoPage() {
       supabase.from('paquetes').select('id, codigo_paquete, docenas, total_pares, detalles_contenido, estado, preparador:usuarios(nombre), catalogo_media:catalogo_medias(sku, codigo), ubicacion:ubicaciones(nombre)').order('created_at', { ascending: false }).limit(30),
       supabase.from('ubicaciones').select('id, nombre, tipo').eq('activo', true),
       supabase.from('cronograma_preparado').select('id, semana, anio, dia_semana, criterio, valor_criterio, preparador_id, preparador:usuarios(nombre)').eq('semana', semanaSeleccionada).eq('anio', anioSeleccionado),
-      supabase.from('catalogo_medias').select('id, sku, codigo, talla, publico').eq('estado', 'activo').order('codigo'),
+      supabase.from('catalogo_medias').select('id, sku, codigo, talla, publico, modelo, diseno_color').eq('estado', 'activo').order('codigo'),
     ])
 
     if (st.error) toast.error(`Error al cargar stock listo para planchar: ${st.error.message}`)
@@ -579,16 +582,35 @@ export default function PreparadoPage() {
                   {/* Selector de SKU de media */}
                   <div className="mb-3">
                     <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">SKU / Media a Embolsar</label>
-                    <CustomSelect
-                      value={mediaManualPorPreparador[prep.id] || mediaAsignadaObj?.id || ''}
-                      onChange={val => setMediaManualPorPreparador(prev => ({ ...prev, [prep.id]: val }))}
-                      options={catalogo.map(c => ({
-                        value: c.id,
-                        label: `${c.sku ? `[${c.sku}] ` : ''}${c.codigo} (${c.publico})`
-                      }))}
-                      triggerClassName="text-xs font-mono font-bold text-emerald-300 border-emerald-500/30"
-                      placeholder="Seleccionar SKU..."
-                    />
+                    {(() => {
+                      const seleccionId = mediaManualPorPreparador[prep.id] || mediaAsignadaObj?.id || ''
+                      const texto = busquedaSku[prep.id] || ''
+                      const filtrados = filtrarCatalogo(catalogo, texto)
+                      // La media ya elegida se mantiene en la lista aunque no coincida con el filtro
+                      const seleccionada = catalogo.find(c => c.id === seleccionId)
+                      const opciones = seleccionada && !filtrados.includes(seleccionada) ? [seleccionada, ...filtrados] : filtrados
+                      return (
+                        <>
+                          <input
+                            type="text"
+                            value={texto}
+                            onChange={e => setBusquedaSku(prev => ({ ...prev, [prep.id]: e.target.value }))}
+                            placeholder="Buscar: modelo, talla, color, SKU..."
+                            className="input-dark text-xs w-full py-1.5 mb-1.5"
+                          />
+                          <CustomSelect
+                            value={seleccionId}
+                            onChange={val => setMediaManualPorPreparador(prev => ({ ...prev, [prep.id]: val }))}
+                            options={opciones.map(c => ({
+                              value: c.id,
+                              label: `${c.sku ? `[${c.sku}] ` : ''}${c.codigo} (${c.publico})`
+                            }))}
+                            triggerClassName="text-xs font-mono font-bold text-emerald-300 border-emerald-500/30"
+                            placeholder={texto && filtrados.length === 0 ? 'Sin resultados para ese texto' : `Seleccionar SKU... (${filtrados.length})`}
+                          />
+                        </>
+                      )
+                    })()}
                   </div>
 
                   {/* Input de docenas empacadas */}
