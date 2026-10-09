@@ -11,9 +11,9 @@ import {
 import { toast } from 'sonner'
 import { generarCodigoPaquete, getSemanaAnio, getDiaSemana, formatearRangoSemana } from '@/lib/utils'
 import { convertirDocenasAPares, construirQrSacoMaestro, siguienteCodigoSaco } from '@/lib/domain/packaging'
-import { filtrarCatalogo } from '@/lib/domain/catalogo'
 import QRCode from 'qrcode'
 import CustomSelect from '@/components/ui/CustomSelect'
+import SelectorMedia from '@/components/ui/SelectorMedia'
 import Modal from '@/components/ui/Modal'
 
 interface Preparador { id: string; nombre: string }
@@ -64,8 +64,6 @@ export default function PreparadoPage() {
   const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
   const [cronograma, setCronograma] = useState<Cronograma[]>([])
   const [catalogo, setCatalogo] = useState<CatalogoMedia[]>([])
-  // Texto del buscador de SKU de cada preparador
-  const [busquedaSku, setBusquedaSku] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -582,35 +580,17 @@ export default function PreparadoPage() {
                   {/* Selector de SKU de media */}
                   <div className="mb-3">
                     <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">SKU / Media a Embolsar</label>
-                    {(() => {
-                      const seleccionId = mediaManualPorPreparador[prep.id] || mediaAsignadaObj?.id || ''
-                      const texto = busquedaSku[prep.id] || ''
-                      const filtrados = filtrarCatalogo(catalogo, texto)
-                      // La media ya elegida se mantiene en la lista aunque no coincida con el filtro
-                      const seleccionada = catalogo.find(c => c.id === seleccionId)
-                      const opciones = seleccionada && !filtrados.includes(seleccionada) ? [seleccionada, ...filtrados] : filtrados
-                      return (
-                        <>
-                          <input
-                            type="text"
-                            value={texto}
-                            onChange={e => setBusquedaSku(prev => ({ ...prev, [prep.id]: e.target.value }))}
-                            placeholder="Buscar: modelo, talla, color, SKU..."
-                            className="input-dark text-xs w-full py-1.5 mb-1.5"
-                          />
-                          <CustomSelect
-                            value={seleccionId}
-                            onChange={val => setMediaManualPorPreparador(prev => ({ ...prev, [prep.id]: val }))}
-                            options={opciones.map(c => ({
-                              value: c.id,
-                              label: `${c.sku ? `[${c.sku}] ` : ''}${c.codigo} (${c.publico})`
-                            }))}
-                            triggerClassName="text-xs font-mono font-bold text-emerald-300 border-emerald-500/30"
-                            placeholder={texto && filtrados.length === 0 ? 'Sin resultados para ese texto' : `Seleccionar SKU... (${filtrados.length})`}
-                          />
-                        </>
-                      )
-                    })()}
+                    <SelectorMedia
+                      items={catalogo}
+                      value={mediaManualPorPreparador[prep.id] || mediaAsignadaObj?.id || ''}
+                      onChange={val => setMediaManualPorPreparador(prev => ({ ...prev, [prep.id]: val }))}
+                      toOption={c => ({
+                        value: c.id,
+                        label: `${c.sku ? `[${c.sku}] ` : ''}${c.codigo} (${c.publico})`
+                      })}
+                      triggerClassName="text-xs font-mono font-bold text-emerald-300 border-emerald-500/30"
+                      placeholder="Seleccionar SKU..."
+                    />
                   </div>
 
                   {/* Input de docenas empacadas */}

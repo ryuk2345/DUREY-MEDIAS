@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
 import CustomSelect from '@/components/ui/CustomSelect'
+import SelectorMedia from '@/components/ui/SelectorMedia'
 import Modal from '@/components/ui/Modal'
 
 
@@ -26,7 +27,7 @@ interface Maquina {
   marca?: { id: string; nombre: string }
 }
 interface Tejedor { id: string; nombre: string }
-interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: string; talla: string }
+interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: string; talla: string; sku?: string; diseno_color?: string }
 interface TurnoMaquina { maquina_id: string; catalogo_media_id: string }
 interface Turno {
   id: string
@@ -77,7 +78,7 @@ export default function ProduccionTejidoPage() {
         id, codigo, marca_id, tipo, estado, caracteristicas,
         marca:marcas_maquinas(id, nombre)
       `).eq('tipo', 'tejedora').order('codigo'),
-      supabase.from('catalogo_medias').select('id, codigo, modelo, publico, talla').eq('estado', 'activo').order('codigo'),
+      supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla').eq('estado', 'activo').order('codigo'),
       supabase.from('turnos_produccion').select(`
         id, fecha, horario, duracion_horas, estado, tejedor_id,
         tejedor:usuarios(nombre),
@@ -664,14 +665,14 @@ export default function ProduccionTejidoPage() {
                           </div>
 
                           {isSelected && (
-                            <CustomSelect
+                            <SelectorMedia
+                              items={catalogo}
                               value={selectedMediaId}
                               onChange={val => updateMediaParaMaquina(m.id, val)}
-                              options={[
-                                { value: '', label: 'Seleccionar código de media...' },
-                                ...catalogo.map(c => ({ value: c.id, label: c.codigo }))
-                              ]}
-                              triggerClassName="text-[11px] py-1.5 font-mono mt-1"
+                              emptyOption={{ value: '', label: 'Seleccionar código de media...' }}
+                              toOption={c => ({ value: c.id, label: c.codigo })}
+                              className="mt-1"
+                              triggerClassName="text-[11px] py-1.5 font-mono"
                               placeholder="Seleccionar código de media..."
                             />
                           )}
