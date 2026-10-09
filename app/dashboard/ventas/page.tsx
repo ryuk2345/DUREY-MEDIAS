@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import { generarCronogramaCuotas } from '@/lib/domain/finance'
 import CustomSelect from '@/components/ui/CustomSelect'
+import SelectorMedia from '@/components/ui/SelectorMedia'
 import { Modal } from '@/components/ui/Modal'
 
 interface Cliente {
@@ -26,7 +27,7 @@ interface Cliente {
 }
 
 interface Vendedora { id: string; nombre: string }
-interface MediaItem { id: string; codigo: string; modelo: string; publico: string }
+interface MediaItem { id: string; codigo: string; modelo: string; publico: string; sku?: string; diseno_color?: string; talla?: string }
 interface Venta {
   id: string; codigo_venta: string; total_soles: number; tipo_pago: string; estado: string; fecha: string
   cliente: { id: string; nombre: string; numero_documento: string; telefono?: string; direccion?: string }
@@ -132,7 +133,7 @@ export default function VentasPage() {
     const [cli, vend, cat, ven, deu, caj, paq] = await Promise.all([
       supabase.from('clientes').select('*').order('nombre'),
       listarUsuarios({ rol: 'vendedora', campos: 'id,nombre' }),
-      supabase.from('catalogo_medias').select('id, codigo, modelo, publico').eq('estado', 'activo').order('codigo'),
+      supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla').eq('estado', 'activo').order('codigo'),
       supabase.from('ventas').select(`
         id, codigo_venta, total_soles, tipo_pago, estado, fecha,
         cliente:clientes(id, nombre, numero_documento, telefono, direccion),
@@ -1242,7 +1243,8 @@ export default function VentasPage() {
                       sinStock ? 'border-red-500/40 bg-red-500/[0.04]' : 'border-white/[0.04] bg-slate-900/40'
                     }`}>
                       <div className="grid grid-cols-12 gap-2 items-center">
-                        <CustomSelect
+                        <SelectorMedia
+                          items={catalogo}
                           value={item.catalogo_media_id}
                           onChange={val => {
                             const media = catalogo.find(c => c.id === val)
@@ -1250,17 +1252,15 @@ export default function VentasPage() {
                             arr[idx] = { ...arr[idx], catalogo_media_id: val, codigo: media?.codigo ?? '' }
                             setCarrito(arr)
                           }}
-                          options={[
-                            { value: '', label: 'Tipo de media...' },
-                            ...catalogo.map(c => {
-                              const s = stockPorMedia[c.id] ?? 0
-                              return {
-                                value: c.id,
-                                label: `${c.codigo} ${s === 0 ? '⛔ SIN STOCK' : s <= 5 ? `⚠️ Stock: ${s} doc.` : ''}`,
-                                disabled: s === 0
-                              }
-                            })
-                          ]}
+                          emptyOption={{ value: '', label: 'Tipo de media...' }}
+                          toOption={c => {
+                            const s = stockPorMedia[c.id] ?? 0
+                            return {
+                              value: c.id,
+                              label: `${c.codigo} ${s === 0 ? '⛔ SIN STOCK' : s <= 5 ? `⚠️ Stock: ${s} doc.` : ''}`,
+                              disabled: s === 0
+                            }
+                          }}
                           className="col-span-5"
                           triggerClassName="text-xs font-mono font-medium"
                           placeholder="Tipo de media..."

@@ -11,6 +11,7 @@ import {
 import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
 import CustomSelect from '@/components/ui/CustomSelect'
+import SelectorMedia from '@/components/ui/SelectorMedia'
 import Modal from '@/components/ui/Modal'
 
 
@@ -36,7 +37,7 @@ interface MaquinaRem {
   estado: string
   marca?: { id: string; nombre: string }
 }
-interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: string }
+interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: string; sku?: string; diseno_color?: string; talla?: string }
 
 
 export default function RemalladoMonitorPage() {
@@ -83,7 +84,7 @@ export default function RemalladoMonitorPage() {
           maquina_remalladora:maquinas(id, codigo)
         `).eq('estado', 'en_proceso'),
       supabase.from('maquinas').select('id, codigo, marca_id, tipo, estado, marca:marcas_maquinas(id, nombre)').eq('tipo', 'remalladora').order('codigo'),
-      supabase.from('catalogo_medias').select('id, codigo, modelo, publico').eq('estado', 'activo').order('codigo'),
+      supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla').eq('estado', 'activo').order('codigo'),
     ])
 
     if (lot.error) {
@@ -542,13 +543,12 @@ export default function RemalladoMonitorPage() {
                 <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
                   Tipo de Media a Remallar (Catálogo)
                 </label>
-                <CustomSelect
+                <SelectorMedia
+                  items={catalogo}
                   value={cargaForm.catalogo_media_id}
                   onChange={val => setCargaForm({ ...cargaForm, catalogo_media_id: val })}
-                  options={[
-                    { value: '', label: 'Seleccionar código de media...' },
-                    ...catalogo.map(c => ({ value: c.id, label: c.codigo }))
-                  ]}
+                  emptyOption={{ value: '', label: 'Seleccionar código de media...' }}
+                  toOption={c => ({ value: c.id, label: c.codigo })}
                   triggerClassName="text-xs font-mono font-medium"
                   placeholder="Seleccionar código de media..."
                 />

@@ -11,6 +11,7 @@ import {
 import { toast } from 'sonner'
 import { getSemanaAnio, getDiaSemana, formatearRangoSemana } from '@/lib/utils'
 import CustomSelect from '@/components/ui/CustomSelect'
+import SelectorMedia from '@/components/ui/SelectorMedia'
 import Modal from '@/components/ui/Modal'
 
 interface Planchador { id: string; nombre: string }
@@ -30,7 +31,7 @@ interface Cronograma {
   planchador_id: string
   planchador?: { nombre: string }
 }
-interface CatalogoMedia { id: string; codigo: string; talla: string; publico: string }
+interface CatalogoMedia { id: string; codigo: string; talla: string; publico: string; sku?: string; modelo?: string; diseno_color?: string }
 
 interface MediaItemParaPlanchar {
   catalogo_media_id: string
@@ -89,7 +90,7 @@ export default function PlanchadoPage() {
       supabase.from('cronograma_planchado')
         .select('id, semana, anio, dia_semana, criterio, valor_criterio, planchador_id, planchador:usuarios(nombre)')
         .eq('semana', semanaSeleccionada).eq('anio', anioSeleccionado),
-      supabase.from('catalogo_medias').select('id, codigo, talla, publico').eq('estado', 'activo').order('codigo'),
+      supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla').eq('estado', 'activo').order('codigo'),
     ])
 
     if (st.error) toast.error(`Error al cargar stock listo para planchar: ${st.error.message}`)
@@ -785,13 +786,12 @@ export default function PlanchadoPage() {
 
                     {/* Selector rápido si se quiere agregar una media adicional */}
                     <div className="mb-3">
-                      <CustomSelect
+                      <SelectorMedia
+                        items={catalogo}
                         value={mediaManualPorPlanchador[p.id] || ''}
                         onChange={val => setMediaManualPorPlanchador(prev => ({ ...prev, [p.id]: val }))}
-                        options={[
-                          { value: '', label: '+ Añadir/Seleccionar media del catálogo...' },
-                          ...catalogo.map(c => ({ value: c.id, label: c.codigo }))
-                        ]}
+                        emptyOption={{ value: '', label: '+ Añadir/Seleccionar media del catálogo...' }}
+                        toOption={c => ({ value: c.id, label: c.codigo })}
                         triggerClassName="text-[11px] py-1.5 font-mono text-slate-300"
                         placeholder="+ Añadir/Seleccionar media del catálogo..."
                       />
@@ -937,13 +937,13 @@ export default function PlanchadoPage() {
           <div>
             <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Valor Asignado</label>
             {cronoForm.criterio === 'media' ? (
-              <CustomSelect
+              <SelectorMedia
+                items={catalogo}
                 value={cronoForm.valor_criterio}
                 onChange={val => setCronoForm({ ...cronoForm, valor_criterio: val })}
-                options={[
-                  { value: '', label: 'Seleccionar media...' },
-                  ...catalogo.map(c => ({ value: c.codigo, label: c.codigo }))
-                ]}
+                valorDe={c => c.codigo}
+                emptyOption={{ value: '', label: 'Seleccionar media...' }}
+                toOption={c => ({ value: c.codigo, label: c.codigo })}
                 triggerClassName="text-xs font-mono font-medium"
                 placeholder="Seleccionar media..."
               />
