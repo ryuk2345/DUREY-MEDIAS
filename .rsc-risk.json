@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "rules": [
+    { "class": "auth", "tier": 2,
+      "path": "^(lib/auth/|proxy\\.ts$|middleware\\.ts$|app/api/auth/|app/api/usuarios|app/api/diagnostico/|app/\\(auth\\)/)",
+      "because": "Login, sesion y permisos: un error deja entrar a quien no debe o deja fuera a la planta (constitucion 17, REVIEW.md)." },
+    { "class": "auth", "tier": 2,
+      "path": "^lib/utils/index\\.ts$", "added": "MODULOS_POR_ROL|ROLES_LABELS|^\\s*[a-z_]+:\\s*\\[\\s*'",
+      "because": "Roles y modulos por rol: decide quien ve cada pantalla." },
+    { "class": "auth", "tier": 2,
+      "path": "^lib/utils/index\\.ts$", "removed": "MODULOS_POR_ROL|ROLES_LABELS|^\\s*[a-z_]+:\\s*\\[\\s*'",
+      "because": "Roles y modulos por rol: decide quien ve cada pantalla." },
+    { "class": "money", "tier": 2,
+      "path": "^(lib/domain/finance\\.ts$|app/dashboard/(ventas|egresos|balance)/)",
+      "because": "Caja, cobros y pagos: un error descuadra la caja o el balance (REVIEW.md)." },
+    { "class": "money", "tier": 2,
+      "path": "^app/dashboard/materia-prima/",
+      "added": "registrar_pago_proveedor|reprogramar_cuota_compra|cuotas_compras|pagos_proveedores|cajas_diarias",
+      "because": "Pagos y cuotas a proveedores: salidas de caja." },
+    { "class": "money", "tier": 2,
+      "path": "^app/dashboard/materia-prima/",
+      "removed": "registrar_pago_proveedor|reprogramar_cuota_compra|cuotas_compras|pagos_proveedores|cajas_diarias",
+      "because": "Pagos y cuotas a proveedores: salidas de caja." }
+  ]
+}
