@@ -208,3 +208,27 @@ describe('mock: vista de historia', () => {
     expect(h.find(e => e.tipo === 'repuesto')).toMatchObject({ detalle: 'Aceite', cantidad: 2, costo: 16 })
   })
 })
+
+describe('mock: lectura por páginas y tope de mano de obra', () => {
+  it('range(desde, hasta) devuelve esas filas, con el orden aplicado antes', async () => {
+    const { createMockClient } = await import('@/lib/supabase/mockDb')
+    const g = globalThis as unknown as { localStorage?: Storage }
+    if (!g.localStorage) return // la base mock del navegador no está disponible en este entorno
+    const cliente = createMockClient()
+    const a = await cliente.from('usuarios').select('*').order('id', { ascending: true }).range(0, 1)
+    const b = await cliente.from('usuarios').select('*').order('id', { ascending: true }).range(2, 3)
+    expect(a.data).toHaveLength(2)
+    if ((b.data ?? []).length) expect(b.data![0].id).not.toBe(a.data![0].id)
+  })
+
+  it('1 000 000 exacto se acepta', () => {
+    const db: Db = {
+      maquinas: [{ id: 'q1', codigo: 'T01', estado: 'activa' }],
+      planes_mantenimiento: [{ id: 'p1', maquina_id: 'q1', tarea: 'X', frecuencia_dias: 7, fecha_inicio: '2026-01-01', ultima_fecha: null, activo: true }],
+      mecanicos: [{ id: 'm1', nombre: 'Juan', apellido: 'Pérez', telefono: '9', activo: true }],
+      averias_maquinas: [],
+    }
+    const ini = rpc(db, 'iniciar_mantenimiento_preventivo', { p_plan_id: 'p1', p_mecanico_id: 'm1' })
+    expect(rpc(db, 'terminar_mantenimiento_preventivo', { p_mantenimiento_id: ini.data, p_nota: '', p_costo_mano_obra: 1000000 }).error).toBeNull()
+  })
+})

@@ -46,8 +46,9 @@ export default function HistoriaMaquinaPage() {
       const todos: EventoHistoria[] = []
       for (let desdeFila = 0; ; desdeFila += PAGINA) {
         const hist = await supabase.from('vista_historia_maquina').select('*').eq('maquina_id', id).gte('fecha', desde).lte('fecha', hasta)
-          .order('momento', { ascending: true }).range(desdeFila, desdeFila + PAGINA - 1)
-        if (hist.error) { if (vigente) toast.error(`Error al cargar la historia: ${hist.error.message}`); break }
+          .order('momento', { ascending: true }).order('evento_id', { ascending: true }).range(desdeFila, desdeFila + PAGINA - 1)
+        // Si falla una página no se muestra una historia a medias
+        if (hist.error) { if (vigente) toast.error(`Error al cargar la historia: ${hist.error.message}`); todos.length = 0; break }
         todos.push(...((hist.data ?? []) as EventoHistoria[]))
         if ((hist.data ?? []).length < PAGINA) break
       }

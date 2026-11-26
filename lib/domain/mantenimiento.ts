@@ -69,6 +69,7 @@ export type TipoEvento = 'produccion' | 'falla' | 'reparacion' | 'repuesto' | 'p
 
 /** Fila de vista_historia_maquina (migración 031). */
 export type EventoHistoria = {
+  evento_id?: string
   maquina_id: string
   fecha: string
   momento: string | null

@@ -137,6 +137,16 @@ SELECT pg_temp.verificar((SELECT count(*) FROM egresos_adicionales) = (SELECT n 
 SELECT pg_temp.debe_fallar($$SELECT terminar_mantenimiento_preventivo((SELECT id FROM t_m), 'ok', -1)$$, 'negativ');
 SELECT pg_temp.debe_fallar($$SELECT terminar_mantenimiento_preventivo((SELECT id FROM t_m), 'ok', 'NaN')$$, 'no es un número');
 SELECT pg_temp.debe_fallar($$SELECT terminar_mantenimiento_preventivo((SELECT id FROM t_m), 'ok', 1000000.01)$$, '1 000 000');
+-- Exactamente el tope se acepta (en una subtransacción que se deshace)
+DO $$
+BEGIN
+  BEGIN
+    PERFORM terminar_mantenimiento_preventivo((SELECT id FROM t_m), 'tope', 1000000);
+    RAISE EXCEPTION 'tope_ok';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'tope_ok' THEN RAISE EXCEPTION 'FALLO: 1 000 000 exacto debería aceptarse (%)', SQLERRM; END IF;
+  END;
+END $$;
 SELECT terminar_mantenimiento_preventivo((SELECT id FROM t_m), 'Lubricado y ajustado', 40);
 SELECT pg_temp.verificar((SELECT estado = 'terminado' AND costo_mano_obra = 40 AND costo_repuestos = 16 AND fecha_fin IS NOT NULL
   FROM mantenimientos_preventivos WHERE id = (SELECT id FROM t_m)), 'terminado: mano de obra 40 y repuestos 2 × 8 = 16');
@@ -177,8 +187,9 @@ INSERT INTO lotes_remallado (id, catalogo_media_id, maquina_remalladora_id, esta
   ('00000000-0000-0000-0000-0000000031b7', '00000000-0000-0000-0000-0000000031c1', '00000000-0000-0000-0000-0000000031d5', 'completado');
 INSERT INTO reportes_remallado (lote_id, remalladora_id, maquina_id, docenas_remalladas, docenas_restantes, fecha) VALUES
   ('00000000-0000-0000-0000-0000000031b7', '00000000-0000-0000-0000-0000000031a1', '00000000-0000-0000-0000-0000000031d5', 12, 0, CURRENT_DATE);
+-- El repuesto lo puso otro mecánico (Luis), distinto del asignado a la falla (Juan)
 INSERT INTO averia_repuestos (averia_id, repuesto_id, cantidad, costo_unitario, mecanico_id) VALUES
-  ('00000000-0000-0000-0000-0000000031ab', '00000000-0000-0000-0000-0000000031b1', 1, 8, '00000000-0000-0000-0000-0000000031f1');
+  ('00000000-0000-0000-0000-0000000031ab', '00000000-0000-0000-0000-0000000031b1', 1, 8, '00000000-0000-0000-0000-0000000031f2');
 
 SET LOCAL ROLE authenticated;
 CREATE TEMP TABLE t_h ON COMMIT DROP AS SELECT * FROM vista_historia_maquina WHERE maquina_id = '00000000-0000-0000-0000-0000000031d1';
@@ -194,8 +205,10 @@ SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'preventivo'
   'historia: preventivo con tarea, mano de obra y mecánico');
 SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'repuesto' AND detalle = 'Aceite 031' AND cantidad = 2 AND costo = 16),
   'historia: repuesto usado en el preventivo');
-SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'repuesto' AND cantidad = 1 AND costo = 8 AND mecanico = 'Juan Pérez'),
-  'historia: repuesto usado en una falla');
+SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'repuesto' AND cantidad = 1 AND costo = 8 AND mecanico = 'Luis Baja'),
+  'historia: repuesto usado en una falla, con el mecánico que lo usó');
+SELECT pg_temp.verificar((SELECT count(*) = count(DISTINCT evento_id) AND bool_and(evento_id IS NOT NULL) FROM vista_historia_maquina),
+  'cada evento tiene un identificador único (orden estable por páginas)');
 SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h5 WHERE tipo = 'produccion' AND cantidad = 12 AND persona = 'Tejedor 031' AND detalle = 'M031'),
   'historia: producción de remallado en la máquina remalladora');
 SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM t_h WHERE maquina_id <> '00000000-0000-0000-0000-0000000031d1'), 'historia filtrada por máquina');

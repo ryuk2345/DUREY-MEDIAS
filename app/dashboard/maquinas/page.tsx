@@ -324,6 +324,15 @@ export default function MaquinasPage() {
     }
 
     try {
+      // 0. Con historial de mantenimiento preventivo no se borra (031): se avisa antes de tocar nada
+      const { count: conHistorial, error: errHist } = await supabase.from('mantenimientos_preventivos')
+        .select('id', { count: 'exact', head: true }).eq('maquina_id', m.id)
+      if (errHist) { toast.error(`No se pudo comprobar el historial de ${m.codigo}: ${errHist.message}`); return }
+      if ((conHistorial ?? 0) > 0) {
+        toast.error(`No se puede eliminar ${m.codigo}: tiene historial de mantenimiento. Cámbiala a estado "inactiva" en su lugar.`)
+        return
+      }
+
       // 1. Limpiar posibles asignaciones vinculadas en disenos_maquinas
       const { error: errDisenos } = await supabase.from('disenos_maquinas').delete().eq('maquina_id', m.id)
       if (errDisenos) {
@@ -343,7 +352,9 @@ export default function MaquinasPage() {
       }
 
       if (delErr) {
-        toast.error('Error al eliminar máquina: ' + delErr.message)
+        toast.error(delErr.code === '23503'
+          ? `No se puede eliminar ${m.codigo}: tiene historial (fallas, producción o mantenimientos). Cámbiala a estado "inactiva" en su lugar.`
+          : 'Error al eliminar máquina: ' + delErr.message)
         return
       }
 
