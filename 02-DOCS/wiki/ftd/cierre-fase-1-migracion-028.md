@@ -22,7 +22,7 @@ Fuera: el aviso "authenticated puede ejecutar funciones SECURITY DEFINER" (es lo
 - [x] T1 Documento de Fase 1 actualizado — prueba: diff del documento.
 - [x] T2 Test SQL de la 028 escrito antes de la migración — prueba: falla sin la 028 ("vista_stock_medias con security_invoker").
 - [x] T3 Migración 028 — prueba: test 028 pasa en Postgres local; ejecuta las 4 funciones afectadas como `authenticated` y compara el stock de la vista con el del dueño.
-- [x] T4 Reversión — prueba: `probar_migraciones.sh` ejecuta `revertir_028.sql`, comprueba que el test de la 028 falla, reaplica la 028 y el test vuelve a pasar.
+- [x] T4 Reversión — prueba: `probar_migraciones.sh` guarda una huella del esquema public antes de la 028, ejecuta `revertir_028.sql` y exige la misma huella exacta; luego reaplica la 028 y su test vuelve a pasar.
 - [x] T5 Controles: npm test, Playwright, build, `rsc risk` (nivel 2: spec + panel de 3 revisores).
 - [ ] T6 Tras fusionar: aplicar la 028 en la base real, verificar con SQL y advisors.
 
@@ -33,7 +33,8 @@ Fuera: el aviso "authenticated puede ejecutar funciones SECURITY DEFINER" (es lo
 - `npm test` 184/184; `npm run build` compila; `npm run test:browser` 38/38 (sobre 7d08b4f).
 - `rsc risk`: nivel 2 (migración) -> spec [cierre-fase-1-migracion-028](../sdd/specs/cierre-fase-1-migracion-028.md), `rsc spec gate` 3/3.
 - Panel de 3 revisores sobre 7d08b4f (correctitud, seguridad, tests): 0 bloqueos. Corregido: el test exige `public, pg_temp` exacto en las 5 funciones (mataba un mutante `pg_temp, public` que sobrevivía); la reversión ahora se prueba en el script local; el script solo apunta a 127.0.0.1 y distingue salida 2 (no montó la base) de 1 (tests). Descartado con evidencia: en la base real `authenticated` no puede crear objetos en `public` (`has_schema_privilege` = false), así que `public, pg_temp` basta. Registrado en el ledger.
-- Tras correcciones: `probar_migraciones.sh` 7 tests SQL en verde + "PASA reversión 028".
+- Segunda ronda del panel sobre cbc639c: 0 bloqueos. Tests encontró que una reversión parcial pasaba (bastaba con que el test fallara una vez). Corregido: huella exacta del esquema antes y después; 5 reversiones rotas (sin funciones, sin vista, sin las de diseños/remallado, sin `_siguiente_codigo`, vacía) dan FALLA y salida 1. Seguridad: puerto y nombre de base validados; PGHOSTADDR, PGSERVICE y similares anulados. Registrado en el ledger.
+- Tras correcciones: `probar_migraciones.sh` 7 tests SQL en verde + "PASA reversión 028 (el esquema vuelve exactamente al de antes)".
 - Regla 2 de AGENTS.md: no cambian tipos TS, mock ni datos (la vista devuelve lo mismo).
 
 ## Next
