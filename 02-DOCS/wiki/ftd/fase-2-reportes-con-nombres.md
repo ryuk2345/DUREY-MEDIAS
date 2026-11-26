@@ -1,7 +1,9 @@
 ---
 author: ryuk2345
 branch: fase-2/reportes-con-nombres
-status: in-progress
+status: done
+merged: 2026-11-25
+pr: #16
 ---
 # Fase 2 — Reportes con nombres
 
@@ -39,4 +41,4 @@ Fuera (decidido por el usuario 2026-11-25): operario por máquina y turno → Fa
 - Regla 2 de AGENTS.md: sin cambios de modelo de datos. Regla 3: la lógica de las filas vive en `lib/domain/reportes.ts`; la fecha, en `formatearFecha`.
 
 ## Next
-PR y fusión. Después: Fase 3 (Repuestos y mecánicos, ASDD; antes ratificar la constitución).
+Fusionado en main el 2026-11-25 (dc0f6e5).
