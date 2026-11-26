@@ -38,12 +38,13 @@ export default function AdminPage() {
     const hoy = new Date()
     const inicioMes = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`
 
-    const [cobros, cuotasPend, reparaciones, comprasMes, egresosMes] = await Promise.all([
+    const [cobros, cuotasPend, reparaciones, comprasMes, egresosMes, preventivosMes] = await Promise.all([
       supabase.from('cobros').select('monto').gte('fecha', inicioMes).eq('estado_validacion', 'validado'),
       supabase.from('cuotas').select('monto').neq('estado', 'pagada'),
       supabase.from('reparaciones').select('costo_mano_obra').gte('fecha_reparacion', inicioMes),
       supabase.from('compras_materia_prima').select('costo_total').eq('estado', 'recibida').gte('fecha', inicioMes),
       supabase.from('egresos_adicionales').select('monto').gte('fecha', inicioMes),
+      supabase.from('mantenimientos_preventivos').select('costo_mano_obra').eq('estado', 'terminado').gte('fecha_fin', inicioMes),
     ])
 
     if (cobros.error) toast.error(`Error al cargar cobros del mes: ${cobros.error.message}`)
@@ -55,7 +56,8 @@ export default function AdminPage() {
     // Number(): los NUMERIC de Postgres llegan como texto y "+" los concatenaría
     const ingresosRecaudados = (cobros.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
     const cuentasCobrar = (cuotasPend.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
-    const gastosMantenimiento = gastoMantenimiento(reparaciones.data ?? [])
+    if (preventivosMes.error) toast.error(`Error al cargar mantenimientos preventivos: ${preventivosMes.error.message}`)
+    const gastosMantenimiento = gastoMantenimiento(reparaciones.data ?? [], preventivosMes.data ?? [])
     const comprasMateriaPrima = (comprasMes.data ?? []).reduce((s, c) => s + Number(c.costo_total ?? 0), 0)
     const egresosAdicionales = (egresosMes.data ?? []).reduce((s, e) => s + Number(e.monto ?? 0), 0)
 
@@ -101,17 +103,18 @@ export default function AdminPage() {
     }
 
     const promesasMeses = mesesFiltro.map(async (m) => {
-      const [cobRes, repRes, compRes, egrRes] = await Promise.all([
+      const [cobRes, repRes, compRes, egrRes, prevRes] = await Promise.all([
         supabase.from('cobros').select('monto').eq('estado_validacion', 'validado').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
         supabase.from('reparaciones').select('costo_mano_obra').gte('fecha_reparacion', m.inicio).lt('fecha_reparacion', m.finSiguiente),
         supabase.from('compras_materia_prima').select('costo_total').eq('estado', 'recibida').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
         supabase.from('egresos_adicionales').select('monto').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
+        supabase.from('mantenimientos_preventivos').select('costo_mano_obra').eq('estado', 'terminado').gte('fecha_fin', m.inicio).lt('fecha_fin', m.finSiguiente),
       ])
 
       // Misma definición que Balance: dinero cobrado − (compras recibidas + reparaciones + egresos).
       // El costo estándar de producción no se suma: duplicaría lo ya pagado en materia prima.
       const ingresos = (cobRes.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
-      const costManto = gastoMantenimiento(repRes.data ?? [])
+      const costManto = gastoMantenimiento(repRes.data ?? [], prevRes.data ?? [])
       const costMat = (compRes.data ?? []).reduce((s, c) => s + Number(c.costo_total ?? 0), 0)
       const costEgr = (egrRes.data ?? []).reduce((s, e) => s + Number(e.monto ?? 0), 0)
 

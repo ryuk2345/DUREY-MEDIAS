@@ -10,6 +10,7 @@ import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
 import { costoRepuestosUsados, nombreMecanico } from '@/lib/domain/repuestos'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
+import PreventivoTab from '@/components/mantenimiento/PreventivoTab'
 
 
 interface Maquina { id: string; codigo: string; tipo: string; estado: string }
@@ -35,7 +36,7 @@ export default function MantenimientoPage() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([])
   const [averias, setAverias] = useState<Averia[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'pendientes' | 'timeline' | 'ranking'>('pendientes')
+  const [activeTab, setActiveTab] = useState<'pendientes' | 'preventivo' | 'timeline' | 'ranking'>('pendientes')
   const [showAveriaModal, setShowAveriaModal] = useState(false)
   const [showRepararModal, setShowRepararModal] = useState(false)
   const [averiaSeleccionada, setAveriaSeleccionada] = useState<Averia | null>(null)
@@ -277,12 +278,13 @@ export default function MantenimientoPage() {
       <div className="flex border-b border-white/[0.06]">
         {[
           { id: 'pendientes', label: 'Pendientes', icon: <AlertTriangle className="w-4 h-4" /> },
+          { id: 'preventivo', label: 'Preventivo', icon: <Wrench className="w-4 h-4" /> },
           { id: 'timeline', label: 'Timeline', icon: <Clock className="w-4 h-4" /> },
           { id: 'ranking', label: 'Ranking de Gastos', icon: <TrendingUp className="w-4 h-4" /> },
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as 'pendientes' | 'timeline' | 'ranking')}
+            onClick={() => setActiveTab(tab.id as 'pendientes' | 'preventivo' | 'timeline' | 'ranking')}
             className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.id ? 'border-amber-400 text-amber-400' : 'border-transparent text-slate-500 hover:text-slate-300'
             }`}
@@ -502,6 +504,8 @@ export default function MantenimientoPage() {
               })()}
             </div>
           )}
+
+          {activeTab === 'preventivo' && <PreventivoTab onCambio={cargarDatos} />}
 
           {activeTab === 'ranking' && (
             <div className="glass rounded-2xl p-6">

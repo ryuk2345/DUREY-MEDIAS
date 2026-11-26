@@ -229,7 +229,10 @@ export default function MateriaPrimaPage() {
       setPagosProveedores((pagosRes.data ?? []) as unknown as PagoProveedor[])
       
       const totalRecaudadoVentas = (ventasRes.data ?? []).reduce((s, c) => s + c.monto, 0)
-      const totalReparaciones = gastoMantenimiento(repairsRes.data ?? [])
+      // Fase 4: la mano de obra de los preventivos terminados también es gasto de mantenimiento
+      const prevRes = await supabase.from('mantenimientos_preventivos').select('costo_mano_obra').eq('estado', 'terminado')
+      if (prevRes.error) toast.error(`Error al cargar mantenimientos preventivos: ${prevRes.error.message}`)
+      const totalReparaciones = gastoMantenimiento(repairsRes.data ?? [], prevRes.data ?? [])
       setVentasTotal(totalRecaudadoVentas)
       setRepairsTotal(totalReparaciones)
 

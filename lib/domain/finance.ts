@@ -135,6 +135,10 @@ export type MetodoPagoProveedor = typeof METODOS_PAGO_PROVEEDOR[number]['value']
  * decisión del dueño 2026-11-25); sumar `costo_total` los contaría dos veces.
  * Única definición: la usan Panel, Balance, Egresos y Materia Prima.
  */
-export function gastoMantenimiento(reparaciones: { costo_mano_obra?: number | string | null }[]): number {
-  return Math.round(reparaciones.reduce((s, r) => s + (Number(r.costo_mano_obra) || 0), 0) * 100) / 100
+export function gastoMantenimiento(
+  reparaciones: { costo_mano_obra?: number | string | null }[],
+  preventivosTerminados: { costo_mano_obra?: number | string | null }[] = [],
+): number {
+  // Fase 4: la mano de obra de los mantenimientos preventivos también es gasto de mantenimiento
+  return Math.round([...reparaciones, ...preventivosTerminados].reduce((s, r) => s + (Number(r.costo_mano_obra) || 0), 0) * 100) / 100
 }

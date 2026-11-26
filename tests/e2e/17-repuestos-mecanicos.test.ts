@@ -9,7 +9,7 @@
  *   - El rol técnico ya no existe.
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import { filtrarRepuestos, totalCompraRepuesto, costoRepuestosUsados, nombreMecanico } from '@/lib/domain/repuestos'
+import { filtrarRepuestos, totalCompraRepuesto, costoRepuestosUsados, nombreMecanico, redondearCentimos } from '@/lib/domain/repuestos'
 import { ejecutarRpcMantenimiento } from '@/lib/supabase/mockRpcMantenimiento'
 import { ejecutarRpcMateriaPrima } from '@/lib/supabase/mockRpcMateriaPrima'
 import { MODULOS_POR_ROL, ROLES_LABELS } from '@/lib/utils'
@@ -42,6 +42,14 @@ describe('lib/domain/repuestos', () => {
     expect(totalCompraRepuesto(1, 2.135)).toBe(2.14)
     expect(totalCompraRepuesto(1, 4.015)).toBe(4.02)
     expect(totalCompraRepuesto(3, 1999.995)).toBe(6000)
+  })
+
+  it('redondearCentimos: números en notación científica y negativos diminutos', () => {
+    expect(redondearCentimos(1e-7)).toBe(0)
+    expect(Object.is(redondearCentimos(-0.001), 0)).toBe(true) // 0, no -0
+    expect(redondearCentimos(1e21)).toBe(1e21)
+    expect(redondearCentimos(5e-324)).toBe(0)
+    expect(redondearCentimos(-2.135)).toBe(-2.14)
     expect(totalCompraRepuesto(2, 0)).toBe(0)
   })
 
@@ -141,6 +149,13 @@ describe('mock: compra de repuestos (AC1)', () => {
     expect(r.data).toMatchObject({ descontado_de_caja: false, caja_id: null })
     rpcMant(db, 'registrar_compra_repuesto', { p_repuesto_id: 'r1', p_cantidad: 1, p_precio_unitario: 3, p_metodo_pago: 'efectivo', p_de_caja: false })
     expect(db.compras_repuestos.at(-1)).toMatchObject({ de_caja: false, caja_id: null })
+    expect(db.cajas_diarias[0].pagos_efectivo).toBe(0)
+  })
+
+  it('una caja cerrada de hoy nunca se toca', () => {
+    db.cajas_diarias = [{ id: 'cerrada', fecha: hoy(), estado: 'cerrada_cuadrada', asesora_id: null, pagos_efectivo: 0, created_at: '0' }]
+    const r = rpcMant(db, 'registrar_compra_repuesto', { p_repuesto_id: 'r1', p_cantidad: 1, p_precio_unitario: 7, p_metodo_pago: 'efectivo', p_de_caja: true })
+    expect(r.data).toMatchObject({ descontado_de_caja: false })
     expect(db.cajas_diarias[0].pagos_efectivo).toBe(0)
   })
 

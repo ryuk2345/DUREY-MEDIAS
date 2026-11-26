@@ -7,6 +7,7 @@ import { ejecutarRpcProcesos, RPC_PROCESOS } from './mockRpcProcesos'
 import { ejecutarRpcMateriaPrima, RPC_MATERIA_PRIMA } from './mockRpcMateriaPrima'
 import { ejecutarRpcLogistica, RPC_LOGISTICA } from './mockRpcLogistica'
 import { ejecutarRpcMantenimiento, RPC_MANTENIMIENTO } from './mockRpcMantenimiento'
+import { construirHistoriaMock } from './mockHistoria'
 
 const SEMILLAS = {
   usuarios: [
@@ -161,6 +162,10 @@ const SEMILLAS = {
   ],
   compras_repuestos: [],
   averia_repuestos: [],
+  // Fase 4 (migración 031)
+  planes_mantenimiento: [],
+  mantenimientos_preventivos: [],
+  mantenimiento_repuestos: [],
   guias_remision: [],
   movimientos_stock: [],
   disenos: [],
@@ -322,6 +327,7 @@ class MockQueryBuilder {
         stock_docenas
       }));
     }
+    if (this.tableName === 'vista_historia_maquina') return construirHistoriaMock(db);
     return db[this.tableName] || [];
   }
 
@@ -335,6 +341,7 @@ class MockQueryBuilder {
     const self = this;
     let filters: ((item: any) => boolean)[] = [];
     let limitCount: number | null = null;
+    let rangeDesde: number | null = null;
     let orderConfig: { column: string; ascending: boolean } | null = null;
 
     const queryObj = {
@@ -391,6 +398,12 @@ class MockQueryBuilder {
         limitCount = count;
         return queryObj;
       },
+      // Igual que supabase-js: filas desde..hasta, ambos incluidos
+      range(desde: number, hasta: number) {
+        rangeDesde = desde;
+        limitCount = hasta - desde + 1;
+        return queryObj;
+      },
       // Terminadores
       async single() {
         const data = await self.getTableData();
@@ -437,7 +450,7 @@ class MockQueryBuilder {
 
         // Aplicar límite
         if (limitCount !== null) {
-          result = result.slice(0, limitCount);
+          result = result.slice(rangeDesde ?? 0, (rangeDesde ?? 0) + limitCount);
         }
 
         // Mock resolver relaciones (Join simulation)
@@ -517,6 +530,18 @@ class MockQueryBuilder {
               } : null
             };
           });
+        } else if (self.tableName === 'planes_mantenimiento') {
+          result = result.map(p => ({
+            ...p,
+            maquina: (db.maquinas || []).find((m: { id: string }) => m.id === p.maquina_id) || null
+          }));
+        } else if (self.tableName === 'mantenimientos_preventivos') {
+          result = result.map(m => ({
+            ...m,
+            mecanico: (db.mecanicos || []).find((x: { id: string }) => x.id === m.mecanico_id) || null,
+            mantenimiento_repuestos: (db.mantenimiento_repuestos || []).filter((u: { mantenimiento_id: string }) => u.mantenimiento_id === m.id)
+              .map((u: { repuesto_id: string }) => ({ ...u, repuesto: (db.repuestos || []).find((r: { id: string }) => r.id === u.repuesto_id) || null }))
+          }));
         } else if (self.tableName === 'compras_repuestos') {
           result = result.map(c => ({
             ...c,
