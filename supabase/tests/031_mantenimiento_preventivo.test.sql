@@ -33,7 +33,7 @@ SELECT pg_temp.verificar((SELECT bool_and(relrowsecurity) FROM pg_class WHERE oi
   ('public.planes_mantenimiento'::regclass, 'public.mantenimientos_preventivos'::regclass, 'public.mantenimiento_repuestos'::regclass)), 'tablas nuevas con RLS');
 SELECT pg_temp.verificar((SELECT count(*) = 3 FROM pg_policies WHERE schemaname = 'public' AND policyname = 'durey_usuarios_con_sesion'
   AND tablename IN ('planes_mantenimiento', 'mantenimientos_preventivos', 'mantenimiento_repuestos')), 'tablas nuevas con la política de sesión');
-SELECT pg_temp.verificar(pg_temp.permisos('planes_mantenimiento', 'authenticated') = 'DELETE,INSERT,SELECT,UPDATE', 'planes: leer, crear, cambiar y borrar');
+SELECT pg_temp.verificar(pg_temp.permisos('planes_mantenimiento', 'authenticated') = 'INSERT,SELECT,UPDATE', 'planes: leer, crear y cambiar (se desactivan, no se borran)');
 SELECT pg_temp.verificar(pg_temp.permisos(t, 'authenticated') = 'SELECT', t || ': solo lectura (' || pg_temp.permisos(t, 'authenticated') || ')')
   FROM unnest(ARRAY['mantenimientos_preventivos', 'mantenimiento_repuestos', 'vista_historia_maquina']) AS t;
 SELECT pg_temp.verificar(pg_temp.permisos(t, 'anon') = '-', t || ': nada para anon')
@@ -56,8 +56,12 @@ INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
 INSERT INTO maquinas (id, codigo, tipo, estado) VALUES
   ('00000000-0000-0000-0000-0000000031d1', 'T3101', 'tejedora', 'activa'),
   ('00000000-0000-0000-0000-0000000031d2', 'T3102', 'tejedora', 'ocupada'),
-  ('00000000-0000-0000-0000-0000000031d3', 'T3103', 'tejedora', 'standby');
-INSERT INTO mecanicos (id, nombre, apellido, telefono) VALUES ('00000000-0000-0000-0000-0000000031f1', 'Juan', 'Pérez', '987');
+  ('00000000-0000-0000-0000-0000000031d3', 'T3103', 'tejedora', 'standby'),
+  ('00000000-0000-0000-0000-0000000031d4', 'T3104', 'tejedora', 'malograda'),
+  ('00000000-0000-0000-0000-0000000031d5', 'R3105', 'remalladora', 'activa');
+INSERT INTO mecanicos (id, nombre, apellido, telefono, activo) VALUES
+  ('00000000-0000-0000-0000-0000000031f1', 'Juan', 'Pérez', '987', true),
+  ('00000000-0000-0000-0000-0000000031f2', 'Luis', 'Baja', '988', false);
 INSERT INTO repuestos (id, nombre, stock_actual, costo_unitario) VALUES ('00000000-0000-0000-0000-0000000031b1', 'Aceite 031', 5, 8);
 INSERT INTO catalogo_medias (id, codigo, modelo, talla, diseno_color, publico) VALUES ('00000000-0000-0000-0000-0000000031c1', 'M031', 'Mod', 'U', 'Negro', 'adulto');
 
@@ -70,12 +74,17 @@ INSERT INTO planes_mantenimiento (id, maquina_id, tarea, frecuencia_dias, fecha_
   ('00000000-0000-0000-0000-0000000031e1', '00000000-0000-0000-0000-0000000031d1', 'Lubricar cilindro', 15, CURRENT_DATE - 20),
   ('00000000-0000-0000-0000-0000000031e2', '00000000-0000-0000-0000-0000000031d2', 'Limpieza', 7, CURRENT_DATE - 10),
   ('00000000-0000-0000-0000-0000000031e3', '00000000-0000-0000-0000-0000000031d3', 'Agujas', 30, CURRENT_DATE - 40),
-  ('00000000-0000-0000-0000-0000000031e4', '00000000-0000-0000-0000-0000000031d1', 'Otra tarea', 30, CURRENT_DATE);
+  ('00000000-0000-0000-0000-0000000031e4', '00000000-0000-0000-0000-0000000031d1', 'Otra tarea', 30, CURRENT_DATE),
+  ('00000000-0000-0000-0000-0000000031e5', '00000000-0000-0000-0000-0000000031d4', 'En falla', 30, CURRENT_DATE);
 
 -- ── Iniciar ────────────────────────────────────────────────────────────────
 SELECT pg_temp.debe_fallar($$SELECT iniciar_mantenimiento_preventivo('00000000-0000-0000-0000-0000000031e1', NULL)$$, 'mecánico');
 SELECT pg_temp.debe_fallar($$SELECT iniciar_mantenimiento_preventivo('00000000-0000-0000-0000-0000000031e2', '00000000-0000-0000-0000-0000000031f1')$$, 'ocupada');
 SELECT pg_temp.verificar((SELECT estado = 'ocupada' FROM maquinas WHERE id = '00000000-0000-0000-0000-0000000031d2'), 'la máquina ocupada sigue ocupada');
+-- Malograda sin falla abierta (estado puesto a mano): tampoco
+SELECT pg_temp.debe_fallar($$SELECT iniciar_mantenimiento_preventivo('00000000-0000-0000-0000-0000000031e5', '00000000-0000-0000-0000-0000000031f1')$$, 'malograda');
+-- Mecánico dado de baja: no
+SELECT pg_temp.debe_fallar($$SELECT iniciar_mantenimiento_preventivo('00000000-0000-0000-0000-0000000031e1', '00000000-0000-0000-0000-0000000031f2')$$, 'no está activo');
 -- Falla abierta: no se inicia
 INSERT INTO averias_maquinas (id, maquina_id, estado, descripcion_operador) VALUES
   ('00000000-0000-0000-0000-0000000031aa', '00000000-0000-0000-0000-0000000031d3', 'pendiente', 'x');
@@ -126,15 +135,31 @@ SELECT pg_temp.verificar((SELECT count(*) FROM egresos_adicionales) = (SELECT n 
 
 -- ── Terminar ───────────────────────────────────────────────────────────────
 SELECT pg_temp.debe_fallar($$SELECT terminar_mantenimiento_preventivo((SELECT id FROM t_m), 'ok', -1)$$, 'negativ');
+SELECT pg_temp.debe_fallar($$SELECT terminar_mantenimiento_preventivo((SELECT id FROM t_m), 'ok', 'NaN')$$, 'no es un número');
+SELECT pg_temp.debe_fallar($$SELECT terminar_mantenimiento_preventivo((SELECT id FROM t_m), 'ok', 1000000.01)$$, '1 000 000');
 SELECT terminar_mantenimiento_preventivo((SELECT id FROM t_m), 'Lubricado y ajustado', 40);
 SELECT pg_temp.verificar((SELECT estado = 'terminado' AND costo_mano_obra = 40 AND costo_repuestos = 16 AND fecha_fin IS NOT NULL
   FROM mantenimientos_preventivos WHERE id = (SELECT id FROM t_m)), 'terminado: mano de obra 40 y repuestos 2 × 8 = 16');
-SELECT pg_temp.verificar((SELECT ultima_fecha = CURRENT_DATE FROM planes_mantenimiento WHERE id = '00000000-0000-0000-0000-0000000031e1'),
-  'el plan cuenta desde hoy');
+SELECT pg_temp.verificar((SELECT ultima_fecha = (NOW() AT TIME ZONE 'America/Lima')::date FROM planes_mantenimiento WHERE id = '00000000-0000-0000-0000-0000000031e1'),
+  'el plan cuenta desde hoy (día de Lima)');
 SELECT pg_temp.verificar((SELECT estado = 'activa' AND detalle_estado = 'OPERATIVA' FROM maquinas WHERE id = '00000000-0000-0000-0000-0000000031d1'),
   'la máquina vuelve a activa');
 SELECT pg_temp.debe_fallar($$SELECT terminar_mantenimiento_preventivo((SELECT id FROM t_m), 'otra vez', 40)$$, 'en curso');
 SELECT pg_temp.debe_fallar($$SELECT usar_repuesto_en_mantenimiento((SELECT id FROM t_m), '00000000-0000-0000-0000-0000000031b1', 1)$$, 'en curso');
+SELECT pg_temp.debe_fallar($$SELECT quitar_repuesto_de_mantenimiento((SELECT id FROM mantenimiento_repuestos WHERE mantenimiento_id = (SELECT id FROM t_m)))$$, 'en curso');
+SELECT pg_temp.verificar((SELECT stock_actual = 3 FROM repuestos WHERE id = '00000000-0000-0000-0000-0000000031b1'), 'tras terminar, el stock no vuelve');
+-- Un plan con historial no se borra (ni con sesión, ni en cascada)
+DO $$
+BEGIN
+  SET LOCAL ROLE authenticated;
+  BEGIN
+    DELETE FROM planes_mantenimiento WHERE id = '00000000-0000-0000-0000-0000000031e4';
+    RAISE EXCEPTION 'FALLO: con sesión se borró un plan';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  RESET ROLE;
+END $$;
+SELECT pg_temp.debe_fallar($$DELETE FROM planes_mantenimiento WHERE id = '00000000-0000-0000-0000-0000000031e1'$$, 'foreign key');
 
 -- ── Historia clínica ───────────────────────────────────────────────────────
 INSERT INTO turnos_produccion (id, tejedor_id, fecha, horario, duracion_horas, estado) VALUES
@@ -147,8 +172,17 @@ INSERT INTO averias_maquinas (id, maquina_id, estado, descripcion_operador, fech
 INSERT INTO reparaciones (averia_id, mecanico_id, descripcion_tecnico, costo_repuestos, costo_mano_obra) VALUES
   ('00000000-0000-0000-0000-0000000031ab', '00000000-0000-0000-0000-0000000031f1', 'Cambio de aguja', 12, 20);
 
+-- Remallado (máquina remalladora) y repuesto usado en una falla
+INSERT INTO lotes_remallado (id, catalogo_media_id, maquina_remalladora_id, estado) VALUES
+  ('00000000-0000-0000-0000-0000000031b7', '00000000-0000-0000-0000-0000000031c1', '00000000-0000-0000-0000-0000000031d5', 'completado');
+INSERT INTO reportes_remallado (lote_id, remalladora_id, maquina_id, docenas_remalladas, docenas_restantes, fecha) VALUES
+  ('00000000-0000-0000-0000-0000000031b7', '00000000-0000-0000-0000-0000000031a1', '00000000-0000-0000-0000-0000000031d5', 12, 0, CURRENT_DATE);
+INSERT INTO averia_repuestos (averia_id, repuesto_id, cantidad, costo_unitario, mecanico_id) VALUES
+  ('00000000-0000-0000-0000-0000000031ab', '00000000-0000-0000-0000-0000000031b1', 1, 8, '00000000-0000-0000-0000-0000000031f1');
+
 SET LOCAL ROLE authenticated;
 CREATE TEMP TABLE t_h ON COMMIT DROP AS SELECT * FROM vista_historia_maquina WHERE maquina_id = '00000000-0000-0000-0000-0000000031d1';
+CREATE TEMP TABLE t_h5 ON COMMIT DROP AS SELECT * FROM vista_historia_maquina WHERE maquina_id = '00000000-0000-0000-0000-0000000031d5';
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'produccion' AND cantidad = 30 AND turno = 'noche' AND persona = 'Tejedor 031' AND detalle = 'M031'),
   'historia: producción con turno, tejedor y producto');
@@ -156,10 +190,14 @@ SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'falla' AND 
   'historia: falla con quién reportó y mecánico');
 SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'reparacion' AND costo = 32 AND mecanico = 'Juan Pérez'),
   'historia: reparación con costo total y mecánico');
-SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'preventivo' AND costo = 40 AND detalle LIKE 'Lubricar cilindro%' AND mecanico = 'Juan Pérez'),
+SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'preventivo' AND costo = 40 AND detalle = 'Lubricar cilindro — Lubricado y ajustado' AND mecanico = 'Juan Pérez'),
   'historia: preventivo con tarea, mano de obra y mecánico');
 SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'repuesto' AND detalle = 'Aceite 031' AND cantidad = 2 AND costo = 16),
   'historia: repuesto usado en el preventivo');
+SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h WHERE tipo = 'repuesto' AND cantidad = 1 AND costo = 8 AND mecanico = 'Juan Pérez'),
+  'historia: repuesto usado en una falla');
+SELECT pg_temp.verificar((SELECT count(*) = 1 FROM t_h5 WHERE tipo = 'produccion' AND cantidad = 12 AND persona = 'Tejedor 031' AND detalle = 'M031'),
+  'historia: producción de remallado en la máquina remalladora');
 SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM t_h WHERE maquina_id <> '00000000-0000-0000-0000-0000000031d1'), 'historia filtrada por máquina');
 
 -- ── Sin sesión no se toca nada ─────────────────────────────────────────────

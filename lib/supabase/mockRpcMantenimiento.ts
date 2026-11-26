@@ -6,6 +6,7 @@
  */
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, cajaAbiertaHoy, nombreCaja, type Db, type ResultadoRpc } from './mockRpcComun'
 import { totalCompraRepuesto, costoRepuestosUsados, nombreMecanico, redondearCentimos } from '@/lib/domain/repuestos'
+import { hoyLocal } from '@/lib/domain/mantenimiento'
 
 export const RPC_MANTENIMIENTO = [
   'registrar_compra_repuesto',
@@ -200,7 +201,9 @@ function quitarRepuestoPreventivo(db: Db, p: any) {
 }
 
 function terminarPreventivo(db: Db, p: any) {
+  if (p.p_costo_mano_obra != null && Number.isNaN(Number(p.p_costo_mano_obra))) throw new ErrorNegocio('La mano de obra no es un número válido')
   if (num(p.p_costo_mano_obra) < 0) throw new ErrorNegocio('La mano de obra no puede ser negativa')
+  if (num(p.p_costo_mano_obra) > 1000000) throw new ErrorNegocio('La mano de obra no puede pasar de S/ 1 000 000')
   const m = mantenimiento(db, p.p_mantenimiento_id)
   if (m.estado !== 'en_curso') throw new ErrorNegocio('Solo se termina un mantenimiento en curso')
   Object.assign(m, {
@@ -209,7 +212,7 @@ function terminarPreventivo(db: Db, p: any) {
     costo_repuestos: costoRepuestosUsados(tabla(db, 'mantenimiento_repuestos').filter(u => u.mantenimiento_id === m.id)),
   })
   const plan = tabla(db, 'planes_mantenimiento').find(x => x.id === m.plan_id)
-  if (plan) plan.ultima_fecha = hoy()
+  if (plan) plan.ultima_fecha = hoyLocal() // día de Lima, como la 031
   const maq = tabla(db, 'maquinas').find(x => x.id === m.maquina_id)
   if (maq) Object.assign(maq, { estado: 'activa', detalle_estado: 'OPERATIVA' })
   return null

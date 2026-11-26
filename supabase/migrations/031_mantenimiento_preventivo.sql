@@ -12,7 +12,7 @@
 -- 3. vista_historia_maquina: producción, fallas, reparaciones, repuestos usados
 --    y preventivos de cada máquina, una fila por evento (permisos de quien consulta).
 --
--- Permisos (lección de la 030): planes con leer/crear/cambiar/borrar; los
+-- Permisos (lección de la 030): planes con leer/crear/cambiar (se desactivan, no se borran); los
 -- mantenimientos y sus repuestos solo lectura (se escriben por sus funciones);
 -- la vista solo lectura; nada para anon. Reversión: supabase/scripts/revertir_031.sql
 -- ==============================================================================
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS public.planes_mantenimiento (
   maquina_id       UUID NOT NULL REFERENCES public.maquinas(id) ON DELETE CASCADE,
   tarea            TEXT NOT NULL CHECK (btrim(tarea) <> ''),
   frecuencia_dias  INTEGER NOT NULL CHECK (frecuencia_dias > 0),
-  fecha_inicio     DATE NOT NULL DEFAULT CURRENT_DATE,
+  fecha_inicio     DATE NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Lima')::date,
   ultima_fecha     DATE,
   activo           BOOLEAN NOT NULL DEFAULT true,
   created_at       TIMESTAMPTZ DEFAULT NOW()
@@ -36,8 +36,9 @@ CREATE INDEX IF NOT EXISTS planes_mantenimiento_maquina_idx ON public.planes_man
 
 CREATE TABLE IF NOT EXISTS public.mantenimientos_preventivos (
   id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  plan_id          UUID NOT NULL REFERENCES public.planes_mantenimiento(id) ON DELETE CASCADE,
-  maquina_id       UUID NOT NULL REFERENCES public.maquinas(id) ON DELETE CASCADE,
+  -- RESTRICT: el historial de mantenimientos no se borra en cascada (los planes se desactivan)
+  plan_id          UUID NOT NULL REFERENCES public.planes_mantenimiento(id) ON DELETE RESTRICT,
+  maquina_id       UUID NOT NULL REFERENCES public.maquinas(id) ON DELETE RESTRICT,
   mecanico_id      UUID REFERENCES public.mecanicos(id) ON DELETE SET NULL,
   estado           TEXT NOT NULL DEFAULT 'en_curso' CHECK (estado IN ('en_curso', 'terminado')),
   fecha_inicio     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -148,19 +149,24 @@ DECLARE
   v_m         RECORD;
   v_repuestos NUMERIC(12,2);
 BEGIN
+  -- NaN pasaría el CHECK >= 0 (en Postgres NaN es mayor que todo) y arruinaría las sumas de gasto
+  IF p_costo_mano_obra = 'NaN'::numeric THEN RAISE EXCEPTION 'La mano de obra no es un número válido'; END IF;
   IF COALESCE(p_costo_mano_obra, 0) < 0 THEN RAISE EXCEPTION 'La mano de obra no puede ser negativa'; END IF;
+  IF COALESCE(p_costo_mano_obra, 0) > 1000000 THEN RAISE EXCEPTION 'La mano de obra no puede pasar de S/ 1 000 000'; END IF;
   SELECT id, plan_id, maquina_id, estado INTO v_m FROM mantenimientos_preventivos WHERE id = p_mantenimiento_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Mantenimiento no encontrado'; END IF;
   IF v_m.estado <> 'en_curso' THEN RAISE EXCEPTION 'Solo se termina un mantenimiento en curso'; END IF;
-  PERFORM 1 FROM maquinas WHERE id = v_m.maquina_id FOR UPDATE;
+  -- Mismo orden de bloqueo que iniciar: plan y después máquina
   PERFORM 1 FROM planes_mantenimiento WHERE id = v_m.plan_id FOR UPDATE;
+  PERFORM 1 FROM maquinas WHERE id = v_m.maquina_id FOR UPDATE;
 
   SELECT COALESCE(sum(cantidad * costo_unitario), 0) INTO v_repuestos FROM mantenimiento_repuestos WHERE mantenimiento_id = v_m.id;
   UPDATE mantenimientos_preventivos
      SET estado = 'terminado', fecha_fin = NOW(), nota = NULLIF(btrim(COALESCE(p_nota, '')), ''),
          costo_mano_obra = round(COALESCE(p_costo_mano_obra, 0), 2), costo_repuestos = v_repuestos
    WHERE id = v_m.id;
-  UPDATE planes_mantenimiento SET ultima_fecha = CURRENT_DATE WHERE id = v_m.plan_id;
+  -- Día de Lima (la base está en UTC): después de las 19:00 en Lima, CURRENT_DATE ya es mañana
+  UPDATE planes_mantenimiento SET ultima_fecha = (NOW() AT TIME ZONE 'America/Lima')::date WHERE id = v_m.plan_id;
   UPDATE maquinas SET estado = 'activa', detalle_estado = 'OPERATIVA' WHERE id = v_m.maquina_id;
 END;
 $$;
@@ -231,7 +237,8 @@ CREATE POLICY durey_usuarios_con_sesion ON public.mantenimiento_repuestos FOR AL
 
 REVOKE ALL ON TABLE public.planes_mantenimiento, public.mantenimientos_preventivos, public.mantenimiento_repuestos,
                     public.vista_historia_maquina FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.planes_mantenimiento TO authenticated;
+-- Sin DELETE: un plan se desactiva (activo = false), no se borra
+GRANT SELECT, INSERT, UPDATE ON TABLE public.planes_mantenimiento TO authenticated;
 GRANT SELECT ON TABLE public.mantenimientos_preventivos, public.mantenimiento_repuestos, public.vista_historia_maquina TO authenticated;
 GRANT ALL ON TABLE public.planes_mantenimiento, public.mantenimientos_preventivos, public.mantenimiento_repuestos TO service_role;
 GRANT SELECT ON TABLE public.vista_historia_maquina TO service_role;

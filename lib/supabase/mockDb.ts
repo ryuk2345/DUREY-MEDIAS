@@ -341,6 +341,7 @@ class MockQueryBuilder {
     const self = this;
     let filters: ((item: any) => boolean)[] = [];
     let limitCount: number | null = null;
+    let rangeDesde: number | null = null;
     let orderConfig: { column: string; ascending: boolean } | null = null;
 
     const queryObj = {
@@ -397,6 +398,12 @@ class MockQueryBuilder {
         limitCount = count;
         return queryObj;
       },
+      // Igual que supabase-js: filas desde..hasta, ambos incluidos
+      range(desde: number, hasta: number) {
+        rangeDesde = desde;
+        limitCount = hasta - desde + 1;
+        return queryObj;
+      },
       // Terminadores
       async single() {
         const data = await self.getTableData();
@@ -443,7 +450,7 @@ class MockQueryBuilder {
 
         // Aplicar límite
         if (limitCount !== null) {
-          result = result.slice(0, limitCount);
+          result = result.slice(rangeDesde ?? 0, (rangeDesde ?? 0) + limitCount);
         }
 
         // Mock resolver relaciones (Join simulation)

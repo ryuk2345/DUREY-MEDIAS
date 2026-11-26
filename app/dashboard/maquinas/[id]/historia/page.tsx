@@ -40,15 +40,21 @@ export default function HistoriaMaquinaPage() {
     if (!id || !rangoValido) return
     let vigente = true
     ;(async () => {
-      const [maq, hist] = await Promise.all([
-        supabase.from('maquinas').select('codigo').eq('id', id).maybeSingle(),
-        supabase.from('vista_historia_maquina').select('*').eq('maquina_id', id).gte('fecha', desde).lte('fecha', hasta),
-      ])
+      const maq = await supabase.from('maquinas').select('codigo').eq('id', id).maybeSingle()
+      // La API devuelve como máximo 1000 filas por consulta: se pide por páginas para no cortar la historia
+      const PAGINA = 1000
+      const todos: EventoHistoria[] = []
+      for (let desdeFila = 0; ; desdeFila += PAGINA) {
+        const hist = await supabase.from('vista_historia_maquina').select('*').eq('maquina_id', id).gte('fecha', desde).lte('fecha', hasta)
+          .order('momento', { ascending: true }).range(desdeFila, desdeFila + PAGINA - 1)
+        if (hist.error) { if (vigente) toast.error(`Error al cargar la historia: ${hist.error.message}`); break }
+        todos.push(...((hist.data ?? []) as EventoHistoria[]))
+        if ((hist.data ?? []).length < PAGINA) break
+      }
       if (!vigente) return
       if (maq.error) toast.error(`Error al cargar la máquina: ${maq.error.message}`)
-      if (hist.error) toast.error(`Error al cargar la historia: ${hist.error.message}`)
       setCodigo(maq.data?.codigo ?? '')
-      setEventos((hist.data ?? []) as EventoHistoria[])
+      setEventos(todos)
       setClaveCargada(`${id}|${desde}|${hasta}`)
     })()
     return () => { vigente = false }

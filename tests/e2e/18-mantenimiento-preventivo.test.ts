@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
-  sumarDias, proximaFecha, estadoPlan, estadoPreventivoMaquina, lunesDeSemana,
+  sumarDias, proximaFecha, estadoPlan, hoyLocal, estadoPreventivoMaquina, lunesDeSemana,
   agruparHistoria, totalesHistoria, filasHistoria, DIAS_AVISO_PROXIMO, type EventoHistoria,
 } from '@/lib/domain/mantenimiento'
 import { gastoMantenimiento } from '@/lib/domain/finance'
@@ -147,10 +147,31 @@ describe('mock: mantenimiento preventivo', () => {
 
     expect(rpc(db, 'terminar_mantenimiento_preventivo', { p_mantenimiento_id: ini.data, p_nota: 'ok', p_costo_mano_obra: 40 }).error).toBeNull()
     expect(db.mantenimientos_preventivos[0]).toMatchObject({ estado: 'terminado', costo_mano_obra: 40, costo_repuestos: 16 })
-    expect(db.planes_mantenimiento[0].ultima_fecha).toBe(new Date().toISOString().split('T')[0])
+    expect(db.planes_mantenimiento[0].ultima_fecha).toBe(hoyLocal())
     expect(db.maquinas[0]).toMatchObject({ estado: 'activa', detalle_estado: 'OPERATIVA' })
     expect(db.egresos_adicionales).toHaveLength(0)
     expect(rpc(db, 'terminar_mantenimiento_preventivo', { p_mantenimiento_id: ini.data, p_nota: '', p_costo_mano_obra: 1 }).error?.message).toContain('en curso')
+  })
+
+  it('no se inicia con la máquina malograda ni con un mecánico dado de baja', () => {
+    db.maquinas[0].estado = 'malograda'
+    expect(rpc(db, 'iniciar_mantenimiento_preventivo', { p_plan_id: 'p1', p_mecanico_id: 'm1' }).error?.message).toContain('malograda')
+    db.maquinas[0].estado = 'activa'
+    db.mecanicos.push({ id: 'm2', nombre: 'Luis', apellido: 'Baja', telefono: '9', activo: false })
+    expect(rpc(db, 'iniciar_mantenimiento_preventivo', { p_plan_id: 'p1', p_mecanico_id: 'm2' }).error?.message).toContain('no está activo')
+    expect(db.mantenimientos_preventivos ?? []).toHaveLength(0)
+  })
+
+  it('terminado: no se usan ni quitan repuestos; mano de obra inválida rechazada', () => {
+    const ini = rpc(db, 'iniciar_mantenimiento_preventivo', { p_plan_id: 'p1', p_mecanico_id: 'm1' })
+    const uso = rpc(db, 'usar_repuesto_en_mantenimiento', { p_mantenimiento_id: ini.data, p_repuesto_id: 'r1', p_cantidad: 1 })
+    for (const [v, msg] of [[-1, 'negativa'], ['NaN', 'no es un número'], [1000000.01, '1 000 000']] as const) {
+      expect(rpc(db, 'terminar_mantenimiento_preventivo', { p_mantenimiento_id: ini.data, p_nota: '', p_costo_mano_obra: v }).error?.message).toContain(msg)
+    }
+    rpc(db, 'terminar_mantenimiento_preventivo', { p_mantenimiento_id: ini.data, p_nota: '', p_costo_mano_obra: 10 })
+    expect(rpc(db, 'usar_repuesto_en_mantenimiento', { p_mantenimiento_id: ini.data, p_repuesto_id: 'r1', p_cantidad: 1 }).error?.message).toContain('en curso')
+    expect(rpc(db, 'quitar_repuesto_de_mantenimiento', { p_uso_id: uso.data }).error?.message).toContain('en curso')
+    expect(db.repuestos[0].stock_actual).toBe(4)
   })
 
   it('no se inicia con la máquina ocupada, con una falla abierta ni con el plan desactivado', () => {
