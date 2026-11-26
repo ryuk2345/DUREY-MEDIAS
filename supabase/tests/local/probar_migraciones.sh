@@ -10,7 +10,7 @@
 # 3. Aplica supabase/migrations/002..último en orden (000 y 001 son anteriores a la línea base 002).
 #    Justo antes de la última migración NNN guarda una huella del esquema public
 #    (opciones de tablas y vistas, RLS, permisos —ordenados, el orden interno no importa—,
-#    funciones con su configuración, políticas).
+#    funciones con su configuración, permisos por defecto de objetos nuevos, políticas).
 # 4. Corre supabase/tests/*.sql (cada test corre en una transacción que se revierte).
 # 5. Si existe supabase/scripts/revertir_NNN.sql: lo ejecuta y exige que la huella vuelva a ser
 #    EXACTAMENTE la de antes de la NNN (la reversión deshace todo, no solo una parte); luego
@@ -37,6 +37,10 @@ HUELLA_SQL="SELECT md5(string_agg(x, E'\n' ORDER BY x)) FROM (
   SELECT 'fn ' || p.oid::regprocedure::text || ' secdef=' || p.prosecdef || ' cfg=' || COALESCE(array_to_string(p.proconfig, ','), '-')
          || ' acl=' || COALESCE((SELECT string_agg(a::text, ',' ORDER BY a::text) FROM unnest(p.proacl) a), '-') || ' src=' || md5(p.prosrc)
     FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
+  UNION ALL
+  SELECT 'defacl ' || pg_get_userbyid(d.defaclrole) || ' ' || d.defaclobjtype::text || ' '
+         || COALESCE((SELECT string_agg(a::text, ',' ORDER BY a::text) FROM unnest(d.defaclacl) a), '-')
+    FROM pg_default_acl d WHERE d.defaclnamespace = 'public'::regnamespace
   UNION ALL
   SELECT 'pol ' || tablename || ' ' || policyname || ' ' || cmd || ' ' || array_to_string(roles, ',') FROM pg_policies WHERE schemaname = 'public'
 ) s"

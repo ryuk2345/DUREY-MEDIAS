@@ -31,7 +31,18 @@ SELECT pg_temp.verificar(pg_temp.permisos(t) = 'SELECT', t || ': solo lectura, s
 -- Una tabla que se cree en adelante nace sin TRUNCATE, REFERENCES ni TRIGGER para authenticated, y sin nada para anon
 CREATE TABLE public.tabla_prueba_030 (id INT);
 SELECT pg_temp.verificar(pg_temp.permisos('tabla_prueba_030') = 'DELETE,INSERT,SELECT,UPDATE', 'tabla nueva: solo leer, crear, cambiar y borrar');
-SELECT pg_temp.verificar(NOT has_table_privilege('anon', 'public.tabla_prueba_030', 'SELECT'), 'tabla nueva cerrada a anon');
+SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM information_schema.role_table_grants
+  WHERE table_schema = 'public' AND table_name = 'tabla_prueba_030' AND grantee = 'anon'), 'tabla nueva: ningún permiso para anon');
+
+-- Postgres 17 (base real) tiene además MAINTAIN, que information_schema no lista: se comprueba aparte
+DO $$
+BEGIN
+  IF current_setting('server_version_num')::int >= 170000 AND EXISTS (
+    SELECT 1 FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')
+       AND has_table_privilege('authenticated', c.oid, 'MAINTAIN')) THEN
+    RAISE EXCEPTION 'FALLO: authenticated conserva MAINTAIN en alguna tabla';
+  END IF;
+END $$;
 
 -- La web sigue funcionando: con sesión se lee y se escriben mecánicos; compras solo por la función
 SET LOCAL ROLE authenticated;
