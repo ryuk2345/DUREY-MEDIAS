@@ -1,7 +1,9 @@
 ---
 author: ryuk2345
 branch: fase-1/correcciones-botones
-status: in-progress
+status: done
+merged: 2026-11-25
+pr: #14
 ---
 # Fase 1 — Correcciones y botones
 
@@ -44,4 +46,4 @@ Fuera: Egresos/Balance a plazos (Fase 7), cualquier cambio de modelo no listado.
 - No ejecutado: supabase/tests/027_*.test.sql (requiere Postgres de prueba).
 
 ## Next
-PR y fusión. Luego: el usuario ejecuta la migración 027 en Supabase (antes de usar las pantallas nuevas en producción).
+Fusionado en main el 2026-11-25 (5782e63).
