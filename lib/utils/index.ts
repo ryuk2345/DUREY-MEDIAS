@@ -39,7 +39,10 @@ export function formatearMoneda(monto: number): string {
 
 export function formatearFecha(fecha: string | Date): string {
   if (!fecha) return '—'
-  const d = new Date(fecha)
+  // "AAAA-MM-DD" (columna DATE) es un día del calendario, no un instante: new Date() lo leería
+  // como medianoche UTC y en Lima (UTC-5) se mostraría el día anterior.
+  const soloDia = typeof fecha === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha) : null
+  const d = soloDia ? new Date(Number(soloDia[1]), Number(soloDia[2]) - 1, Number(soloDia[3])) : new Date(fecha)
   if (isNaN(d.getTime())) return '—'
   return new Intl.DateTimeFormat('es-PE', {
     day: '2-digit',

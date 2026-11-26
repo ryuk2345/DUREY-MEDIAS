@@ -32,6 +32,22 @@
       "rol": "vendedora",
       "activo": true,
       "estado": "disponible"
+    },
+    {
+      "id": "op1",
+      "nombre": "Operaria Tejido",
+      "email": "optej@durey.com",
+      "rol": "operador",
+      "activo": true,
+      "estado": "disponible"
+    },
+    {
+      "id": "rem1",
+      "nombre": "Remalladora Prueba",
+      "email": "rem@durey.com",
+      "rol": "remalladora",
+      "activo": true,
+      "estado": "disponible"
     }
   ],
   "marcas_maquinas": [
@@ -158,6 +174,48 @@
       "turno_id": "tp-anterior",
       "maquina_id": "m3",
       "catalogo_media_id": "media1"
+    }
+  ],
+  "reportes_produccion": [
+    {
+      "id": "rp-ant-1",
+      "turno_id": "tp-anterior",
+      "maquina_id": "m2",
+      "catalogo_media_id": "media1",
+      "docenas_producidas": 30,
+      "fecha": "2026-01-05"
+    }
+  ],
+  "asignaciones_turno": [
+    {
+      "id": "as-ant-1",
+      "operador_id": "op1",
+      "area": "tejido",
+      "fecha": "2026-01-05",
+      "turno": "dia"
+    }
+  ],
+  "lotes_remallado": [
+    {
+      "id": "lr-ant-1",
+      "catalogo_media_id": "media1",
+      "remalladora_id": "rem1",
+      "maquina_remalladora_id": "m1",
+      "docenas_asignadas": 10,
+      "docenas_pendientes": 0,
+      "estado": "completado",
+      "fecha": "2026-01-05"
+    }
+  ],
+  "reportes_remallado": [
+    {
+      "id": "rr-ant-1",
+      "lote_id": "lr-ant-1",
+      "remalladora_id": "rem1",
+      "maquina_id": "m1",
+      "docenas_remalladas": 10,
+      "docenas_restantes": 0,
+      "fecha": "2026-01-05"
     }
   ]
 }

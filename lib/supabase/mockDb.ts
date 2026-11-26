@@ -472,7 +472,10 @@ class MockQueryBuilder {
             ...a,
             maquina: db.maquinas.find((m: any) => m.id === a.maquina_id) || null,
             reportado_por: db.usuarios.find((u: any) => u.id === a.reportado_por_id) || null,
-            reparaciones: db.reparaciones.filter((r: any) => r.averia_id === a.id)
+            reparaciones: db.reparaciones.filter((r: any) => r.averia_id === a.id).map((r: any) => ({
+              ...r,
+              tecnico: db.usuarios.find((u: any) => u.id === r.tecnico_id) || null
+            }))
           }));
         } else if (self.tableName === 'disenos') {
           result = result.map(d => ({
@@ -555,6 +558,8 @@ class MockQueryBuilder {
             const c = db.catalogo_medias.find((c: any) => c.id === l.catalogo_media_id) || null;
             return {
               ...r,
+              remalladora: db.usuarios.find((u: any) => u.id === r.remalladora_id) || null,
+              maquina: db.maquinas.find((m: any) => m.id === r.maquina_id) || null,
               lote: {
                 catalogo_media: c
               }

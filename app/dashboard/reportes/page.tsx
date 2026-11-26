@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { BarChart3, Download, Calendar, FileSpreadsheet, FileText, Loader2, TrendingUp, Package, Scissors, Wind, Warehouse, ShoppingCart, Wrench, Layers } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearFecha } from '@/lib/utils'
+import { filasProduccion, filasRemallado, filasPlanchado, filasPreparado, filasMantenimiento, resumenPorPersona, RESUMEN_POR_MODULO, type ReporteTejido, type AsignacionTurno, type ReporteRemallado, type ReportePlanchado, type PaquetePreparado, type AveriaReporte } from '@/lib/domain/reportes'
 import * as XLSX from 'xlsx'
 
 const MODULOS_REPORTE = [
@@ -34,35 +35,38 @@ export default function ReportesPage() {
 
     try {
       let data: Record<string, unknown>[] = []
-      let nombreArchivo = `reporte_${moduloSeleccionado}_${fechaInicio}_${fechaFin}`
+      const nombreArchivo = `reporte_${moduloSeleccionado}_${fechaInicio}_${fechaFin}`
 
       switch (moduloSeleccionado) {
         case 'produccion': {
           const { data: rows, error } = await supabase
             .from('reportes_produccion')
-            .select('fecha, docenas_producidas, maquina:maquinas(codigo), catalogo_media:catalogo_medias(codigo)')
+            .select('fecha, docenas_producidas, maquina:maquinas(codigo), catalogo_media:catalogo_medias(codigo), turno:turnos_produccion(fecha, horario, tejedor:usuarios(nombre))')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
           if (error) throw new Error(`Error al generar reporte de producción: ${error.message}`)
-          data = (rows ?? []).map(r => ({
-            Fecha: formatearFecha(r.fecha as string),
-            Máquina: (r.maquina as {codigo:string})?.codigo,
-            'Tipo de Media': (r.catalogo_media as {codigo:string})?.codigo,
-            'Docenas Producidas': r.docenas_producidas,
-          }))
+          const reportes = (rows ?? []) as unknown as ReporteTejido[]
+          // Operarios del Calendario de Turnos (área tejido) en las fechas de esos turnos
+          const fechasTurno = [...new Set(reportes.map(r => r.turno?.fecha ?? r.fecha))]
+          let asignaciones: AsignacionTurno[] = []
+          if (fechasTurno.length > 0) {
+            const { data: asig, error: errAsig } = await supabase
+              .from('asignaciones_turno')
+              .select('fecha, turno, operador:usuarios(nombre)')
+              .eq('area', 'tejido')
+              .in('fecha', fechasTurno)
+            if (errAsig) throw new Error(`Error al leer los operarios de tejido: ${errAsig.message}`)
+            asignaciones = (asig ?? []) as unknown as AsignacionTurno[]
+          }
+          data = filasProduccion(reportes, asignaciones)
           break
         }
         case 'remallado': {
           const { data: rows, error } = await supabase
             .from('reportes_remallado')
-            .select('fecha, docenas_remalladas, docenas_restantes, lote:lotes_remallado(catalogo_media:catalogo_medias(codigo))')
+            .select('fecha, docenas_remalladas, docenas_restantes, remalladora:usuarios(nombre), maquina:maquinas(codigo), lote:lotes_remallado(catalogo_media:catalogo_medias(codigo))')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
           if (error) throw new Error(`Error al generar reporte de remallado: ${error.message}`)
-          data = (rows ?? []).map(r => ({
-            Fecha: formatearFecha(r.fecha as string),
-            'Tipo de Media': ((r.lote as {catalogo_media:{codigo:string}})?.catalogo_media)?.codigo,
-            'Docenas Remalladas': r.docenas_remalladas,
-            'Docenas Restantes': r.docenas_restantes,
-          }))
+          data = filasRemallado((rows ?? []) as unknown as ReporteRemallado[])
           break
         }
         case 'planchado': {
@@ -71,13 +75,7 @@ export default function ReportesPage() {
             .select('fecha, docenas_planchadas, docenas_defectuosas, planchador:usuarios(nombre), catalogo_media:catalogo_medias(codigo)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
           if (error) throw new Error(`Error al generar reporte de planchado: ${error.message}`)
-          data = (rows ?? []).map(r => ({
-            Fecha: formatearFecha(r.fecha as string),
-            Planchador: (r.planchador as {nombre:string})?.nombre,
-            'Tipo de Media': (r.catalogo_media as {codigo:string})?.codigo,
-            'Docenas Planchadas': r.docenas_planchadas,
-            'Mermas': r.docenas_defectuosas,
-          }))
+          data = filasPlanchado((rows ?? []) as unknown as ReportePlanchado[])
           break
         }
         case 'ventas': {
@@ -100,21 +98,10 @@ export default function ReportesPage() {
         case 'mantenimiento': {
           const { data: rows, error } = await supabase
             .from('averias_maquinas')
-            .select('fecha_reporte, descripcion_operador, estado, maquina:maquinas(codigo), reparaciones(costo_repuestos, costo_mano_obra, costo_total)')
+            .select('fecha_reporte, descripcion_operador, estado, maquina:maquinas(codigo), reportado_por:usuarios(nombre), reparaciones(costo_repuestos, costo_mano_obra, costo_total, tecnico:usuarios(nombre))')
             .gte('fecha_reporte', fechaInicio).lt('fecha_reporte', finExclusivo)
           if (error) throw new Error(`Error al generar reporte de mantenimiento: ${error.message}`)
-
-          data = (rows ?? []).map(r => {
-            const rep = (r.reparaciones as {costo_total:number}[])?.[0]
-            return {
-              Fecha: formatearFecha(r.fecha_reporte as string),
-              Máquina: (r.maquina as {codigo:string})?.codigo,
-              'Descripción Problema': r.descripcion_operador,
-              Estado: r.estado,
-              'Costo Total (S/)': rep ? Number(rep.costo_total) : null,
-              Reparada: rep ? 'Sí' : 'No',
-            }
-          })
+          data = filasMantenimiento((rows ?? []) as unknown as AveriaReporte[])
           break
         }
         case 'preparado': {
@@ -123,15 +110,7 @@ export default function ReportesPage() {
             .select('fecha, codigo_paquete, docenas, estado, preparador:usuarios(nombre), catalogo_media:catalogo_medias(codigo, sku)')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
           if (error) throw new Error(`Error al generar reporte de preparado: ${error.message}`)
-
-          data = (rows ?? []).map(r => ({
-            Fecha: formatearFecha(r.fecha as string),
-            'Código Paquete': r.codigo_paquete,
-            'Tipo Media': r.catalogo_media?.codigo || r.catalogo_media?.sku || 'N/A',
-            Docenas: r.docenas,
-            Estado: r.estado,
-            Preparador: r.preparador?.nombre || 'N/A'
-          }))
+          data = filasPreparado((rows ?? []) as unknown as PaquetePreparado[])
           break
         }
         case 'almacen': {
@@ -162,10 +141,15 @@ export default function ReportesPage() {
         return
       }
 
+      // Quién produjo cuánto en el período (módulos de producción)
+      const columnas = RESUMEN_POR_MODULO[moduloSeleccionado]
+      const resumen = columnas ? resumenPorPersona(data as Parameters<typeof resumenPorPersona>[0], columnas.persona, columnas.cantidad) : null
+
       if (formato === 'excel') {
         const wb = XLSX.utils.book_new()
         const ws = XLSX.utils.json_to_sheet(data)
         XLSX.utils.book_append_sheet(wb, ws, 'Reporte')
+        if (resumen) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumen), 'Resumen por persona')
         XLSX.writeFile(wb, `${nombreArchivo}.xlsx`)
         toast.success(`Reporte Excel descargado: ${nombreArchivo}.xlsx`)
       } else {
@@ -186,6 +170,19 @@ export default function ReportesPage() {
             styles: { fontSize: 8 },
             headStyles: { fillColor: [30, 58, 138] },
           })
+          if (resumen && resumen.length > 0) {
+            const finTabla = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 35
+            doc.setFontSize(12)
+            doc.text('Resumen por persona', 14, finTabla + 12)
+            autoTable(doc, {
+              head: [Object.keys(resumen[0])],
+              body: resumen.map(row => Object.values(row).map(v => v == null ? '—' : String(v))),
+              startY: finTabla + 16,
+              theme: 'grid',
+              styles: { fontSize: 8 },
+              headStyles: { fillColor: [30, 58, 138] },
+            })
+          }
         }
         doc.save(`${nombreArchivo}.pdf`)
         toast.success(`Reporte PDF descargado: ${nombreArchivo}.pdf`)
