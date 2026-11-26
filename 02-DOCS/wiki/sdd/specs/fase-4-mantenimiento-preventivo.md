@@ -7,12 +7,12 @@ timestamp: 2026-11-26T15:30:00Z
 topic: sdd
 slug: fase-4-mantenimiento-preventivo
 branch: fase-4/mantenimiento-preventivo
-status: draft
+status: approved
 ---
 
 # Spec — Fase 4, mantenimiento preventivo e historia clínica de máquinas
 
-> Slug: `fase-4-mantenimiento-preventivo` · Status: draft (pendiente de aprobación) · Created: 2026-11-26
+> Slug: `fase-4-mantenimiento-preventivo` · Status: approved · Created: 2026-11-26
 > Inherits: [constitución v1.0.0](../constitution.md) y AGENTS.md. Plan: [plan-fases](../../plan-fases.md).
 
 ## Problem & why
@@ -83,11 +83,11 @@ Quién: usuarios con sesión y acceso al módulo (MODULOS_POR_ROL). Nadie sin se
 - Given un usuario sin sesión, Then no ve ni toca planes, mantenimientos ni historia.
 
 ## Points to clarify
-- **suposición tomada** — "Próximo" = vence en 3 días o menos. *Riesgo:* si se quiere otro margen, es una constante.
-- **suposición tomada** — Al terminar, la máquina vuelve a "activa" (aunque antes estuviera en standby o inactiva). *Riesgo:* si debe volver a su estado anterior, se guarda ese estado al iniciar.
-- **suposición tomada** — La próxima fecha cuenta desde el día en que se terminó el mantenimiento, no desde la fecha programada. *Riesgo:* si se quiere un calendario fijo, cambia el cálculo.
-- **suposición tomada** — La historia incluye la producción de remallado para las máquinas remalladoras.
-- **suposición tomada** — Antes de la Fase 4 se corrigen los detalles anotados de la Fase 3 y la 030 (redondeo del mock, tests faltantes).
+- **decidido (dueño, 2026-11-26)** — "Próximo" = vence en 3 días o menos. *Riesgo:* si se quiere otro margen, es una constante.
+- **decidido (dueño, 2026-11-26)** — Al terminar, la máquina vuelve a "activa" (aunque antes estuviera en standby o inactiva). *Riesgo:* si debe volver a su estado anterior, se guarda ese estado al iniciar.
+- **decidido (dueño, 2026-11-26)** — La próxima fecha cuenta desde el día en que se terminó el mantenimiento, no desde la fecha programada. *Riesgo:* si se quiere un calendario fijo, cambia el cálculo.
+- **decidido (dueño, 2026-11-26)** — La historia incluye la producción de remallado para las máquinas remalladoras.
+- **decidido (dueño, 2026-11-26)** — Antes de la Fase 4 se corrigen los detalles anotados de la Fase 3 y la 030 (redondeo del mock, tests faltantes).
 
 ## Approval
-Decisiones del dueño (2026-11-26): «1-A (cada N días), 2-por máquina, 3-pasa a estado de mantenimiento, 4-las dos (día y semana), 5-sí imprimir en PDF o Excel». Pendiente: aprobación de esta especificación y de los supuestos.
+Decisiones del dueño (2026-11-26): «1-A (cada N días), 2-por máquina, 3-pasa a estado de mantenimiento, 4-las dos (día y semana), 5-sí imprimir en PDF o Excel». Especificación y supuestos aprobados por el dueño el 2026-11-26: «SI CONTINUA».
