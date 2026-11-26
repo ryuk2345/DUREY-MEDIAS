@@ -1,8 +1,10 @@
 ---
 author: ryuk2345
 branch: chore/cierre-fase-1-migracion-028
-status: in-progress
+status: done
 spec: ../sdd/specs/cierre-fase-1-migracion-028.md
+merged: 2026-11-25
+pr: #15
 ---
 # Cierre de Fase 1 y migración 028 (avisos de seguridad)
 
@@ -38,4 +40,4 @@ Fuera: el aviso "authenticated puede ejecutar funciones SECURITY DEFINER" (es lo
 - Regla 2 de AGENTS.md: no cambian tipos TS, mock ni datos (la vista devuelve lo mismo).
 
 ## Next
-PR, fusión y aplicación en la base real (T6).
+Fusionado en main el 2026-11-25 (1fb39d1).
