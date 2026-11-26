@@ -67,7 +67,7 @@ interface GuiaRemision {
   }
 }
 
-const AGENCIAS = ['Shalom', 'Olva Courier', 'Marvisur', 'Flores Cargo']
+interface Agencia { id: string; nombre: string }
 
 // ── COMPONENTE PRINCIPAL ───────────────────────────────────────────────────
 export default function DespachoPage() {
@@ -91,6 +91,11 @@ export default function DespachoPage() {
   // Modal confirmación de despacho
   const [showDespachoModal, setShowDespachoModal] = useState(false)
   const [agenciaSeleccionada, setAgenciaSeleccionada] = useState('')
+  // Agencias de transporte: tabla `agencias` (migración 027), ya no fijas en el código
+  const [agencias, setAgencias] = useState<Agencia[]>([])
+  const [mostrarNuevaAgencia, setMostrarNuevaAgencia] = useState(false)
+  const [nombreNuevaAgencia, setNombreNuevaAgencia] = useState('')
+  const [guardandoAgencia, setGuardandoAgencia] = useState(false)
 
   // Filtros kardex
   const [busquedaKardex, setBusquedaKardex] = useState('')
@@ -98,7 +103,7 @@ export default function DespachoPage() {
   // ── CARGA DATOS ──────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    const [venRes, guiRes, catRes, paqRes] = await Promise.all([
+    const [venRes, guiRes, catRes, paqRes, agRes] = await Promise.all([
       // Solo pedidos pendientes de despacho
       supabase.from('ventas').select(`
         id, codigo_venta, estado, fecha, total_soles,
@@ -124,12 +129,16 @@ export default function DespachoPage() {
 
       supabase.from('catalogo_medias').select('id, codigo, sku, modelo, publico, diseno_color, talla'),
 
-      supabase.from('vista_stock_medias').select('catalogo_media_id, stock_docenas')
+      supabase.from('vista_stock_medias').select('catalogo_media_id, stock_docenas'),
+
+      supabase.from('agencias').select('id, nombre').eq('activo', true).order('nombre')
     ])
 
     if (venRes.error) toast.error(`Error al cargar ventas: ${venRes.error.message}`)
     if (catRes.error) toast.error(`Error al cargar catálogo: ${catRes.error.message}`)
     if (paqRes.error) toast.error(`Error al cargar stock: ${paqRes.error.message}`)
+    if (agRes.error) toast.error(`Error al cargar agencias: ${agRes.error.message}`)
+    setAgencias((agRes.data ?? []) as Agencia[])
 
     setVentasPendientes((venRes.data ?? []) as unknown as Venta[])
     setGuias((guiRes.data ?? []) as unknown as GuiaRemision[])
@@ -145,6 +154,22 @@ export default function DespachoPage() {
   }, [supabase])
 
   useEffect(() => { cargarDatos() }, [cargarDatos])
+
+  const guardarNuevaAgencia = async () => {
+    const nombre = nombreNuevaAgencia.trim()
+    if (!nombre) { toast.error('Ingresa el nombre de la agencia'); return }
+    setGuardandoAgencia(true)
+    // La base valida nombre vacío y repetido (registrar_agencia, migración 027)
+    const { error } = await supabase.rpc('registrar_agencia', { p_nombre: nombre })
+    setGuardandoAgencia(false)
+    if (error) { toast.error(error.message); return }
+    const { data } = await supabase.from('agencias').select('id, nombre').eq('activo', true).order('nombre')
+    setAgencias((data ?? []) as Agencia[])
+    setAgenciaSeleccionada(nombre)
+    setNombreNuevaAgencia('')
+    setMostrarNuevaAgencia(false)
+    toast.success(`Agencia ${nombre} añadida`)
+  }
 
   useEffect(() => {
     if (modoEscaneo === 'pistola' && ventaSeleccionada && inputRef.current) {
@@ -660,10 +685,34 @@ export default function DespachoPage() {
                 onChange={val => setAgenciaSeleccionada(val)}
                 options={[
                   { value: '', label: 'Seleccionar agencia...' },
-                  ...AGENCIAS.map(ag => ({ value: ag, label: ag }))
+                  ...agencias.map(ag => ({ value: ag.nombre, label: ag.nombre }))
                 ]}
                 placeholder="Seleccionar agencia..."
               />
+              {mostrarNuevaAgencia ? (
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    aria-label="Nombre de la nueva agencia"
+                    placeholder="Nombre de la nueva agencia"
+                    value={nombreNuevaAgencia}
+                    onChange={e => setNombreNuevaAgencia(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardarNuevaAgencia() } }}
+                    className="input-dark flex-1 text-xs py-2"
+                  />
+                  <button type="button" onClick={guardarNuevaAgencia} disabled={guardandoAgencia} className="btn-primary text-xs py-2 px-3">
+                    {guardandoAgencia ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Guardar Agencia
+                  </button>
+                  <button type="button" onClick={() => { setMostrarNuevaAgencia(false); setNombreNuevaAgencia('') }} className="btn-secondary text-xs py-2 px-2" aria-label="Cancelar nueva agencia">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setMostrarNuevaAgencia(true)} className="mt-2 text-xs font-bold text-cyan-300 hover:text-cyan-200 flex items-center gap-1">
+                  <Plus className="w-3.5 h-3.5" /> Añadir agencia
+                </button>
+              )}
             </div>
 
             <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex gap-2">

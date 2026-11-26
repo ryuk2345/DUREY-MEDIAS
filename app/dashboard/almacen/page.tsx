@@ -4,12 +4,14 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   Warehouse, Scan, QrCode, CheckCircle2, AlertTriangle,
-  Loader2, X, Search, Check, RefreshCw, Barcode, Box, Layers, Zap, MapPin, ArrowRight, Plus, PackagePlus
+  Loader2, X, Search, Check, RefreshCw, Barcode, Box, Layers, Zap, MapPin, ArrowRight, Plus, PackagePlus,
+  Pencil, Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { validarTransicionEstadoPaquete, convertirDocenasAPares } from '@/lib/domain/packaging'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 
 interface Ubicacion { id: string; nombre: string; tipo: string }
@@ -81,6 +83,12 @@ export default function AlmacenPage() {
   const [nuevoSalonNombre, setNuevoSalonNombre] = useState('')
   const [guardandoSalon, setGuardandoSalon] = useState(false)
 
+  // ── EDITAR NOMBRE / ELIMINAR (BORRADO SUAVE) ──────────────────────────────
+  const [salonEditando, setSalonEditando] = useState<Ubicacion | null>(null)
+  const [nombreEditado, setNombreEditado] = useState('')
+  const [salonAEliminar, setSalonAEliminar] = useState<Ubicacion | null>(null)
+  const [procesandoSalon, setProcesandoSalon] = useState(false)
+
   const supabase = createClient()
 
   const crearNuevoSalon = async (e: React.FormEvent) => {
@@ -112,6 +120,32 @@ export default function AlmacenPage() {
   }
 
 
+
+  const guardarNombreSalon = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!salonEditando) return
+    setProcesandoSalon(true)
+    // La base valida nombre vacío y repetido (renombrar_ubicacion, migración 027)
+    const { error } = await supabase.rpc('renombrar_ubicacion', { p_id: salonEditando.id, p_nombre: nombreEditado })
+    setProcesandoSalon(false)
+    if (error) { toast.error(error.message); return }
+    toast.success(`Almacén renombrado a ${nombreEditado.trim()}`)
+    setSalonEditando(null)
+    cargarDatos()
+  }
+
+  const eliminarSalon = async () => {
+    if (!salonAEliminar) return
+    setProcesandoSalon(true)
+    // Borrado suave: la base lo rechaza si tiene paquetes dentro y explica por qué
+    const { error } = await supabase.rpc('desactivar_ubicacion', { p_id: salonAEliminar.id })
+    setProcesandoSalon(false)
+    const nombre = salonAEliminar.nombre
+    setSalonAEliminar(null)
+    if (error) { toast.error(error.message, { duration: 8000 }); return }
+    toast.success(`${nombre} eliminado. Su historial de paquetes se conserva.`)
+    cargarDatos()
+  }
 
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
@@ -495,9 +529,29 @@ export default function AlmacenPage() {
                     </div>
                   </div>
 
-                  <span className="badge bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-bold text-xs">
-                    {sal.countSacos} Sacos
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="badge bg-emerald-500/20 text-emerald-300 border-emerald-500/30 font-bold text-xs">
+                      {sal.countSacos} Sacos
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setSalonEditando(sal); setNombreEditado(sal.nombre) }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10"
+                      title={`Editar nombre de ${sal.nombre}`}
+                      aria-label={`Editar nombre de ${sal.nombre}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSalonAEliminar(sal)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10"
+                      title={`Eliminar ${sal.nombre}`}
+                      aria-label={`Eliminar ${sal.nombre}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-center">
@@ -1004,6 +1058,41 @@ export default function AlmacenPage() {
           </div>
         </form>
       </Modal>
+
+      {/* MODAL EDITAR NOMBRE DE ALMACÉN */}
+      <Modal open={Boolean(salonEditando)} onClose={() => setSalonEditando(null)} title="Editar nombre del almacén" maxWidth="sm">
+        <form onSubmit={guardarNombreSalon} className="space-y-4 text-xs">
+          <div>
+            <label htmlFor="nombre-almacen" className="block text-slate-300 font-bold uppercase tracking-wider mb-1">Nombre</label>
+            <input
+              id="nombre-almacen"
+              type="text"
+              autoFocus
+              value={nombreEditado}
+              onChange={e => setNombreEditado(e.target.value)}
+              className="input-dark w-full text-sm py-2.5"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setSalonEditando(null)} className="btn-secondary flex-1 justify-center py-2.5">Cancelar</button>
+            <button type="submit" disabled={procesandoSalon || !nombreEditado.trim()} className="btn-primary flex-1 justify-center py-2.5">
+              {procesandoSalon ? 'Guardando...' : 'Guardar Nombre'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* CONFIRMAR ELIMINAR ALMACÉN (BORRADO SUAVE) */}
+      <ConfirmDialog
+        isOpen={Boolean(salonAEliminar)}
+        onClose={() => setSalonAEliminar(null)}
+        onConfirm={eliminarSalon}
+        title={`¿Eliminar ${salonAEliminar?.nombre ?? ''}?`}
+        description="El almacén dejará de aparecer en las listas. Su historial de paquetes y movimientos se conserva. Si todavía tiene paquetes dentro, no se eliminará."
+        confirmText="Eliminar Almacén"
+        isDanger
+        isLoading={procesandoSalon}
+      />
     </div>
   )
 }

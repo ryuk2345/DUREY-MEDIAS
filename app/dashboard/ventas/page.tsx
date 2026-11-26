@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
-import { generarCronogramaCuotas } from '@/lib/domain/finance'
+import { generarCronogramaCuotas, calcularEfectivoEsperadoCaja } from '@/lib/domain/finance'
 import CustomSelect from '@/components/ui/CustomSelect'
 import SelectorMedia from '@/components/ui/SelectorMedia'
 import { Modal } from '@/components/ui/Modal'
@@ -44,7 +44,7 @@ interface Deuda {
   venta: { id: string; codigo_venta: string; total_soles: number; cliente: { id: string; nombre: string; numero_documento: string; telefono?: string; direccion?: string }; asesora: { id: string; nombre: string } }
 }
 interface CajaDiaria {
-  id: string; saldo_inicial: number; ventas_efectivo: number; cobros_efectivo: number; estado: string
+  id: string; saldo_inicial: number; ventas_efectivo: number; cobros_efectivo: number; pagos_efectivo?: number; estado: string
 }
 
 interface CarritoItem { catalogo_media_id: string; codigo: string; docenas: number; precio_docena: number }
@@ -637,7 +637,8 @@ export default function VentasPage() {
 
   const cerrarCaja = async () => {
     if (!caja) return
-    const esperadoEfectivo = (caja.saldo_inicial ?? 0) + (caja.ventas_efectivo ?? 0) + (caja.cobros_efectivo ?? 0)
+    // Entra lo vendido y cobrado en efectivo; sale lo pagado a proveedores en efectivo (027)
+    const esperadoEfectivo = calcularEfectivoEsperadoCaja(caja)
     const declaradoEfectivo = parseFloat(cierreForm.efectivo || '0')
     const diferencia = declaradoEfectivo - esperadoEfectivo
     const estado = diferencia === 0 ? 'cerrada_cuadrada' : diferencia < 0 ? 'cerrada_faltante' : 'cerrada_sobrante'
@@ -706,7 +707,7 @@ export default function VentasPage() {
             <p className={`font-semibold text-sm ${caja.estado === 'abierta' ? 'text-emerald-300' : 'text-slate-400'}`}>
               Caja {caja.estado === 'abierta' ? 'Abierta' : 'Cerrada'} · Saldo inicial: {formatearMoneda(caja.saldo_inicial)}
             </p>
-            <p className="text-xs text-slate-500">Ventas efectivo: {formatearMoneda(caja.ventas_efectivo ?? 0)} · Cobros efectivo: {formatearMoneda(caja.cobros_efectivo ?? 0)}</p>
+            <p className="text-xs text-slate-500">Ventas efectivo: {formatearMoneda(caja.ventas_efectivo ?? 0)} · Cobros efectivo: {formatearMoneda(caja.cobros_efectivo ?? 0)} · Pagos a proveedores: {formatearMoneda(caja.pagos_efectivo ?? 0)}</p>
           </div>
         </div>
       )}
@@ -1098,7 +1099,8 @@ export default function VentasPage() {
                 { label: 'Saldo Inicial', value: caja?.saldo_inicial ?? 0, color: 'text-slate-300' },
                 { label: 'Ventas en Efectivo', value: caja?.ventas_efectivo ?? 0, color: 'text-emerald-400' },
                 { label: 'Cobros en Efectivo', value: caja?.cobros_efectivo ?? 0, color: 'text-blue-400' },
-                { label: 'Total Esperado en Caja', value: (caja?.saldo_inicial ?? 0) + (caja?.ventas_efectivo ?? 0) + (caja?.cobros_efectivo ?? 0), color: 'text-white' },
+                { label: 'Pagos a Proveedores (Efectivo)', value: -(caja?.pagos_efectivo ?? 0), color: 'text-red-400' },
+                { label: 'Total Esperado en Caja', value: calcularEfectivoEsperadoCaja(caja), color: 'text-white' },
               ].map(s => (
                 <div key={s.label} className="glass rounded-3xl p-5 border border-white/[0.08]">
                   <p className="text-slate-400 text-xs uppercase tracking-wider mb-2 font-bold">{s.label}</p>

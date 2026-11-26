@@ -11,7 +11,12 @@ export const RPC_MATERIA_PRIMA = [
   'registrar_compra_materia_prima',
   'procesar_control_calidad_compra',
   'ajustar_stock_repuesto',
+  'registrar_pago_proveedor',
+  'reprogramar_cuota_compra',
 ] as const
+
+const METODOS_PAGO_PROVEEDOR = ['efectivo', 'transferencia', 'yape_plin', 'otro']
+const ETIQUETA_METODO: Record<string, string> = { efectivo: 'Efectivo', transferencia: 'Transferencia', yape_plin: 'Yape/Plin', otro: 'Otro' }
 
 const num = (v: unknown) => Number(v ?? 0) || 0
 const ahora = () => new Date().toISOString()
@@ -106,11 +111,53 @@ function ajustarStockRepuesto(db: Db, p: any) {
   return rep.stock_actual
 }
 
+/** Igual que registrar_pago_proveedor (027): efectivo de hoy sale de la caja abierta del día. */
+function registrarPagoProveedor(db: Db, p: any) {
+  if (!METODOS_PAGO_PROVEEDOR.includes(p.p_metodo_pago)) throw new ErrorNegocio('Método de pago inválido')
+  const fecha = p.p_fecha || hoy()
+  if (fecha > hoy()) throw new ErrorNegocio('La fecha de pago no puede ser futura')
+  const cuota = tabla(db, 'cuotas_compras').find(q => q.id === p.p_cuota_id)
+  if (!cuota) throw new ErrorNegocio('Cuota no encontrada')
+  if (cuota.estado === 'pagada') throw new ErrorNegocio('Esta cuota ya fue pagada')
+  const compra = tabla(db, 'compras_materia_prima').find(c => c.id === cuota.compra_id)
+
+  let cajaId: string | null = null
+  if (p.p_metodo_pago === 'efectivo' && fecha === hoy()) {
+    const abiertas = tabla(db, 'cajas_diarias').filter(c => c.fecha === hoy() && c.estado === 'abierta')
+    const caja = abiertas.find(c => (c.asesora_id ?? null) === (p.p_usuario_id ?? null)) ?? abiertas[0]
+    if (caja) {
+      caja.pagos_efectivo = num(caja.pagos_efectivo) + num(cuota.monto)
+      cajaId = caja.id
+    }
+  }
+
+  const comprobante = String(p.p_comprobante_url ?? '').trim() || null
+  const pagoId = nuevoId()
+  tabla(db, 'pagos_proveedores').push({
+    id: pagoId, cuota_compra_id: cuota.id, proveedor_id: compra?.proveedor_id ?? null, monto: num(cuota.monto),
+    metodo_pago: p.p_metodo_pago, fecha, comprobante_url: comprobante, caja_id: cajaId,
+    registrado_por: p.p_usuario_id ?? null, created_at: ahora(),
+  })
+  Object.assign(cuota, { estado: 'pagada', fecha_pago: fecha, metodo_pago: ETIQUETA_METODO[p.p_metodo_pago], comprobante_url: comprobante })
+  return { pago_id: pagoId, caja_id: cajaId, monto: num(cuota.monto), descontado_de_caja: cajaId !== null }
+}
+
+function reprogramarCuotaCompra(db: Db, p: any) {
+  if (!p.p_fecha_vencimiento) throw new ErrorNegocio('Indica la nueva fecha de vencimiento')
+  const cuota = tabla(db, 'cuotas_compras').find(q => q.id === p.p_cuota_id)
+  if (!cuota) throw new ErrorNegocio('Cuota no encontrada')
+  if (cuota.estado === 'pagada') throw new ErrorNegocio('Una cuota pagada no se puede reprogramar')
+  cuota.fecha_vencimiento = p.p_fecha_vencimiento
+  return null
+}
+
 export function ejecutarRpcMateriaPrima(db: Db, fnName: string, params: any): ResultadoRpc | null {
   return ejecutarHandler({
     editar_materia_prima: editarMateriaPrima,
     registrar_compra_materia_prima: registrarCompra,
     procesar_control_calidad_compra: procesarControlCalidad,
     ajustar_stock_repuesto: ajustarStockRepuesto,
+    registrar_pago_proveedor: registrarPagoProveedor,
+    reprogramar_cuota_compra: reprogramarCuotaCompra,
   }, db, fnName, params)
 }
