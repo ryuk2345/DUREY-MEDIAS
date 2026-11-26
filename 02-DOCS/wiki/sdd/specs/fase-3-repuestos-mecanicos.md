@@ -7,12 +7,12 @@ timestamp: 2026-11-25T23:50:00Z
 topic: sdd
 slug: fase-3-repuestos-mecanicos
 branch: fase-3/repuestos-mecanicos
-status: draft
+status: approved
 ---
 
 # Spec — Fase 3, repuestos y mecánicos
 
-> Slug: `fase-3-repuestos-mecanicos` · Status: draft (pendiente de aprobación) · Created: 2026-11-25
+> Slug: `fase-3-repuestos-mecanicos` · Status: approved · Created: 2026-11-25
 > Inherits: [constitución v1.0.0](../constitution.md) y AGENTS.md. Plan: [plan-fases](../../plan-fases.md).
 
 ## Problem & why
@@ -82,10 +82,10 @@ Quién: usuarios con sesión y acceso al módulo (MODULOS_POR_ROL). Nadie sin se
 - Given un usuario sin sesión, Then no ve ni toca compras, mecánicos ni usos de repuestos.
 
 ## Points to clarify
-- **pregunta abierta** — Compra pagada en efectivo: ¿resta de la caja abierta del día, como los pagos a proveedores (migración 027)? Si sí, se usa la misma regla de caja (la de quien paga, si no la general, si no la más antigua) y sin caja abierta la compra se registra igual. *Recomendación:* sí, por coherencia con los pagos a proveedores.
+- **decidido (dueño, 2026-11-25)** — Compra pagada en efectivo: ¿resta de la caja abierta del día, como los pagos a proveedores (migración 027)? Si sí, se usa la misma regla de caja (la de quien paga, si no la general, si no la más antigua) y sin caja abierta la compra se registra igual. Respuesta del dueño: «si es efectivo de la venta del día, sí». Por eso, en una compra en efectivo el formulario pregunta «Pagado con efectivo de la caja del día» (marcada por defecto); marcada resta de la caja, desmarcada solo queda como gasto.
 - **decidido (dueño, 2026-11-25)** — El proveedor de la compra es opcional (a veces se compra en una ferretería sin registrar). *Riesgo:* bajo.
 - **decidido (dueño, 2026-11-25)** — El ajuste manual de stock se mantiene, sin egreso, para corregir inventario. *Base:* el gasto ahora se cuenta al comprar. *Riesgo:* si se quiere quitar el ajuste manual, se quita el botón.
 - **decidido (dueño, 2026-11-25)** — Las fallas antiguas guardan el técnico como texto (`asignado_a`); se conservan como texto y las nuevas apuntan al mecánico. *Riesgo:* bajo (en la base real hay 1 falla y 0 reparaciones).
 
 ## Approval
-Decisiones del dueño (2026-11-25): «todo es al contado»; gasto al comprar (opción A: usar el repuesto ya no crea egreso); costo = último precio pagado; quitar el rol técnico; mecánico = nombre, apellido y número. Supuestos confirmados por el dueño (2026-11-25): proveedor opcional; ajuste manual sin egreso; fallas antiguas como texto; precio 0 permitido; quitar un repuesto usado devuelve su stock. Pendiente: respuesta a la pregunta abierta (efectivo y caja).
+Decisiones del dueño (2026-11-25): «todo es al contado»; gasto al comprar (opción A: usar el repuesto ya no crea egreso); costo = último precio pagado; quitar el rol técnico; mecánico = nombre, apellido y número. Supuestos confirmados por el dueño (2026-11-25): proveedor opcional; ajuste manual sin egreso; fallas antiguas como texto; precio 0 permitido; quitar un repuesto usado devuelve su stock. Efectivo de la caja del día: resta de la caja (casilla en el formulario). Especificación aprobada el 2026-11-25.
