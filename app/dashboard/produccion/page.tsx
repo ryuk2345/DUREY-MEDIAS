@@ -7,10 +7,11 @@ import { listarUsuarios } from '@/lib/api/usuarios'
 import {
   Layers, Plus, Search, CheckCircle, Clock, ChevronDown, X,
   Loader2, AlertTriangle, Cpu, Play, Pause, Activity, User, Wrench,
-  CheckCircle2, Sparkles, Filter, ShieldAlert
+  CheckCircle2, Sparkles, Filter, ShieldAlert, Copy
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
+import { construirCopiaAsignacion, type TurnoPrevio } from '@/lib/domain/tejido'
 import CustomSelect from '@/components/ui/CustomSelect'
 import SelectorMedia from '@/components/ui/SelectorMedia'
 import Modal from '@/components/ui/Modal'
@@ -229,6 +230,48 @@ export default function ProduccionTejidoPage() {
         [maquinaId]: mediaId
       }
     }))
+  }
+
+  // ── COPIAR ASIGNACIÓN DEL DÍA ANTERIOR ────────────────────────────────────
+  // Solo rellena el formulario (máquinas con su producto y el tejedor encargado);
+  // el supervisor revisa y guarda con "Validar y Cargar Lote" como siempre.
+  const [copiandoAsignacion, setCopiandoAsignacion] = useState(false)
+  const copiarAsignacionAnterior = async () => {
+    setCopiandoAsignacion(true)
+    const hoy = new Date().toISOString().split('T')[0]
+    const { data, error } = await supabase.from('turnos_produccion').select(`
+      fecha, horario, duracion_horas, tejedor_id,
+      turno_maquinas(maquina_id, catalogo_media_id)
+    `).lt('fecha', hoy).eq('horario', cargaForm.horario).order('fecha', { ascending: false }).limit(50)
+    setCopiandoAsignacion(false)
+    if (error) { toast.error(`No se pudo leer el día anterior: ${error.message}`); return }
+
+    const r = construirCopiaAsignacion(
+      (data ?? []) as TurnoPrevio[],
+      maquinas,
+      new Set(catalogo.map(c => c.id)),
+      cargaForm.horario,
+      cargaForm.marca_id || null
+    )
+    const { copia, error: errorCopia } = r
+    if (!copia) { toast.error(errorCopia ?? 'No se pudo copiar la asignación'); return }
+    setCargaForm(prev => ({
+      ...prev,
+      marca_id: copia.marca_id,
+      tejedor_id: copia.tejedor_id,
+      duracion_horas: copia.duracion_horas,
+      maquinas_seleccionadas: copia.maquinas_seleccionadas
+    }))
+    const copiadas = Object.keys(copia.maquinas_seleccionadas).length
+    const tejedorDisponible = tejedores.some(t => t.id === copia.tejedor_id)
+    toast.success(`Asignación del ${copia.fecha} copiada: ${copiadas} máquina(s). Revisa y pulsa "Validar y Cargar Lote".`, { duration: 6000 })
+    if (copia.omitidas.length > 0) {
+      toast.warning(`No se copiaron: ${copia.omitidas.map(o => `${o.codigo} (${o.motivo})`).join(', ')}`, { duration: 8000 })
+    }
+    if (!tejedorDisponible) {
+      toast.warning('El tejedor de ese día no está asignado a Tejido hoy: elige el operador de turno.', { duration: 8000 })
+      setCargaForm(prev => ({ ...prev, tejedor_id: '' }))
+    }
   }
 
   // ── CREAR TURNO POR MARCA ─────────────────────────────────────────────────
@@ -549,6 +592,17 @@ export default function ProduccionTejidoPage() {
               <Sparkles className="w-5 h-5 text-blue-400" />
               <h2 className="text-base font-bold text-white">Carga de Lote por Marca</h2>
             </div>
+
+            <button
+              type="button"
+              onClick={copiarAsignacionAnterior}
+              disabled={copiandoAsignacion}
+              className="btn-secondary w-full justify-center text-xs py-2 mb-4 border-blue-500/30 text-blue-200 hover:bg-blue-500/10"
+              title="Rellena el formulario con las máquinas, productos y tejedor del último día, para el horario elegido"
+            >
+              {copiandoAsignacion ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+              Copiar asignación del día anterior
+            </button>
 
             <div className="space-y-4 text-xs">
               {/* 1. Selector de Marca de Máquina */}

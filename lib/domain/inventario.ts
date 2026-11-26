@@ -12,3 +12,18 @@ export function esStockBajoMateriaPrima(stockKg: number, tipoEmpaque?: string | 
   const empaque = (tipoEmpaque && tipoEmpaque in UMBRAL_STOCK_BAJO_KG ? tipoEmpaque : 'cono') as TipoEmpaque
   return Number(stockKg ?? 0) <= UMBRAL_STOCK_BAJO_KG[empaque]
 }
+
+/**
+ * Cantidad comprada que todavía no entra al stock: compras en estado
+ * 'pendiente' (esperan control de calidad). El stock sube solo al aprobarlas.
+ */
+export function cantidadEnCaminoPorInsumo(
+  compras: { materia_prima_id: string; cantidad_kg: number; estado: string }[]
+): Record<string, number> {
+  const mapa: Record<string, number> = {}
+  for (const c of compras) {
+    if (c.estado !== 'pendiente') continue
+    mapa[c.materia_prima_id] = (mapa[c.materia_prima_id] ?? 0) + (Number(c.cantidad_kg) || 0)
+  }
+  return mapa
+}

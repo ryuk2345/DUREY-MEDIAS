@@ -29,7 +29,7 @@ test('compra → control de calidad → el stock sube exactamente lo comprado', 
   await page.getByPlaceholder('Ej. 150').fill('10')
   await page.getByPlaceholder('Ej. 1200.0').fill('100')
   await page.getByRole('button', { name: /Registrar Compra/ }).last().click()
-  await expect(page.getByText(/Orden de compra registrada/)).toBeVisible()
+  await expect(page.getByText(/Compra registrada\. El stock del insumo subirá cuando apruebes el control de calidad/)).toBeVisible()
   expect(await stockAlgodonBlanco(page)).toBe(antes)
 
   await page.getByRole('button', { name: 'Inspeccionar' }).first().click()

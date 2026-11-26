@@ -2,12 +2,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { esStockBajoMateriaPrima } from '@/lib/domain/inventario'
+import { esStockBajoMateriaPrima, cantidadEnCaminoPorInsumo } from '@/lib/domain/inventario'
+import { resumirCuentasPorPagar, deudaPendientePorProveedor, METODOS_PAGO_PROVEEDOR, type MetodoPagoProveedor } from '@/lib/domain/finance'
+import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
+import { formatearMoneda } from '@/lib/utils'
 import { toast } from 'sonner'
 import { 
   Database, Plus, Check, X, RefreshCw, Truck, FileText, AlertTriangle, 
   TrendingUp, TrendingDown, CreditCard, DollarSign, BarChart3, Wrench, Info, Scale, ShoppingCart, Trash2, PackageCheck,
-  Building2, Phone, MessageCircle, User, ExternalLink, Edit2
+  Building2, Phone, MessageCircle, User, ExternalLink, Edit2, CalendarClock, History, Clock
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import CustomSelect from '@/components/ui/CustomSelect'
@@ -81,6 +84,16 @@ interface EgresoAdicional {
   created_at: string
 }
 
+interface PagoProveedor {
+  id: string
+  monto: number
+  metodo_pago: MetodoPagoProveedor
+  fecha: string
+  caja_id: string | null
+  comprobante_url: string | null
+  proveedor?: { nombre: string } | null
+}
+
 interface Movimiento {
   id: string
   materia_prima_id: string
@@ -105,6 +118,7 @@ export default function MateriaPrimaPage() {
   const [repuestos, setRepuestos] = useState<Repuesto[]>([])
   const [cuotasCompras, setCuotasCompras] = useState<CuotaCompra[]>([])
   const [egresosAdicionales, setEgresosAdicionales] = useState<EgresoAdicional[]>([])
+  const [pagosProveedores, setPagosProveedores] = useState<PagoProveedor[]>([])
   
   // Financial parameters
   const [ventasTotal, setVentasTotal] = useState(0)
@@ -135,7 +149,11 @@ export default function MateriaPrimaPage() {
   })
   const [repuestoForm, setRepuestoForm] = useState({ nombre: '', stock_actual: '', costo_unitario: '' })
   const [egresoForm, setEgresoForm] = useState({ concepto: '', monto: '', categoria: 'planilla' })
-  const [payCuotaForm, setPayCuotaForm] = useState({ metodo_pago: 'Transferencia', comprobante_url: '' })
+  const hoyISO = () => new Date().toISOString().split('T')[0]
+  const [payCuotaForm, setPayCuotaForm] = useState<{ metodo_pago: MetodoPagoProveedor; fecha: string; comprobante_url: string }>({ metodo_pago: 'transferencia', fecha: hoyISO(), comprobante_url: '' })
+  // Reprogramar la fecha de vencimiento de una cuota pendiente
+  const [cuotaAReprogramar, setCuotaAReprogramar] = useState<CuotaCompra | null>(null)
+  const [nuevaFechaCuota, setNuevaFechaCuota] = useState('')
   const [proveedorForm, setProveedorForm] = useState({ nombre: '', ruc: '', contacto: '', telefono: '' })
   const [adjustRepuestoForm, setAdjustRepuestoForm] = useState({ tipo: 'ingreso', cantidad: '', motivo: '' })
   
@@ -161,7 +179,7 @@ export default function MateriaPrimaPage() {
     setLoading(true)
     try {
       // 1. Intentar cargar desde Supabase
-      const [hilosRes, provRes, comprasRes, movRes, repRes, cuotasRes, egresosRes, ventasRes, repairsRes] = await Promise.all([
+      const [hilosRes, provRes, comprasRes, movRes, repRes, cuotasRes, egresosRes, ventasRes, repairsRes, pagosRes] = await Promise.all([
         supabase.from('materia_prima').select('*').order('material'),
         supabase.from('proveedores').select('*').order('nombre'),
         supabase.from('compras_materia_prima').select(`
@@ -177,17 +195,21 @@ export default function MateriaPrimaPage() {
         supabase.from('cuotas_compras').select(`
           *,
           compra:compras_materia_prima(
-            fecha, costo_total,
+            fecha, costo_total, proveedor_id,
             proveedores(nombre),
             materia_prima(material, color)
           )
         `).order('fecha_vencimiento'),
         supabase.from('egresos_adicionales').select('*').order('fecha', { ascending: false }),
         supabase.from('cobros').select('monto').eq('estado_validacion', 'validado'),
-        supabase.from('reparaciones').select('costo_total')
+        supabase.from('reparaciones').select('costo_total'),
+        supabase.from('pagos_proveedores').select(`
+          id, monto, metodo_pago, fecha, caja_id, comprobante_url,
+          proveedor:proveedores(nombre)
+        `).order('fecha', { ascending: false }).limit(50)
       ])
 
-      const conError = [hilosRes, provRes, comprasRes, movRes, repRes, cuotasRes, egresosRes, ventasRes, repairsRes].find(r => r.error)
+      const conError = [hilosRes, provRes, comprasRes, movRes, repRes, cuotasRes, egresosRes, ventasRes, repairsRes, pagosRes].find(r => r.error)
       if (conError?.error) throw conError.error
 
       setStockHilos(hilosRes.data ?? [])
@@ -197,6 +219,7 @@ export default function MateriaPrimaPage() {
       setRepuestos(repRes.data ?? [])
       setCuotasCompras((cuotasRes.data ?? []) as unknown as CuotaCompra[])
       setEgresosAdicionales(egresosRes.data ?? [])
+      setPagosProveedores((pagosRes.data ?? []) as unknown as PagoProveedor[])
       
       const totalRecaudadoVentas = (ventasRes.data ?? []).reduce((s, c) => s + c.monto, 0)
       const totalReparaciones = (repairsRes.data ?? []).reduce((s, r) => s + (Number(r.costo_total) || 0), 0)
@@ -585,7 +608,13 @@ export default function MateriaPrimaPage() {
       if (error) throw error
     
 
-      toast.success('📦 Orden de compra registrada. Pendiente de control de calidad.')
+      // El stock NO sube aquí: sube al aprobar el control de calidad (procesar_control_calidad_compra)
+      const cuotasCreadas = compraForm.condicion_pago === 'pago_diferido' ? parseInt(compraForm.cuotas_num) : 0
+      toast.success(
+        `📦 Compra registrada. El stock del insumo subirá cuando apruebes el control de calidad (botón "Inspeccionar" en Registro de Entregas).` +
+        (cuotasCreadas > 0 ? ` Se crearon ${cuotasCreadas} cuotas en Cuentas por Pagar.` : ''),
+        { duration: 8000 }
+      )
       setShowCompraModal(false)
       setCompraForm({
         proveedor_id: '', materia_prima_id: '', cantidad_kg: '', costo_total: '',
@@ -607,7 +636,7 @@ export default function MateriaPrimaPage() {
 
   const abrirModalPagarCuota = (cuota: CuotaCompra) => {
     setSelectedCuota(cuota)
-    setPayCuotaForm({ metodo_pago: 'Transferencia', comprobante_url: '' })
+    setPayCuotaForm({ metodo_pago: 'transferencia', fecha: hoyISO(), comprobante_url: '' })
     setShowPayCuotaModal(true)
   }
 
@@ -647,27 +676,37 @@ export default function MateriaPrimaPage() {
   }
 
   // ── PAGAR CUOTA DE COMPRA ────────────────────────────────────────────────
+  // Una sola operación (registrar_pago_proveedor, migración 027): marca la cuota,
+  // guarda el pago en el historial y, si es efectivo de hoy, lo resta de la caja.
   const handlePagarCuota = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedCuota) return
 
     setSaving(true)
-    const fecha = new Date().toISOString().split('T')[0]
     try {
-      const { error } = await supabase
-        .from('cuotas_compras')
-        .update({
-          estado: 'pagada',
-          fecha_pago: fecha,
-          metodo_pago: payCuotaForm.metodo_pago,
-          comprobante_url: payCuotaForm.comprobante_url || null
-        })
-        .eq('id', selectedCuota.id)
-
+      const usuario = await obtenerUsuarioActual()
+      const { data, error } = await supabase.rpc('registrar_pago_proveedor', {
+        p_cuota_id: selectedCuota.id,
+        p_metodo_pago: payCuotaForm.metodo_pago,
+        p_fecha: payCuotaForm.fecha || null,
+        p_comprobante_url: payCuotaForm.comprobante_url || null,
+        p_usuario_id: usuario?.id ?? null
+      })
       if (error) throw error
-    
 
-      toast.success('💸 Cuota de compra marcada como pagada')
+      const r = data as { descontado_de_caja?: boolean; caja_de?: string | null } | null
+      if (payCuotaForm.metodo_pago === 'efectivo' && !r?.descontado_de_caja) {
+        toast.warning(
+          payCuotaForm.fecha === hoyISO()
+            ? 'Pago registrado. No había una caja abierta hoy: quedó en el historial pero no se restó de ninguna caja.'
+            : 'Pago registrado con fecha pasada: quedó en el historial y no se restó de la caja de hoy.',
+          { duration: 8000 }
+        )
+      } else {
+        toast.success(r?.descontado_de_caja
+          ? `💸 Pago de ${formatearMoneda(selectedCuota.monto)} registrado y restado de la caja del día (${r.caja_de ?? 'caja abierta'})`
+          : `💸 Pago de ${formatearMoneda(selectedCuota.monto)} registrado`)
+      }
       setShowPayCuotaModal(false)
       setSelectedCuota(null)
       cargarDatos()
@@ -676,6 +715,21 @@ export default function MateriaPrimaPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleReprogramarCuota = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!cuotaAReprogramar) return
+    setSaving(true)
+    const { error } = await supabase.rpc('reprogramar_cuota_compra', {
+      p_cuota_id: cuotaAReprogramar.id,
+      p_fecha_vencimiento: nuevaFechaCuota || null
+    })
+    setSaving(false)
+    if (error) { toast.error(`No se pudo reprogramar: ${error.message}`); return }
+    toast.success(`📅 Cuota reprogramada para el ${nuevaFechaCuota}`)
+    setCuotaAReprogramar(null)
+    cargarDatos()
   }
 
   // ── CALCULAR SUB-LISTAS POR TIPO DE EMPAQUE Y ALERTAS ESPECÍFICAS ──────────
@@ -697,15 +751,16 @@ export default function MateriaPrimaPage() {
     return stockHilos.filter(isItemCritical)
   }, [stockHilos])
 
+  const enCaminoPorInsumo = useMemo(() => cantidadEnCaminoPorInsumo(compras), [compras])
+  const resumenPorPagar = useMemo(() => resumirCuentasPorPagar(cuotasCompras, hoyISO()), [cuotasCompras])
+
   const proveedoresInfo = useMemo(() => {
+    const deudas = deudaPendientePorProveedor(cuotasCompras)
     return proveedores.map(p => {
       const misCompras = compras.filter(c => c.proveedor_id === p.id)
       const totalComprado = misCompras.reduce((sum, c) => sum + Number(c.costo_total || 0), 0)
 
-      const misCuotas = cuotasCompras.filter(q => q.compra?.proveedor_id === p.id)
-      const saldoPendiente = misCuotas
-        .filter(q => q.estado === 'pendiente')
-        .reduce((sum, q) => sum + Number(q.monto || 0), 0)
+      const saldoPendiente = deudas[p.id] ?? 0
 
       return {
         ...p,
@@ -1060,6 +1115,7 @@ export default function MateriaPrimaPage() {
                                   </td>
                                   <td className="p-4 text-right font-mono font-black text-sm text-white">
                                     {Number(hilo.stock_kg).toFixed(0)} <span className="text-[10px] font-normal text-slate-400">bolsas</span>
+                                    <EnCamino cantidad={enCaminoPorInsumo[hilo.id]} unidad="bolsas" />
                                   </td>
                                   <td className="p-4 text-center">
                                     {isCritical ? (
@@ -1163,6 +1219,7 @@ export default function MateriaPrimaPage() {
                                   </td>
                                   <td className="p-4 text-right font-mono font-black text-sm text-white">
                                     {Number(hilo.stock_kg).toFixed(0)} <span className="text-[10px] font-normal text-slate-400">conos</span>
+                                    <EnCamino cantidad={enCaminoPorInsumo[hilo.id]} unidad="conos" />
                                   </td>
                                   <td className="p-4 text-center">
                                     {isCritical ? (
@@ -1266,6 +1323,7 @@ export default function MateriaPrimaPage() {
                                   </td>
                                   <td className="p-4 text-right font-mono font-black text-sm text-white">
                                     {Number(hilo.stock_kg).toFixed(0)} <span className="text-[10px] font-normal text-slate-400">cajas</span>
+                                    <EnCamino cantidad={enCaminoPorInsumo[hilo.id]} unidad="cajas" />
                                   </td>
                                   <td className="p-4 text-center">
                                     {isCritical ? (
@@ -1330,6 +1388,10 @@ export default function MateriaPrimaPage() {
                     <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
                       <Truck className="w-4 h-4 text-emerald-400" /> Registro de Entregas e Inspección
                     </h2>
+                    <p className="text-[11px] text-slate-400 flex items-start gap-1.5">
+                      <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                      Al registrar una compra queda <strong className="text-amber-300">&nbsp;Pendiente QC</strong>. El stock del insumo sube solo cuando la apruebas con <strong className="text-emerald-300">&nbsp;Inspeccionar</strong>. Si es a crédito, sus cuotas aparecen enseguida en Cuentas por Pagar.
+                    </p>
 
                     <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
                       <table className="w-full text-left text-xs">
@@ -1517,6 +1579,22 @@ export default function MateriaPrimaPage() {
           {/* TAB 3: PROVEEDORES, CONTACTOS Y CUENTAS POR PAGAR */}
           {activeTab === 'proveedores' && (
             <div className="space-y-8 animate-fadeIn">
+
+              {/* ── 0. RESUMEN DE CUENTAS POR PAGAR (CARDS SUPERIORES) ─────────── */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4" data-testid="resumen-cuentas-por-pagar">
+                {[
+                  { label: 'Total por Pagar', valor: resumenPorPagar.totalPendiente, detalle: `${resumenPorPagar.cuotasPendientes} cuota(s) pendiente(s)`, color: 'text-amber-300', icon: <CreditCard className="w-4 h-4 text-amber-400" /> },
+                  { label: 'Vencido', valor: resumenPorPagar.vencido, detalle: `${resumenPorPagar.cuotasVencidas} cuota(s) vencida(s)`, color: resumenPorPagar.vencido > 0 ? 'text-red-400' : 'text-emerald-400', icon: <AlertTriangle className="w-4 h-4 text-red-400" /> },
+                  { label: 'Vence en 7 días', valor: resumenPorPagar.venceEstaSemana, detalle: 'De hoy a 7 días', color: 'text-white', icon: <Clock className="w-4 h-4 text-cyan-400" /> },
+                  { label: 'Vence en 30 días', valor: resumenPorPagar.venceEsteMes, detalle: 'De hoy a 30 días', color: 'text-white', icon: <CalendarClock className="w-4 h-4 text-indigo-400" /> },
+                ].map(card => (
+                  <div key={card.label} className="glass rounded-3xl p-4 border border-white/[0.08] space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">{card.icon} {card.label}</span>
+                    <p className={`text-xl font-black font-mono ${card.color}`}>{formatearMoneda(card.valor)}</p>
+                    <p className="text-[10px] text-slate-500">{card.detalle}</p>
+                  </div>
+                ))}
+              </div>
               
               {/* ── 1. DIRECTORIO COMPLETO DE PROVEEDORES ──────────────────────── */}
               <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-6">
@@ -1676,7 +1754,12 @@ export default function MateriaPrimaPage() {
                       ) : (
                         cuotasCompras.map((cuota) => (
                           <tr key={cuota.id} className="hover:bg-white/[0.01] transition-colors">
-                            <td className="p-4 font-mono font-bold text-red-300">{cuota.fecha_vencimiento}</td>
+                            <td className={`p-4 font-mono font-bold ${cuota.estado === 'pendiente' && cuota.fecha_vencimiento < hoyISO() ? 'text-red-400' : 'text-slate-200'}`}>
+                              {cuota.fecha_vencimiento}
+                              {cuota.estado === 'pendiente' && cuota.fecha_vencimiento < hoyISO() && (
+                                <span className="block text-[9px] font-black uppercase text-red-400">Vencida</span>
+                              )}
+                            </td>
                             <td className="p-4 font-bold text-white">{(cuota.compra as any)?.proveedores?.nombre || 'Desconocido'}</td>
                             <td className="p-4 text-slate-400">
                               {(cuota.compra as any)?.materia_prima?.material} {(cuota.compra as any)?.materia_prima?.color}
@@ -1692,13 +1775,23 @@ export default function MateriaPrimaPage() {
                             <td className="p-4 text-center font-mono text-slate-400">{cuota.fecha_pago || '-'}</td>
                             <td className="p-4 text-center">
                               {cuota.estado === 'pendiente' ? (
-                                <button 
-                                  type="button"
-                                  onClick={() => abrirModalPagarCuota(cuota)}
-                                  className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px]"
-                                >
-                                  Pagar Cuota
-                                </button>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button 
+                                    type="button"
+                                    onClick={() => abrirModalPagarCuota(cuota)}
+                                    className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px]"
+                                  >
+                                    Pagar Cuota
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setCuotaAReprogramar(cuota); setNuevaFechaCuota(cuota.fecha_vencimiento) }}
+                                    className="px-2.5 py-1.5 rounded-xl border border-white/10 hover:bg-white/5 text-slate-300 font-bold text-[10px]"
+                                    title="Cambiar la fecha de pago planificada"
+                                  >
+                                    Reprogramar
+                                  </button>
+                                </div>
                               ) : (
                                 <span className="text-[10px] text-slate-500 font-bold flex items-center justify-center gap-1">
                                   <Check className="w-3.5 h-3.5 text-emerald-400" /> Liquidado
@@ -1708,6 +1801,45 @@ export default function MateriaPrimaPage() {
                           </tr>
                         ))
                       )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+
+              {/* ── 3. HISTORIAL DE PAGOS (SALIDAS) A PROVEEDORES ───────────────── */}
+              <div className="glass rounded-3xl border border-white/[0.08] p-6 shadow-xl space-y-4" data-testid="historial-pagos-proveedores">
+                <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+                  <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+                    <History className="w-4 h-4 text-amber-400" /> Historial de Pagos a Proveedores (Salidas)
+                  </h2>
+                  <span className="text-xs font-mono text-slate-400">Últimos {pagosProveedores.length}</span>
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-white/[0.03] text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                      <tr>
+                        <th className="p-4">Fecha</th>
+                        <th className="p-4">Proveedor</th>
+                        <th className="p-4 text-right">Monto</th>
+                        <th className="p-4 text-center">Método</th>
+                        <th className="p-4 text-center">Caja del día</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/[0.04] text-slate-300">
+                      {pagosProveedores.length === 0 ? (
+                        <tr><td colSpan={5} className="p-6 text-center text-slate-500 text-xs">Todavía no hay pagos registrados.</td></tr>
+                      ) : pagosProveedores.map(pago => (
+                        <tr key={pago.id}>
+                          <td className="p-4 font-mono">{pago.fecha}</td>
+                          <td className="p-4 font-bold text-white">{pago.proveedor?.nombre || '—'}</td>
+                          <td className="p-4 text-right font-mono font-black text-white">{formatearMoneda(pago.monto)}</td>
+                          <td className="p-4 text-center">{METODOS_PAGO_PROVEEDOR.find(m => m.value === pago.metodo_pago)?.label ?? pago.metodo_pago}</td>
+                          <td className="p-4 text-center text-[10px] font-bold">
+                            {pago.caja_id ? <span className="text-amber-300">Restado de caja</span> : <span className="text-slate-500">No afecta caja</span>}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -2274,13 +2406,26 @@ export default function MateriaPrimaPage() {
                 <label className="block text-slate-300 font-bold mb-1">💵 Método de Pago utilizado</label>
                 <CustomSelect 
                   value={payCuotaForm.metodo_pago}
-                  onChange={val => setPayCuotaForm(prev => ({ ...prev, metodo_pago: val }))}
-                  options={[
-                    { value: 'Transferencia', label: 'Transferencia Bancaria' },
-                    { value: 'Efectivo', label: 'Efectivo de Caja' },
-                    { value: 'Yape/Plin', label: 'Yape/Plin' }
-                  ]}
+                  onChange={val => setPayCuotaForm(prev => ({ ...prev, metodo_pago: val as MetodoPagoProveedor }))}
+                  options={METODOS_PAGO_PROVEEDOR.map(m => ({ value: m.value, label: m.label }))}
                   triggerClassName="text-sm py-2.5 font-bold"
+                />
+                <p className="text-[11px] mt-1.5 text-slate-400">
+                  {payCuotaForm.metodo_pago === 'efectivo'
+                    ? 'En efectivo con fecha de hoy: se resta de la caja abierta del día.'
+                    : 'Queda en el historial de pagos; no afecta la caja.'}
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="fecha-pago-cuota" className="block text-slate-300 font-bold mb-1">📅 Fecha del pago</label>
+                <input
+                  id="fecha-pago-cuota"
+                  type="date"
+                  max={hoyISO()}
+                  value={payCuotaForm.fecha}
+                  onChange={e => setPayCuotaForm(prev => ({ ...prev, fecha: e.target.value }))}
+                  className="input-dark w-full text-sm py-2.5 font-mono"
                 />
               </div>
 
@@ -2315,6 +2460,51 @@ export default function MateriaPrimaPage() {
           </>
         )}
       </Modal>
+
+      {/* ── MODAL: REPROGRAMAR CUOTA ───────────────────────────────────────── */}
+      <Modal
+        open={Boolean(cuotaAReprogramar)}
+        onClose={() => setCuotaAReprogramar(null)}
+        title="📅 Reprogramar Fecha de Pago"
+        maxWidth="sm"
+      >
+        {cuotaAReprogramar && (
+          <form onSubmit={handleReprogramarCuota} className="space-y-4 text-xs">
+            <p className="text-slate-400">
+              {cuotaAReprogramar.compra?.proveedores?.nombre} · {formatearMoneda(cuotaAReprogramar.monto)} · vence el {cuotaAReprogramar.fecha_vencimiento}
+            </p>
+            <div>
+              <label htmlFor="nueva-fecha-cuota" className="block text-slate-300 font-bold mb-1">Nueva fecha de vencimiento</label>
+              <input
+                id="nueva-fecha-cuota"
+                type="date"
+                value={nuevaFechaCuota}
+                onChange={e => setNuevaFechaCuota(e.target.value)}
+                className="input-dark w-full text-sm py-2.5 font-mono"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setCuotaAReprogramar(null)} className="btn-secondary flex-1 justify-center py-2.5">Cancelar</button>
+              <button type="submit" disabled={saving || !nuevaFechaCuota} className="btn-primary flex-1 justify-center py-2.5 bg-amber-600 hover:bg-amber-500 border-none">
+                {saving ? 'Guardando...' : 'Guardar Fecha'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </>
+  )
+}
+
+/** Compra registrada que todavía no entra al stock: espera la aprobación del control de calidad. */
+function EnCamino({ cantidad, unidad }: { cantidad?: number; unidad: string }) {
+  if (!cantidad) return null
+  return (
+    <span
+      className="block text-[10px] font-bold text-amber-300 mt-0.5"
+      title="Compra registrada: el stock sube al aprobar el control de calidad (Inspeccionar)"
+    >
+      + {Number(cantidad).toFixed(0)} {unidad} en camino (pendiente de control de calidad)
+    </span>
   )
 }

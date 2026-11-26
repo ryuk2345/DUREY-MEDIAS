@@ -31,3 +31,19 @@ export function validarTransicionEstadoMaquina(actual: EstadoMaquina, nuevo: Est
   return { valido: true }
 }
 
+/** Grupos de las 4 tarjetas del monitor de Máquinas. Cada tarjeta filtra la lista por su grupo. */
+export type GrupoEstadoMaquina = 'operativa' | 'falla' | 'mantenimiento' | 'standby'
+
+export const GRUPOS_ESTADO_MAQUINA: Record<GrupoEstadoMaquina, { label: string; estados: EstadoMaquina[] }> = {
+  operativa: { label: 'Operativa', estados: ['activa', 'ocupada'] },
+  falla: { label: 'Falla crítica', estados: ['malograda'] },
+  mantenimiento: { label: 'Mantenimiento', estados: ['mantenimiento'] },
+  standby: { label: 'Stand-by', estados: ['standby', 'inactiva'] },
+}
+
+/** Sin grupo (null) devuelve todas las máquinas. */
+export function filtrarMaquinasPorGrupo<T extends { estado: string }>(maquinas: T[], grupo: GrupoEstadoMaquina | null): T[] {
+  if (!grupo) return maquinas
+  const estados = GRUPOS_ESTADO_MAQUINA[grupo].estados as string[]
+  return maquinas.filter(m => estados.includes(m.estado))
+}

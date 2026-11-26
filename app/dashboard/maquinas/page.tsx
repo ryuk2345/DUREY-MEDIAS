@@ -14,7 +14,10 @@ import {
   FileText, Activity, Radio
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
+import {
+  validarTransicionEstadoMaquina, filtrarMaquinasPorGrupo, GRUPOS_ESTADO_MAQUINA, ESTADOS_MAQUINA_VALIDOS,
+  type GrupoEstadoMaquina, type EstadoMaquina
+} from '@/lib/domain/machines'
 
 
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -78,6 +81,9 @@ export default function MaquinasPage() {
   const [enviandoReporte, setEnviandoReporte] = useState(false)
   const [showConfirmReporte, setShowConfirmReporte] = useState(false)
   const [busquedaMonitor, setBusquedaMonitor] = useState('')
+  // Tarjeta de estado pulsada: filtra la lista de máquinas (null = todas)
+  const [filtroGrupo, setFiltroGrupo] = useState<GrupoEstadoMaquina | null>(null)
+  const alternarFiltro = (grupo: GrupoEstadoMaquina) => setFiltroGrupo(actual => (actual === grupo ? null : grupo))
 
   // Modales y Gestión CRUD
   const [showMaquinaModal, setShowMaquinaModal] = useState(false)
@@ -325,15 +331,16 @@ export default function MaquinasPage() {
   })
 
   // Tarjetas superiores: conteo real por estado (sin máquinas ficticias)
-  const resumenEstado = (estados: string[]) => {
-    const lista = maquinas.filter(m => estados.includes(m.estado))
+  const resumenEstado = (grupo: GrupoEstadoMaquina) => {
+    const lista = filtrarMaquinasPorGrupo(maquinas, grupo)
     const codigos = lista.slice(0, 3).map(m => m.codigo).join(', ') + (lista.length > 3 ? ` +${lista.length - 3}` : '')
     return { total: lista.length, codigos, detalle: lista[0]?.detalle_estado || '' }
   }
-  const resumenOperativas = resumenEstado(['activa', 'ocupada'])
-  const resumenMalogradas = resumenEstado(['malograda'])
-  const resumenMantenimiento = resumenEstado(['mantenimiento'])
-  const resumenStandby = resumenEstado(['standby', 'inactiva'])
+  const resumenOperativas = resumenEstado('operativa')
+  const resumenMalogradas = resumenEstado('falla')
+  const resumenMantenimiento = resumenEstado('mantenimiento')
+  const resumenStandby = resumenEstado('standby')
+  const maquinasFiltradas = filtrarMaquinasPorGrupo(maquinas, filtroGrupo)
 
   return (
     <div className="space-y-6 animate-fadeInUp pb-12">
@@ -384,7 +391,13 @@ export default function MaquinasPage() {
           {/* ── 4 TARJETAS PRINCIPALES DE ESTADO EN VIVO (LIVE STATUS) ───────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* 1. OPERATIVA */}
-            <div className="glass rounded-3xl p-5 border border-emerald-500/30 bg-emerald-500/[0.02] shadow-lg flex flex-col justify-between">
+            <button
+              type="button"
+              onClick={() => alternarFiltro('operativa')}
+              aria-pressed={filtroGrupo === 'operativa'}
+              title="Mostrar solo estas máquinas"
+              className={`glass rounded-3xl p-5 border border-emerald-500/30 bg-emerald-500/[0.02] shadow-lg flex flex-col justify-between text-left cursor-pointer transition-all hover:brightness-125 ${filtroGrupo === 'operativa' ? 'ring-2 ring-emerald-400' : ''}`}
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
                   <CheckCircle className="w-5 h-5" />
@@ -399,10 +412,16 @@ export default function MaquinasPage() {
                   {resumenOperativas.total} MÁQUINA(S)
                 </p>
               </div>
-            </div>
+            </button>
 
             {/* 2. FALLA CRÍTICA */}
-            <div className="glass rounded-3xl p-5 border border-red-500/40 bg-red-500/[0.04] shadow-lg flex flex-col justify-between">
+            <button
+              type="button"
+              onClick={() => alternarFiltro('falla')}
+              aria-pressed={filtroGrupo === 'falla'}
+              title="Mostrar solo estas máquinas"
+              className={`glass rounded-3xl p-5 border border-red-500/40 bg-red-500/[0.04] shadow-lg flex flex-col justify-between text-left cursor-pointer transition-all hover:brightness-125 ${filtroGrupo === 'falla' ? 'ring-2 ring-red-400' : ''}`}
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className="w-8 h-8 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center">
                   <AlertTriangle className="w-5 h-5" />
@@ -417,10 +436,16 @@ export default function MaquinasPage() {
                   {resumenMalogradas.total === 0 ? 'SIN FALLAS' : resumenMalogradas.total === 1 ? (resumenMalogradas.detalle || '1 MÁQUINA') : `${resumenMalogradas.total} MÁQUINAS`}
                 </p>
               </div>
-            </div>
+            </button>
 
             {/* 3. MANTENIMIENTO */}
-            <div className="glass rounded-3xl p-5 border border-cyan-500/30 bg-cyan-500/[0.02] shadow-lg flex flex-col justify-between">
+            <button
+              type="button"
+              onClick={() => alternarFiltro('mantenimiento')}
+              aria-pressed={filtroGrupo === 'mantenimiento'}
+              title="Mostrar solo estas máquinas"
+              className={`glass rounded-3xl p-5 border border-cyan-500/30 bg-cyan-500/[0.02] shadow-lg flex flex-col justify-between text-left cursor-pointer transition-all hover:brightness-125 ${filtroGrupo === 'mantenimiento' ? 'ring-2 ring-cyan-400' : ''}`}
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
                   <Wrench className="w-5 h-5" />
@@ -435,10 +460,16 @@ export default function MaquinasPage() {
                   {resumenMantenimiento.total === 0 ? 'SIN MANTENIMIENTOS' : `${resumenMantenimiento.total} MÁQUINA(S)`}
                 </p>
               </div>
-            </div>
+            </button>
 
             {/* 4. STAND-BY */}
-            <div className="glass rounded-3xl p-5 border border-slate-700 bg-slate-800/40 shadow-lg flex flex-col justify-between">
+            <button
+              type="button"
+              onClick={() => alternarFiltro('standby')}
+              aria-pressed={filtroGrupo === 'standby'}
+              title="Mostrar solo estas máquinas"
+              className={`glass rounded-3xl p-5 border border-slate-700 bg-slate-800/40 shadow-lg flex flex-col justify-between text-left cursor-pointer transition-all hover:brightness-125 ${filtroGrupo === 'standby' ? 'ring-2 ring-slate-300' : ''}`}
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className="w-8 h-8 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center">
                   <PauseCircle className="w-5 h-5" />
@@ -453,8 +484,48 @@ export default function MaquinasPage() {
                   {resumenStandby.total === 0 ? 'SIN MÁQUINAS' : `${resumenStandby.total} MÁQUINA(S)`}
                 </p>
               </div>
-            </div>
+            </button>
           </div>
+
+          {/* ── LISTA FILTRADA POR TARJETA ─────────────────────────────────────── */}
+          {filtroGrupo && (
+            <div className="glass rounded-3xl p-5 border border-white/[0.08] space-y-3 animate-fadeIn" data-testid="maquinas-filtradas">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-black text-white uppercase tracking-wider">
+                  Máquinas: {GRUPOS_ESTADO_MAQUINA[filtroGrupo].label} ({maquinasFiltradas.length})
+                </h2>
+                <button type="button" onClick={() => setFiltroGrupo(null)} className="btn-secondary text-xs py-1.5 px-3">
+                  <X className="w-3.5 h-3.5" /> Ver todas
+                </button>
+              </div>
+              {maquinasFiltradas.length === 0 ? (
+                <p className="text-xs text-slate-500 italic">No hay máquinas en este estado.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
+                  <table className="table-dark">
+                    <thead>
+                      <tr><th>Código</th><th>Tipo</th><th>Marca</th><th>Estado</th><th>Detalle</th></tr>
+                    </thead>
+                    <tbody>
+                      {maquinasFiltradas.map(m => (
+                        <tr key={m.id}>
+                          <td><code className="text-cyan-300 font-mono font-bold text-xs">{m.codigo}</code></td>
+                          <td className="capitalize text-slate-300">{m.tipo}</td>
+                          <td className="text-white font-medium">{m.marca?.nombre || '—'}</td>
+                          <td>
+                            <span className={`badge ${ESTADOS_MAQUINA_VALIDOS[m.estado as EstadoMaquina]?.badge ?? 'badge-warning'}`}>
+                              {ESTADOS_MAQUINA_VALIDOS[m.estado as EstadoMaquina]?.label ?? m.estado}
+                            </span>
+                          </td>
+                          <td className="text-slate-400 text-xs">{m.detalle_estado || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── CUERPO PRINCIPAL DOS COLUMNAS ───────────────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

@@ -5,6 +5,7 @@
 import { ejecutarRpcProduccion, RPC_PRODUCCION } from './mockRpcProduccion'
 import { ejecutarRpcProcesos, RPC_PROCESOS } from './mockRpcProcesos'
 import { ejecutarRpcMateriaPrima, RPC_MATERIA_PRIMA } from './mockRpcMateriaPrima'
+import { ejecutarRpcLogistica, RPC_LOGISTICA } from './mockRpcLogistica'
 
 const SEMILLAS = {
   usuarios: [
@@ -142,6 +143,13 @@ const SEMILLAS = {
   cuotas: [],
   cobros: [],
   cajas_diarias: [],
+  pagos_proveedores: [],
+  agencias: [
+    { id: 'ag1', nombre: 'Shalom', activo: true },
+    { id: 'ag2', nombre: 'Olva Courier', activo: true },
+    { id: 'ag3', nombre: 'Marvisur', activo: true },
+    { id: 'ag4', nombre: 'Flores Cargo', activo: true }
+  ],
   averias_maquinas: [
     { id: 'av1', maquina_id: 'maq2', descripcion_operador: 'M02: SOBRECALENTAMIENTO MOTOR PRINCIPAL — Se detectó aumento de temperatura superior a 85°C. Paro de emergencia automático activado.', tipo_averia: 'MECÁNICA', estado: 'pendiente', fecha_reporte: '2026-08-11 14:20:00', asignado_a: 'Carlos Mendoza', nivel: 'CRÍTICO' },
     { id: 'av2', maquina_id: 'maq4', descripcion_operador: 'M05: CAMBIO DE CORREA DENTADA — Mantenimiento preventivo programado completado con éxito. Pruebas de tensión superadas.', tipo_averia: 'MECÁNICA', estado: 'resuelto', fecha_reporte: '2026-08-10 09:15:00', asignado_a: 'Pedro Técnico (Planta)', nivel: 'RESUELTO' },
@@ -478,6 +486,29 @@ class MockQueryBuilder {
                 maquina: db.maquinas?.find((m: any) => m.id === dm.maquina_id) || null
               }))
           }));
+        } else if (self.tableName === 'compras_materia_prima') {
+          result = result.map(c => ({
+            ...c,
+            proveedores: (db.proveedores || []).find((p: any) => p.id === c.proveedor_id) || null,
+            materia_prima: (db.materia_prima || []).find((m: any) => m.id === c.materia_prima_id) || null
+          }));
+        } else if (self.tableName === 'cuotas_compras') {
+          result = result.map(q => {
+            const compra = (db.compras_materia_prima || []).find((c: any) => c.id === q.compra_id);
+            return {
+              ...q,
+              compra: compra ? {
+                ...compra,
+                proveedores: (db.proveedores || []).find((p: any) => p.id === compra.proveedor_id) || null,
+                materia_prima: (db.materia_prima || []).find((m: any) => m.id === compra.materia_prima_id) || null
+              } : null
+            };
+          });
+        } else if (self.tableName === 'pagos_proveedores') {
+          result = result.map(p => ({
+            ...p,
+            proveedor: (db.proveedores || []).find((pr: any) => pr.id === p.proveedor_id) || null
+          }));
         } else if (self.tableName === 'cuotas') {
           result = result.map(q => {
             const v = db.ventas.find((v: any) => v.id === q.venta_id) || {};
@@ -722,11 +753,12 @@ export function createMockClient() {
       return new MockQueryBuilder(tableName);
     },
     async rpc(fnName: string, params: any) {
-      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA].includes(fnName as never)) {
+      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA].includes(fnName as never)) {
         const db = await getMockDb();
         const resultado = (ejecutarRpcProduccion(db, fnName, params)
           ?? ejecutarRpcProcesos(db, fnName, params)
-          ?? ejecutarRpcMateriaPrima(db, fnName, params))!;
+          ?? ejecutarRpcMateriaPrima(db, fnName, params)
+          ?? ejecutarRpcLogistica(db, fnName, params))!;
         if (!resultado.error) await saveMockDb(db);
         return resultado;
       }

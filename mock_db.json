@@ -40,5 +40,28 @@
   "lotes_volteado": [],
   "reportes_volteado": [],
   "disenos": [],
-  "disenos_maquinas": []
+  "disenos_maquinas": [],
+  "agencias": [
+    {
+      "id": "ag1",
+      "nombre": "Shalom",
+      "activo": true
+    },
+    {
+      "id": "ag2",
+      "nombre": "Olva Courier",
+      "activo": true
+    },
+    {
+      "id": "ag3",
+      "nombre": "Marvisur",
+      "activo": true
+    },
+    {
+      "id": "ag4",
+      "nombre": "Flores Cargo",
+      "activo": true
+    }
+  ],
+  "pagos_proveedores": []
 }
