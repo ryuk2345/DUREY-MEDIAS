@@ -12,3 +12,9 @@ CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT nullif
 CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
 CREATE SCHEMA storage; CREATE TABLE storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]); CREATE TABLE storage.objects (id uuid default extensions.uuid_generate_v4(), bucket_id text, name text);
 ALTER DATABASE :"db" SET search_path = "$user", public, extensions;
+-- Permisos por defecto de un proyecto Supabase recién creado (pg_default_acl del rol postgres en public):
+-- cada tabla, secuencia y función nueva da TODO a anon, authenticated y service_role.
+-- La 026 se los quita a anon; sin simular esto, una tabla nueva parecería cerrada en local y no en la base real.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
