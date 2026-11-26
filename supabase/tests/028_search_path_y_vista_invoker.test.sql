@@ -37,9 +37,17 @@ SELECT pg_temp.verificar(NOT EXISTS (
      AND NOT EXISTS (SELECT 1 FROM unnest(COALESCE(p.proconfig, '{}')) c WHERE c LIKE 'search_path=%')
 ), 'todas las funciones propias con search_path fijo');
 
+-- Las cinco que no lo tenían quedan exactamente con public, pg_temp (pg_temp al final)
 SELECT pg_temp.verificar(
-  (SELECT 'search_path=public, pg_temp' = ANY (proconfig) FROM pg_proc WHERE oid = 'public._siguiente_codigo(text, integer, bigint, integer)'::regprocedure),
-  '_siguiente_codigo con search_path = public, pg_temp');
+  (SELECT proconfig = ARRAY['search_path=public, pg_temp'] FROM pg_proc WHERE oid = f::regprocedure),
+  f || ' con search_path = public, pg_temp')
+  FROM unnest(ARRAY[
+    'public._siguiente_codigo(text, integer, bigint, integer)',
+    'public.finalizar_lote_remallado(uuid, numeric, numeric, uuid, uuid, uuid)',
+    'public.asignar_diseno_a_maquinas(uuid, uuid[])',
+    'public.actualizar_estado_muestra_diseno(uuid, text, text)',
+    'public.registrar_diseno_con_asignaciones(text, text, text, text, uuid, uuid, text, integer, text, uuid[])'
+  ]) AS f;
 
 -- Los permisos de la 026 siguen igual
 SELECT pg_temp.verificar(NOT has_table_privilege('anon', 'public.vista_stock_medias', 'SELECT'), 'anon no lee la vista');
