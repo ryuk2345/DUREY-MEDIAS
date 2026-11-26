@@ -43,6 +43,8 @@ export function formatearFecha(fecha: string | Date): string {
   // como medianoche UTC y en Lima (UTC-5) se mostraría el día anterior.
   const soloDia = typeof fecha === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha) : null
   const d = soloDia ? new Date(Number(soloDia[1]), Number(soloDia[2]) - 1, Number(soloDia[3])) : new Date(fecha)
+  // 2026-02-30 no existe: new Date() lo pasaría a marzo
+  if (soloDia && (d.getMonth() !== Number(soloDia[2]) - 1 || d.getDate() !== Number(soloDia[3]))) return '—'
   if (isNaN(d.getTime())) return '—'
   return new Intl.DateTimeFormat('es-PE', {
     day: '2-digit',

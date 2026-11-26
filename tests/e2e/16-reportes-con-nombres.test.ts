@@ -40,6 +40,9 @@ describe('formatearFecha con fechas sin hora (zona de Lima)', () => {
       // Con hora sigue siendo un instante: 03:00 UTC es todavía el día anterior en Lima
       expect(formatearFecha('2026-11-20T03:00:00Z')).toBe('19/11/2026')
       expect(formatearFecha('no-es-fecha')).toBe('—')
+      // Una fecha imposible no salta al mes siguiente
+      expect(formatearFecha('2026-02-30')).toBe('—')
+      expect(formatearFecha('2026-13-01')).toBe('—')
     } finally {
       if (tzAntes === undefined) delete process.env.TZ
       else process.env.TZ = tzAntes
@@ -94,6 +97,18 @@ describe('filasProduccion (tejido)', () => {
     )
     expect(fila.Fecha).toBe('21/11/2026')
     expect(fila.Operarios).toBe('Pedro Noche')
+  })
+
+  it('el encargado no se repite en Operarios si también está asignado en el calendario', () => {
+    const [fila] = filasProduccion([reporteTejido()], [
+      { fecha: '2026-11-20', turno: 'dia', operador: { nombre: 'Rosa Encargada' } },
+      { fecha: '2026-11-20', turno: 'dia', operador: { nombre: 'Luis Operario' } },
+    ])
+    expect(fila.Operarios).toBe('Luis Operario')
+    const [soloEncargado] = filasProduccion([reporteTejido()], [
+      { fecha: '2026-11-20', turno: 'dia', operador: { nombre: 'Rosa Encargada' } },
+    ])
+    expect(soloEncargado.Operarios).toBe(SIN_REGISTRAR)
   })
 
   it('sin asignaciones ni tejedor dice "Sin registrar", nunca vacío', () => {
@@ -157,7 +172,8 @@ describe('filasPlanchado y filasPreparado', () => {
       preparador: { nombre: 'Lucía' }, catalogo_media: { codigo: null, sku: 'SKU-9' },
     }])
     expect(fila.Preparador).toBe('Lucía')
-    expect(fila['Tipo de Media']).toBe('SKU-9')
+    // Se conserva el nombre de columna anterior ("Tipo Media") para no romper plantillas de Excel
+    expect(fila['Tipo Media']).toBe('SKU-9')
     const [sinNombre] = filasPreparado([{ fecha: '2026-11-20', codigo_paquete: 'PQ-2', docenas: 1, estado: 'x' }])
     expect(sinNombre.Preparador).toBe(SIN_REGISTRAR)
   })

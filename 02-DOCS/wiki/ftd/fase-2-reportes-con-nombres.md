@@ -25,14 +25,18 @@ Fuera (decidido por el usuario 2026-11-25): operario por máquina y turno → Fa
 - [x] T3 Página de Reportes usa el dominio; consultas con encargado, operarios, remalladora, máquina, reportado por y técnico — prueba: Playwright descarga el Excel y lo lee.
 - [x] T4 Mock: remalladora y máquina en `reportes_remallado`, técnico en `reparaciones` — prueba: Playwright en modo mock.
 - [x] T5 Controles: npm test, Playwright, build, tsc, lint de los archivos tocados.
-- [ ] T6 `rsc risk`, revisión, PR y fusión.
+- [x] T6 `rsc risk` (nivel 1) y un revisor de contexto nuevo (correctitud) — prueba: hallazgos corregidos y registrados en el ledger.
+- [ ] T7 PR y fusión.
 
 ## Evidence
 - Base real (solo lectura, 2026-11-25): una sola clave foránea a `usuarios` en `reportes_remallado`, `turnos_produccion`, `averias_maquinas`, `reparaciones` y `asignaciones_turno`; las relaciones de PostgREST no son ambiguas.
-- `npm test`: 17 archivos / 199 tests en verde (15 nuevos en tests/e2e/16).
+- `npm test`: 17 archivos / 199 tests en verde (15 nuevos en tests/e2e/16; 16 tras la revisión).
 - `npm run test:browser`: 41/41 (3 nuevos en tests/browser/reportes-con-nombres.spec.ts: Excel de tejido con turno, encargado, operarios y resumen; Excel de remallado con remalladora y máquina; PDF de tejido sin errores; zona horaria Lima, fecha 05/01/2026).
 - `npm run build`: compila. `npx tsc --noEmit`: sin errores. ESLint en los archivos tocados: 0 errores (corregido un `prefer-const` previo en la página).
+- `rsc risk`: nivel 1 (sin migración) -> un revisor. Revisión de correctitud sobre 895fb92: 0 bloqueos. Corregido: el título del resumen en PDF salta de página si no cabe; Preparado conserva la columna `Tipo Media` (no rompe plantillas); `formatearFecha('2026-02-30')` vuelve a dar "—"; el encargado no se repite en Operarios. Tests nuevos para los tres últimos (rojo antes de corregir). El salto de página del PDF se comprobó leyendo el código; no tiene test automático.
+- Tras correcciones: `npm test` 200/200; `npm run test:browser` 41/41; build OK; tsc y lint sin errores.
+- Cambio visible anotado: en Preparado, un preparador o tipo de media vacío sale "Sin registrar" en lugar de "N/A" (igual que en los demás reportes).
 - Regla 2 de AGENTS.md: sin cambios de modelo de datos. Regla 3: la lógica de las filas vive en `lib/domain/reportes.ts`; la fecha, en `formatearFecha`.
 
 ## Next
-`rsc risk`, revisión, PR y fusión. Después: Fase 3 (Repuestos y mecánicos, ASDD; antes ratificar la constitución).
+PR y fusión. Después: Fase 3 (Repuestos y mecánicos, ASDD; antes ratificar la constitución).

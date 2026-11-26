@@ -171,13 +171,18 @@ export default function ReportesPage() {
             headStyles: { fillColor: [30, 58, 138] },
           })
           if (resumen && resumen.length > 0) {
-            const finTabla = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 35
+            let inicio = ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 35) + 12
+            // Si el título y unas filas no caben, el resumen empieza en una página nueva con su título
+            if (inicio + 25 > doc.internal.pageSize.getHeight()) {
+              doc.addPage()
+              inicio = 20
+            }
             doc.setFontSize(12)
-            doc.text('Resumen por persona', 14, finTabla + 12)
+            doc.text('Resumen por persona', 14, inicio)
             autoTable(doc, {
               head: [Object.keys(resumen[0])],
               body: resumen.map(row => Object.values(row).map(v => v == null ? '—' : String(v))),
-              startY: finTabla + 16,
+              startY: inicio + 4,
               theme: 'grid',
               styles: { fontSize: 8 },
               headStyles: { fillColor: [30, 58, 138] },

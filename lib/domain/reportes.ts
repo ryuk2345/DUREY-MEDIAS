@@ -54,7 +54,10 @@ export function filasProduccion(reportes: ReporteTejido[], asignacionesTejido: A
     .map(r => {
       // El turno noche puede cerrarse al día siguiente: se cruza por la fecha del turno
       const fechaTurno = r.turno?.fecha ?? r.fecha
-      const nombres = [...(operarios.get(`${fechaTurno}|${r.turno?.horario}`) ?? [])].sort((x, y) => x.localeCompare(y))
+      const encargado = r.turno?.tejedor?.nombre?.trim()
+      const nombres = [...(operarios.get(`${fechaTurno}|${r.turno?.horario}`) ?? [])]
+        .filter(n => n !== encargado) // el encargado ya tiene su columna
+        .sort((x, y) => x.localeCompare(y))
       return {
         Fecha: formatearFecha(r.fecha),
         Turno: etiquetaTurno(r.turno?.horario),
@@ -122,7 +125,8 @@ export function filasPreparado(paquetes: PaquetePreparado[]): Fila[] {
     Fecha: formatearFecha(p.fecha),
     Preparador: nombre(p.preparador),
     'Código Paquete': p.codigo_paquete,
-    'Tipo de Media': p.catalogo_media?.codigo || p.catalogo_media?.sku || SIN_REGISTRAR,
+    // Mismo nombre de columna que antes de la Fase 2: no romper plantillas de Excel existentes
+    'Tipo Media': p.catalogo_media?.codigo || p.catalogo_media?.sku || SIN_REGISTRAR,
     Docenas: p.docenas,
     Estado: p.estado,
   }))
