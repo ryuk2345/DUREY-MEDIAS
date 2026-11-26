@@ -234,5 +234,19 @@
     }
   ],
   "compras_repuestos": [],
-  "averia_repuestos": []
+  "averia_repuestos": [],
+  "planes_mantenimiento": [
+    {
+      "id": "pl1",
+      "maquina_id": "m2",
+      "tarea": "Lubricar cilindro",
+      "frecuencia_dias": 15,
+      "fecha_inicio": "2026-01-01",
+      "ultima_fecha": null,
+      "activo": true,
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "mantenimientos_preventivos": [],
+  "mantenimiento_repuestos": []
 }

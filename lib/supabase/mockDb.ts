@@ -523,6 +523,18 @@ class MockQueryBuilder {
               } : null
             };
           });
+        } else if (self.tableName === 'planes_mantenimiento') {
+          result = result.map(p => ({
+            ...p,
+            maquina: (db.maquinas || []).find((m: { id: string }) => m.id === p.maquina_id) || null
+          }));
+        } else if (self.tableName === 'mantenimientos_preventivos') {
+          result = result.map(m => ({
+            ...m,
+            mecanico: (db.mecanicos || []).find((x: { id: string }) => x.id === m.mecanico_id) || null,
+            mantenimiento_repuestos: (db.mantenimiento_repuestos || []).filter((u: { mantenimiento_id: string }) => u.mantenimiento_id === m.id)
+              .map((u: { repuesto_id: string }) => ({ ...u, repuesto: (db.repuestos || []).find((r: { id: string }) => r.id === u.repuesto_id) || null }))
+          }));
         } else if (self.tableName === 'compras_repuestos') {
           result = result.map(c => ({
             ...c,

@@ -65,7 +65,10 @@ export default function BalancePage() {
         .reduce((s, c) => s + (Number(c.costo_total) || 0), 0)
       setComprasTotal(totalCompras)
 
-      const totalRepairs = gastoMantenimiento(repRes.data ?? [])
+      // Fase 4: la mano de obra de los preventivos terminados también es gasto de mantenimiento
+      const prevRes = await supabase.from('mantenimientos_preventivos').select('costo_mano_obra').eq('estado', 'terminado')
+      if (prevRes.error) toast.error(`Error al cargar mantenimientos preventivos: ${prevRes.error.message}`)
+      const totalRepairs = gastoMantenimiento(repRes.data ?? [], prevRes.data ?? [])
       setRepairsTotal(totalRepairs)
 
       // Solo datos de la base (antes se mezclaban egresos guardados en este navegador)

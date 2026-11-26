@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import { nombreMecanico } from '@/lib/domain/repuestos'
+import { estadoPreventivoMaquina, ETIQUETA_ESTADO_PLAN, hoyLocal } from '@/lib/domain/mantenimiento'
+import { History } from 'lucide-react'
 import { formatearFecha } from '@/lib/utils'
 import {
   Cpu, Plus, Search, Trash2, Edit2, Loader2, X, Check,
@@ -66,6 +68,8 @@ export default function MaquinasPage() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([])
   const [marcas, setMarcas] = useState<Marca[]>([])
   const [mecanicos, setMecanicos] = useState<Mecanico[]>([])
+  // Fase 4: planes de mantenimiento preventivo, para el aviso de vencido/próximo
+  const [planes, setPlanes] = useState<{ maquina_id: string; fecha_inicio: string; ultima_fecha: string | null; frecuencia_dias: number; activo: boolean }[]>([])
   const mecanicosActivos = mecanicos.filter(m => m.activo)
   const [mecanicoForm, setMecanicoForm] = useState<{ id: string; nombre: string; apellido: string; telefono: string } | null>(null)
   const [guardandoMecanico, setGuardandoMecanico] = useState(false)
@@ -108,14 +112,17 @@ export default function MaquinasPage() {
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
   // No pone loading=true: tras la carga inicial, las recargas actualizan sin ocultar la pantalla
   const cargarDatos = useCallback(async () => {
-    const [maq, mar, tec, av] = await Promise.all([
+    const [maq, mar, tec, av, pl] = await Promise.all([
       supabase.from('maquinas').select('*, marca:marcas_maquinas(nombre)').order('codigo'),
       supabase.from('marcas_maquinas').select('*').order('nombre'),
       supabase.from('mecanicos').select('id, nombre, apellido, telefono, activo').order('nombre'),
       supabase.from('averias_maquinas').select(`
         *, maquina:maquinas(codigo, tipo)
-      `).order('fecha_reporte', { ascending: false }).limit(10)
+      `).order('fecha_reporte', { ascending: false }).limit(10),
+      supabase.from('planes_mantenimiento').select('maquina_id, fecha_inicio, ultima_fecha, frecuencia_dias, activo'),
     ])
+    if (pl.error) toast.error(`Error cargando planes de mantenimiento: ${pl.error.message}`)
+    setPlanes(pl.data ?? [])
 
     if (maq.error) {
       toast.error(`Error cargando máquinas: ${maq.error.message || maq.error.details}`)
@@ -371,6 +378,19 @@ export default function MaquinasPage() {
   const resumenMantenimiento = resumenEstado('mantenimiento')
   const resumenStandby = resumenEstado('standby')
   const maquinasFiltradas = filtrarMaquinasPorGrupo(maquinas, filtroGrupo)
+  const hoy = hoyLocal()
+  const avisoPreventivo = (maquinaId: string) => {
+    const e = estadoPreventivoMaquina(planes, maquinaId, hoy)
+    if (!e) return <span className="text-slate-600 text-xs">—</span>
+    const color = e === 'vencido' ? 'bg-red-500/20 text-red-300' : e === 'proximo' ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'
+    return <span className={`badge text-[10px] ${color}`}>{ETIQUETA_ESTADO_PLAN[e]}</span>
+  }
+  const enlaceHistoria = (maquinaId: string, codigo: string) => (
+    <Link href={`/dashboard/maquinas/${maquinaId}/historia`} className="text-xs text-indigo-300 inline-flex items-center gap-1" aria-label={`Historia de ${codigo}`}>
+      <History className="w-3.5 h-3.5" /> Historia
+    </Link>
+  )
+  const conPreventivoVencido = maquinas.filter(m => estadoPreventivoMaquina(planes, m.id, hoy) === 'vencido')
 
   return (
     <div className="space-y-6 animate-fadeInUp pb-12">
@@ -517,6 +537,15 @@ export default function MaquinasPage() {
             </button>
           </div>
 
+          {conPreventivoVencido.length > 0 && (
+            <div className="glass rounded-2xl p-4 border border-red-500/30 flex flex-wrap items-center gap-3" data-testid="aviso-preventivo-vencido">
+              <Wrench className="w-4 h-4 text-red-400" />
+              <span className="text-sm text-red-300">Mantenimiento preventivo vencido:</span>
+              {conPreventivoVencido.map(m => <code key={m.id} className="text-amber-300 font-mono text-xs">{m.codigo}</code>)}
+              <Link href="/dashboard/mantenimiento" className="text-xs text-cyan-300 ml-auto">Ir a Mantenimiento → Preventivo</Link>
+            </div>
+          )}
+
           {/* ── LISTA FILTRADA POR TARJETA ─────────────────────────────────────── */}
           {filtroGrupo && (
             <div className="glass rounded-3xl p-5 border border-white/[0.08] space-y-3 animate-fadeIn" data-testid="maquinas-filtradas">
@@ -534,7 +563,7 @@ export default function MaquinasPage() {
                 <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
                   <table className="table-dark">
                     <thead>
-                      <tr><th>Código</th><th>Tipo</th><th>Marca</th><th>Estado</th><th>Detalle</th></tr>
+                      <tr><th>Código</th><th>Tipo</th><th>Marca</th><th>Estado</th><th>Detalle</th><th>Preventivo</th><th>Historia</th></tr>
                     </thead>
                     <tbody>
                       {maquinasFiltradas.map(m => (
@@ -548,6 +577,8 @@ export default function MaquinasPage() {
                             </span>
                           </td>
                           <td className="text-slate-400 text-xs">{m.detalle_estado || '—'}</td>
+                          <td>{avisoPreventivo(m.id)}</td>
+                          <td>{enlaceHistoria(m.id, m.codigo)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -807,6 +838,7 @@ export default function MaquinasPage() {
                   <th>Año</th>
                   <th>Características</th>
                   <th>Estado</th>
+                  <th>Preventivo</th>
                   <th className="text-right">Acciones</th>
                 </tr>
               </thead>
@@ -825,7 +857,9 @@ export default function MaquinasPage() {
                         {m.estado}
                       </span>
                     </td>
+                    <td>{avisoPreventivo(m.id)}</td>
                     <td className="text-right space-x-2">
+                      {enlaceHistoria(m.id, m.codigo)}
                       <button
                         onClick={() => abrirMaquinaModal(m)}
                         className="btn-secondary py-1 px-2.5 text-xs hover:border-cyan-500/50 text-slate-300 hover:text-white"

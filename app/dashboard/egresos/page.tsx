@@ -97,7 +97,10 @@ export default function EgresosPage() {
         .reduce((s, c) => s + (Number(c.costo_total) || 0), 0)
       setTotalComprasRecibidas(comprasCosto)
 
-      const repCosto = gastoMantenimiento(repRes.data ?? [])
+      // Fase 4: la mano de obra de los preventivos terminados también es gasto de mantenimiento
+      const prevRes = await supabase.from('mantenimientos_preventivos').select('costo_mano_obra').eq('estado', 'terminado')
+      if (prevRes.error) toast.error(`Error al cargar mantenimientos preventivos: ${prevRes.error.message}`)
+      const repCosto = gastoMantenimiento(repRes.data ?? [], prevRes.data ?? [])
       setTotalReparaciones(repCosto)
     } catch (err: any) {
       toast.error(`Error al cargar egresos: ${err.message}`)
