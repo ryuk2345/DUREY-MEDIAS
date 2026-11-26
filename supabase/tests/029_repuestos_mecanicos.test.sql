@@ -144,6 +144,32 @@ SELECT pg_temp.verificar((SELECT NOT (r->>'descontado_de_caja')::boolean AND (r-
 UPDATE cajas_diarias SET estado = 'abierta' WHERE id IN ('00000000-0000-0000-0000-0000000029e1', '00000000-0000-0000-0000-0000000029e2');
 UPDATE repuestos SET stock_actual = 5, costo_unitario = 12 WHERE id = '00000000-0000-0000-0000-0000000029b1';
 
+-- ── Desempate de cajas (quien paga no tiene caja propia) y fallback sin sesión ──
+UPDATE cajas_diarias SET estado = 'cerrada_cuadrada' WHERE fecha = CURRENT_DATE;
+INSERT INTO cajas_diarias (id, fecha, estado, saldo_inicial, asesora_id, created_at) VALUES
+  ('00000000-0000-0000-0000-0000000029c5', CURRENT_DATE, 'abierta', 0, '00000000-0000-0000-0000-0000000029a2', NOW() - INTERVAL '3 hours'),
+  ('00000000-0000-0000-0000-0000000029c6', CURRENT_DATE, 'abierta', 0, NULL, NOW() - INTERVAL '1 hour'),
+  ('00000000-0000-0000-0000-0000000029c7', CURRENT_DATE, 'abierta', 0, NULL, NOW());
+SELECT registrar_compra_repuesto('00000000-0000-0000-0000-0000000029b1', 1, 5, 'efectivo', NULL, NULL, true, NULL);
+SELECT pg_temp.verificar((SELECT pagos_efectivo = 5 FROM cajas_diarias WHERE id = '00000000-0000-0000-0000-0000000029c6')
+  AND (SELECT pagos_efectivo = 0 FROM cajas_diarias WHERE id = '00000000-0000-0000-0000-0000000029c5')
+  AND (SELECT pagos_efectivo = 0 FROM cajas_diarias WHERE id = '00000000-0000-0000-0000-0000000029c7'),
+  'sin caja propia: la general (no la de otra persona), y de las generales la más antigua');
+-- Sin sesión, cuenta p_usuario_id: la otra vendedora (029a2) paga de su caja
+SELECT registrar_compra_repuesto('00000000-0000-0000-0000-0000000029b1', 1, 4, 'efectivo', NULL, NULL, true, '00000000-0000-0000-0000-0000000029a2');
+SELECT pg_temp.verificar((SELECT pagos_efectivo = 4 FROM cajas_diarias WHERE id = '00000000-0000-0000-0000-0000000029c5'), 'sin sesión: la caja del usuario del parámetro');
+-- Precio 0 en efectivo de caja: no toca la caja ni dice que descontó
+CREATE TEMP TABLE t_cero ON COMMIT DROP AS
+  SELECT registrar_compra_repuesto('00000000-0000-0000-0000-0000000029b1', 1, 0, 'efectivo', NULL, NULL, true, NULL) AS r;
+SELECT pg_temp.verificar((SELECT NOT (r->>'descontado_de_caja')::boolean AND (r->>'caja_id') IS NULL FROM t_cero), 'compra de 0: sin caja');
+-- Efectivo con la casilla desmarcada: queda registrado como no de caja
+CREATE TEMP TABLE t_nocaja ON COMMIT DROP AS
+  SELECT registrar_compra_repuesto('00000000-0000-0000-0000-0000000029b1', 1, 3, 'efectivo', NULL, NULL, false, NULL) AS r;
+SELECT pg_temp.verificar((SELECT NOT de_caja AND caja_id IS NULL FROM compras_repuestos WHERE id = (SELECT (r->>'compra_id')::uuid FROM t_nocaja)), 'efectivo fuera de caja: de_caja = false');
+DELETE FROM cajas_diarias WHERE id IN ('00000000-0000-0000-0000-0000000029c5', '00000000-0000-0000-0000-0000000029c6', '00000000-0000-0000-0000-0000000029c7');
+UPDATE cajas_diarias SET estado = 'abierta' WHERE id IN ('00000000-0000-0000-0000-0000000029e1', '00000000-0000-0000-0000-0000000029e2');
+UPDATE repuestos SET stock_actual = 5, costo_unitario = 12 WHERE id = '00000000-0000-0000-0000-0000000029b1';
+
 -- ── Ajuste manual ya no crea egreso ────────────────────────────────────────
 CREATE TEMP TABLE t_egresos_antes ON COMMIT DROP AS SELECT count(*) AS n FROM egresos_adicionales;
 SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000029b1', 'salida', 1, 'conteo');
@@ -151,6 +177,9 @@ SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000029b1', 'ingreso',
 SELECT pg_temp.verificar((SELECT count(*) FROM egresos_adicionales) = (SELECT n FROM t_egresos_antes), 'el ajuste manual no crea egreso');
 SELECT pg_temp.debe_fallar($$SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000029b1', 'salida', 99, 'x')$$, 'Solo hay 5');
 SELECT pg_temp.debe_fallar($$SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000029b1', 'robo', 1, 'x')$$, 'Tipo de ajuste');
+SELECT pg_temp.verificar((SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000029b1', 'salida', 5, 'conteo') = 0), 'sacar exactamente todo el stock deja 0');
+SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000029b1', 'ingreso', 5, 'conteo');
+SELECT pg_temp.debe_fallar($$SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000029b1', 'ingreso', 0, 'x')$$, 'mayor a 0');
 
 -- ── Falla: reportar, asignar, iniciar con mecánico ─────────────────────────
 CREATE TEMP TABLE t_averia ON COMMIT DROP AS
@@ -196,6 +225,11 @@ SELECT quitar_repuesto_de_averia((SELECT id FROM t_todo));
 SELECT pg_temp.verificar((SELECT stock_actual = 2 FROM repuestos WHERE id = '00000000-0000-0000-0000-0000000029b2'), 'y quitarlo lo devuelve');
 
 -- ── Cerrar la reparación: costo de repuestos calculado ─────────────────────
+-- La máquina debe seguir en mantenimiento para cerrar
+UPDATE maquinas SET estado = 'activa' WHERE id = '00000000-0000-0000-0000-0000000029d1';
+SELECT pg_temp.debe_fallar($$SELECT cerrar_reparacion_averia((SELECT id FROM t_averia), 'ok', 0)$$, 'mantenimiento');
+UPDATE maquinas SET estado = 'mantenimiento' WHERE id = '00000000-0000-0000-0000-0000000029d1';
+SELECT pg_temp.verificar((SELECT detalle_estado = 'EN REPARACIÓN' FROM maquinas WHERE id = '00000000-0000-0000-0000-0000000029d1'), 'detalle EN REPARACIÓN al iniciar');
 SELECT pg_temp.debe_fallar($$SELECT cerrar_reparacion_averia((SELECT id FROM t_averia), '  ', 0)$$, 'diagnóstico');
 SELECT pg_temp.debe_fallar($$SELECT cerrar_reparacion_averia((SELECT id FROM t_averia), 'ok', -1)$$, 'negativ');
 SELECT cerrar_reparacion_averia((SELECT id FROM t_averia), 'Cambio de aguja', 30);

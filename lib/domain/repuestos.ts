@@ -21,9 +21,15 @@ export function filtrarRepuestos<T extends RepuestoBuscable>(items: T[], texto: 
   })
 }
 
-/** Redondeo a céntimos sin el error de coma flotante (1.005 → 1.01, como round() de Postgres). */
+/**
+ * Redondeo a céntimos "mitad hacia arriba", como round(numeric, 2) de Postgres (2.135 → 2.14).
+ * Se desplaza la coma en el texto del número (2.135e2 = 213.5 exacto) para no arrastrar
+ * el error de coma flotante de multiplicar por 100.
+ */
 export function redondearCentimos(n: number): number {
-  return Math.round((n + Math.sign(n) * Number.EPSILON) * 100) / 100
+  if (!Number.isFinite(n)) return n
+  const r = Math.round(Number(`${Math.abs(n)}e2`))
+  return Math.sign(n) * Number(`${r}e-2`)
 }
 
 /** Total de una compra al contado: cantidad × precio unitario redondeado a céntimos (igual que la base). */

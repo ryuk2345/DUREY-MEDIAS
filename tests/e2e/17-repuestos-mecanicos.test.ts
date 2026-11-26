@@ -39,6 +39,9 @@ describe('lib/domain/repuestos', () => {
     expect(totalCompraRepuesto(3, 12)).toBe(36)
     expect(totalCompraRepuesto(100, 0.125)).toBe(13) // 0.125 → 0.13 × 100
     expect(totalCompraRepuesto(1, 1.005)).toBe(1.01) // sin error de coma flotante
+    expect(totalCompraRepuesto(1, 2.135)).toBe(2.14)
+    expect(totalCompraRepuesto(1, 4.015)).toBe(4.02)
+    expect(totalCompraRepuesto(3, 1999.995)).toBe(6000)
     expect(totalCompraRepuesto(2, 0)).toBe(0)
   })
 
@@ -120,6 +123,25 @@ describe('mock: compra de repuestos (AC1)', () => {
     rpcMant(db, 'registrar_compra_repuesto', { p_repuesto_id: 'r1', p_cantidad: 1, p_precio_unitario: 7, p_metodo_pago: 'efectivo', p_de_caja: true, p_fecha: '2026-01-01' })
     expect(db.cajas_diarias.map(c => c.pagos_efectivo)).toEqual([0, 7, 0, 0])
     expect(db.egresos_adicionales.at(-1)).toMatchObject({ fecha: '2026-01-01', monto: 7 })
+  })
+
+  it('sin caja propia: la general de hoy más antigua; nunca una de otro día ni de otra persona', () => {
+    db.cajas_diarias = [
+      { id: 'vieja', fecha: '2000-01-01', estado: 'abierta', asesora_id: null, pagos_efectivo: 0, created_at: '0' },
+      { id: 'otra', fecha: hoy(), estado: 'abierta', asesora_id: 'u9', pagos_efectivo: 0, created_at: '1' },
+      { id: 'gen2', fecha: hoy(), estado: 'abierta', asesora_id: null, pagos_efectivo: 0, created_at: '3' },
+      { id: 'gen1', fecha: hoy(), estado: 'abierta', asesora_id: null, pagos_efectivo: 0, created_at: '2' },
+    ]
+    rpcMant(db, 'registrar_compra_repuesto', { p_repuesto_id: 'r1', p_cantidad: 1, p_precio_unitario: 5, p_metodo_pago: 'efectivo', p_de_caja: true, p_usuario_id: 'u1' })
+    expect(Object.fromEntries(db.cajas_diarias.map(c => [c.id, c.pagos_efectivo]))).toEqual({ vieja: 0, otra: 0, gen2: 0, gen1: 5 })
+  })
+
+  it('precio 0 en efectivo de caja no toca la caja; efectivo fuera de caja queda de_caja = false', () => {
+    const r = rpcMant(db, 'registrar_compra_repuesto', { p_repuesto_id: 'r1', p_cantidad: 1, p_precio_unitario: 0, p_metodo_pago: 'efectivo', p_de_caja: true })
+    expect(r.data).toMatchObject({ descontado_de_caja: false, caja_id: null })
+    rpcMant(db, 'registrar_compra_repuesto', { p_repuesto_id: 'r1', p_cantidad: 1, p_precio_unitario: 3, p_metodo_pago: 'efectivo', p_de_caja: false })
+    expect(db.compras_repuestos.at(-1)).toMatchObject({ de_caja: false, caja_id: null })
+    expect(db.cajas_diarias[0].pagos_efectivo).toBe(0)
   })
 
   it('sin caja abierta la compra se registra igual (gasto, sin caja)', () => {
