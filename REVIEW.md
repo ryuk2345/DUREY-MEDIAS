@@ -48,4 +48,4 @@ La lista que aplica `rsc risk` está en `.rsc-risk.json` (versionado en la raíz
 - `app/dashboard/egresos/`, `app/dashboard/balance/` y `app/dashboard/admin/` (totales de ingresos)
 - Migraciones SQL (`supabase/migrations/`): ya son nivel 2 por ser migraciones; incluye `registrar_cobro_cuotas`, `registrar_pago_proveedor` y `_sumar_a_caja`.
 
-**Fuera a propósito**: los espejos del mock (`lib/supabase/mockRpc*.ts`, `lib/supabase/mockDb.ts`) no tocan la base real; sus errores los atrapan `npm test` y Playwright.
+**Fuera a propósito**: los espejos del mock (`lib/supabase/mockRpc*.ts`) no tocan la base real; sus errores los atrapan `npm test` y Playwright. (`lib/supabase/mockDb.ts` sale nivel 2 igualmente por el detector de login que trae `rsc`: contiene `signInWithPassword(`.)
