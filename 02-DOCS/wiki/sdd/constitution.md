@@ -3,7 +3,7 @@ type: constitution
 title: DUREY-MEDIAS — Constitution
 description: Draft written by rsc onboard from the accepted plan; not ratified.
 tags: [sdd, constitution]
-timestamp: 2026-11-26T00:06:15Z
+timestamp: 2026-11-26T00:21:29Z
 topic: sdd
 status: draft
 version: draft

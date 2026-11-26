@@ -1,5 +1,5 @@
 # Harness decisions
 
-- Accepted plan `5a906a31455090b02b3246af1c770340aa4b0a65cacc6529d2c3b4a2f914444f`.
+- Accepted plan `9f8df631f4ade1ab8b8eeac5d4df3b92072817fb42c8cb2e469773cd1df35621`.
 - Project kind: software.
 - SDD: selected.
