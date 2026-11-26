@@ -7,6 +7,7 @@ import { Wrench, AlertTriangle, Plus, Clock, CheckCircle, TrendingUp, Loader2, X
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
+import { costoRepuestosUsados, nombreMecanico } from '@/lib/domain/repuestos'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
 
@@ -16,6 +17,8 @@ interface Averia {
   id: string; descripcion_operador: string; estado: string; fecha_reporte: string
   maquina: { codigo: string; tipo: string }
   reportado_por: { nombre: string }
+  mecanico: { nombre: string; apellido: string } | null
+  averia_repuestos: { id: string; cantidad: number; costo_unitario: number; repuesto: { nombre: string } | null }[]
   reparaciones: { 
     id: string
     costo_total: number
@@ -24,6 +27,9 @@ interface Averia {
     costo_mano_obra: number
   }[]
 }
+
+interface Mecanico { id: string; nombre: string; apellido: string; telefono: string }
+interface Repuesto { id: string; nombre: string; stock_actual: number }
 
 export default function MantenimientoPage() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([])
@@ -34,27 +40,41 @@ export default function MantenimientoPage() {
   const [showRepararModal, setShowRepararModal] = useState(false)
   const [averiaSeleccionada, setAveriaSeleccionada] = useState<Averia | null>(null)
   const [averiaForm, setAveriaForm] = useState({ maquina_id: '', descripcion: '' })
-  const [reparacionForm, setReparacionForm] = useState({ descripcion_tecnico: '', costo_repuestos: '', costo_mano_obra: '' })
+  const [reparacionForm, setReparacionForm] = useState({ descripcion_tecnico: '', costo_mano_obra: '' })
+  // Fase 3: mecánico que entra a reparar y repuestos que usa (se descuentan del stock)
+  const [mecanicos, setMecanicos] = useState<Mecanico[]>([])
+  const [repuestos, setRepuestos] = useState<Repuesto[]>([])
+  const [mecanicoPorAveria, setMecanicoPorAveria] = useState<Record<string, string>>({})
+  const [usoPorAveria, setUsoPorAveria] = useState<Record<string, { repuesto_id: string; cantidad: string }>>({})
   const [procesando, setProcesando] = useState(false)
   const supabase = createClient()
 
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    const [maq, av] = await Promise.all([
+    const [maq, av, mec, rep] = await Promise.all([
       supabase.from('maquinas').select('id, codigo, tipo, estado').order('codigo'),
+      // Relaciones con la clave foránea explícita: averia_repuestos también apunta a usuarios y mecanicos
       supabase.from('averias_maquinas').select(`
         id, descripcion_operador, estado, fecha_reporte,
         maquina:maquinas(codigo, tipo),
-        reportado_por:usuarios(nombre),
+        reportado_por:usuarios!averias_maquinas_reportado_por_id_fkey(nombre),
+        mecanico:mecanicos!averias_maquinas_mecanico_id_fkey(nombre, apellido),
+        averia_repuestos(id, cantidad, costo_unitario, repuesto:repuestos(nombre)),
         reparaciones(id, costo_total, descripcion_tecnico, costo_repuestos, costo_mano_obra)
       `).order('fecha_reporte', { ascending: false }),
+      supabase.from('mecanicos').select('id, nombre, apellido, telefono').eq('activo', true).order('nombre'),
+      supabase.from('repuestos').select('id, nombre, stock_actual').order('nombre'),
     ])
 
     if (maq.error) toast.error(`Error al cargar máquinas: ${maq.error.message}`)
     if (av.error) toast.error(`Error al cargar averías: ${av.error.message}`)
+    if (mec.error) toast.error(`Error al cargar mecánicos: ${mec.error.message}`)
+    if (rep.error) toast.error(`Error al cargar repuestos: ${rep.error.message}`)
 
     setMaquinas(maq.data ?? [])
-    setAverias((av.data ?? []) as Averia[])
+    setAverias((av.data ?? []) as unknown as Averia[])
+    setMecanicos((mec.data ?? []) as Mecanico[])
+    setRepuestos((rep.data ?? []) as Repuesto[])
     setLoading(false)
   }, [])
 
@@ -123,8 +143,11 @@ export default function MantenimientoPage() {
       return
     }
 
+    const mecanicoId = mecanicoPorAveria[averia.id]
+    if (!mecanicoId) { toast.error('Elige el mecánico que hace la reparación'); return }
+
     setProcesando(true)
-    const { error } = await supabase.rpc('iniciar_reparacion_averia', { p_averia_id: averia.id })
+    const { error } = await supabase.rpc('iniciar_reparacion_mecanico', { p_averia_id: averia.id, p_mecanico_id: mecanicoId })
     setProcesando(false)
     if (error) {
       toast.error(`No se pudo iniciar la reparación: ${error.message}`)
@@ -133,6 +156,31 @@ export default function MantenimientoPage() {
     }
 
     toast.info('🔧 Reparación iniciada. Máquina en estado MANTENIMIENTO.')
+    cargarDatos()
+  }
+
+  // Repuesto usado: se descuenta del stock en la base (función atómica); no crea gasto
+  const usarRepuesto = async (averia: Averia) => {
+    const uso = usoPorAveria[averia.id]
+    const cantidad = Number(uso?.cantidad)
+    if (!uso?.repuesto_id || !Number.isInteger(cantidad) || cantidad <= 0) { toast.error('Elige el repuesto y una cantidad entera mayor a 0'); return }
+    if (procesando) return
+    setProcesando(true)
+    const { error } = await supabase.rpc('usar_repuesto_en_averia', { p_averia_id: averia.id, p_repuesto_id: uso.repuesto_id, p_cantidad: cantidad })
+    setProcesando(false)
+    if (error) { toast.error(error.message); return }
+    toast.success('Repuesto descontado del stock')
+    setUsoPorAveria(prev => ({ ...prev, [averia.id]: { repuesto_id: '', cantidad: '1' } }))
+    cargarDatos()
+  }
+
+  const quitarRepuesto = async (usoId: string) => {
+    if (procesando) return
+    setProcesando(true)
+    const { error } = await supabase.rpc('quitar_repuesto_de_averia', { p_uso_id: usoId })
+    setProcesando(false)
+    if (error) { toast.error(error.message); return }
+    toast.success('Repuesto devuelto al stock')
     cargarDatos()
   }
 
@@ -150,12 +198,11 @@ export default function MantenimientoPage() {
     }
 
     setProcesando(true)
-    const { error } = await supabase.rpc('registrar_reparacion_averia', {
+    // El costo de repuestos lo calcula la base con lo usado en la falla
+    const { error } = await supabase.rpc('cerrar_reparacion_averia', {
       p_averia_id: averiaSeleccionada.id,
-      p_descripcion_tecnico: reparacionForm.descripcion_tecnico,
-      p_costo_repuestos: parseFloat(reparacionForm.costo_repuestos || '0'),
+      p_descripcion: reparacionForm.descripcion_tecnico,
       p_costo_mano_obra: parseFloat(reparacionForm.costo_mano_obra || '0'),
-      p_tecnico_id: null
     })
     setProcesando(false)
     if (error) {
@@ -166,6 +213,7 @@ export default function MantenimientoPage() {
 
     toast.success('Reparación registrada — Máquina habilitada (Activa)')
     setShowRepararModal(false)
+    setReparacionForm({ descripcion_tecnico: '', costo_mano_obra: '' })
     cargarDatos()
   }
 
@@ -277,7 +325,46 @@ export default function MantenimientoPage() {
                             <p className="text-xs text-slate-500 mb-1 font-semibold uppercase">Reporte del Operario:</p>
                             <p className="text-slate-300 text-sm">{a.descripcion_operador}</p>
                             <p className="text-slate-600 text-xs mt-1">Reportado por: {a.reportado_por?.nombre} · {formatearFecha(a.fecha_reporte)}</p>
+                            {a.mecanico && <p className="text-cyan-300 text-xs mt-1">Mecánico: {nombreMecanico(a.mecanico)}</p>}
                           </div>
+                          {isEnReparacion && (
+                            <div>
+                              <p className="text-xs text-slate-500 mb-1 font-semibold uppercase">Repuestos usados:</p>
+                              {a.averia_repuestos?.length ? (
+                                <ul className="space-y-1">
+                                  {a.averia_repuestos.map(u => (
+                                    <li key={u.id} className="flex items-center justify-between gap-2 text-xs text-slate-300">
+                                      <span>{u.cantidad} × {u.repuesto?.nombre ?? 'Repuesto'} · {formatearMoneda(u.cantidad * u.costo_unitario)}</span>
+                                      <button type="button" onClick={() => quitarRepuesto(u.id)} disabled={procesando}
+                                        className="text-red-300 hover:text-red-200" aria-label={`Quitar ${u.repuesto?.nombre ?? 'repuesto'}`}>
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : <p className="text-xs text-slate-600">Ninguno todavía</p>}
+                              <div className="flex gap-2 mt-2">
+                                <div className="flex-1">
+                                  <CustomSelect
+                                    value={usoPorAveria[a.id]?.repuesto_id ?? ''}
+                                    onChange={val => setUsoPorAveria(prev => ({ ...prev, [a.id]: { repuesto_id: val, cantidad: prev[a.id]?.cantidad ?? '1' } }))}
+                                    options={[
+                                      { value: '', label: 'Elegir repuesto...' },
+                                      ...repuestos.filter(r => r.stock_actual > 0).map(r => ({ value: r.id, label: `${r.nombre} (${r.stock_actual} en stock)` }))
+                                    ]}
+                                    triggerClassName="text-xs"
+                                  />
+                                </div>
+                                <input type="number" min="1" step="1" aria-label="Cantidad de repuesto"
+                                  value={usoPorAveria[a.id]?.cantidad ?? '1'}
+                                  onChange={e => setUsoPorAveria(prev => ({ ...prev, [a.id]: { repuesto_id: prev[a.id]?.repuesto_id ?? '', cantidad: e.target.value } }))}
+                                  className="input-dark text-xs w-16" />
+                                <button type="button" onClick={() => usarRepuesto(a)} disabled={procesando} className="btn-secondary text-xs">
+                                  <Plus className="w-3.5 h-3.5" /> Usar
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                       
@@ -290,6 +377,16 @@ export default function MantenimientoPage() {
                           {procesando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} Registrar Reparación
                         </button>
                       ) : (
+                        <div className="ml-4 flex flex-col gap-2 min-w-[12rem]">
+                        <CustomSelect
+                          value={mecanicoPorAveria[a.id] ?? ''}
+                          onChange={val => setMecanicoPorAveria(prev => ({ ...prev, [a.id]: val }))}
+                          options={[
+                            { value: '', label: mecanicos.length ? 'Mecánico que entra...' : 'Registra mecánicos en Máquinas' },
+                            ...mecanicos.map(m => ({ value: m.id, label: nombreMecanico(m) }))
+                          ]}
+                          triggerClassName="text-xs"
+                        />
                         <button
                           onClick={() => iniciarReparacion(a)}
                           disabled={procesando}
@@ -297,6 +394,7 @@ export default function MantenimientoPage() {
                         >
                           {procesando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wrench className="w-3.5 h-3.5" />} Iniciar Reparación
                         </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -500,23 +598,29 @@ export default function MantenimientoPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Costo Repuestos (S/)</label>
-                <input type="number" min="0" step="0.01" placeholder="0.00" value={reparacionForm.costo_repuestos} onChange={e => setReparacionForm({...reparacionForm, costo_repuestos: e.target.value})} className="input-dark w-full" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Costo Mano de Obra (S/)</label>
-                <input type="number" min="0" step="0.01" placeholder="0.00" value={reparacionForm.costo_mano_obra} onChange={e => setReparacionForm({...reparacionForm, costo_mano_obra: e.target.value})} className="input-dark w-full" />
-              </div>
-            </div>
-
-            {reparacionForm.costo_repuestos && reparacionForm.costo_mano_obra && (
-              <div className="mt-4 p-3 rounded-xl bg-white/[0.03] border border-white/[0.08] flex justify-between">
-                <span className="text-slate-400">Costo Total:</span>
-                <span className="text-white font-bold">{formatearMoneda(parseFloat(reparacionForm.costo_repuestos) + parseFloat(reparacionForm.costo_mano_obra))}</span>
-              </div>
-            )}
+            {(() => {
+              const costoRepuestos = costoRepuestosUsados(averiaSeleccionada.averia_repuestos ?? [])
+              const manoObra = parseFloat(reparacionForm.costo_mano_obra || '0') || 0
+              return (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Costo Repuestos (S/)</p>
+                      <p className="input-dark w-full text-slate-300" aria-label="Costo de repuestos usados">{formatearMoneda(costoRepuestos)}</p>
+                      <p className="text-[10px] text-slate-500 mt-1">Suma de los repuestos usados en esta falla</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Costo Mano de Obra (S/)</label>
+                      <input type="number" min="0" step="0.01" placeholder="0.00" value={reparacionForm.costo_mano_obra} onChange={e => setReparacionForm({...reparacionForm, costo_mano_obra: e.target.value})} className="input-dark w-full" />
+                    </div>
+                  </div>
+                  <div className="mt-4 p-3 rounded-xl bg-white/[0.03] border border-white/[0.08] flex justify-between">
+                    <span className="text-slate-400">Costo Total:</span>
+                    <span className="text-white font-bold">{formatearMoneda(costoRepuestos + manoObra)}</span>
+                  </div>
+                </>
+              )
+            })()}
           </div>
         )}
       </Modal>

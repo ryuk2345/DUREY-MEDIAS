@@ -9,8 +9,9 @@ export interface ProductoBuscable {
   talla?: string | null
 }
 
-// Minúsculas, sin tildes y con '_' '/' '-' como espacios: "niño_blanco" ≈ "nino blanco"
-function normalizar(texto: string): string {
+// Minúsculas, sin tildes y con '_' '/' '-' como espacios: "niño_blanco" ≈ "nino blanco".
+// Única definición para los buscadores (catálogo, repuestos).
+export function normalizarBusqueda(texto: string): string {
   return texto
     .toLowerCase()
     .normalize('NFD')
@@ -21,10 +22,10 @@ function normalizar(texto: string): string {
 // Devuelve los productos que contienen TODAS las palabras escritas, en cualquier campo y orden.
 // Texto vacío → lista completa.
 export function filtrarCatalogo<T extends ProductoBuscable>(items: T[], texto: string): T[] {
-  const palabras = normalizar(texto).split(/\s+/).filter(Boolean)
+  const palabras = normalizarBusqueda(texto).split(/\s+/).filter(Boolean)
   if (palabras.length === 0) return items
   return items.filter(item => {
-    const campos = normalizar(
+    const campos = normalizarBusqueda(
       [item.sku, item.codigo, item.modelo, item.publico, item.diseno_color, item.talla].filter(Boolean).join(' ')
     )
     return palabras.every(p => campos.includes(p))

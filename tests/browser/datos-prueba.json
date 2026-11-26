@@ -18,14 +18,6 @@
       "estado": "disponible"
     },
     {
-      "id": "tec1",
-      "nombre": "alexander",
-      "email": "alexander@durey.com",
-      "rol": "tecnico",
-      "activo": true,
-      "estado": "disponible"
-    },
-    {
       "id": "vend1",
       "nombre": "Vendedora Prueba",
       "email": "vend@durey.com",
@@ -217,5 +209,30 @@
       "docenas_restantes": 0,
       "fecha": "2026-01-05"
     }
-  ]
+  ],
+  "mecanicos": [
+    {
+      "id": "mec1",
+      "nombre": "Mecánico",
+      "apellido": "Prueba",
+      "telefono": "900111222",
+      "activo": true
+    }
+  ],
+  "repuestos": [
+    {
+      "id": "rp1",
+      "nombre": "Aguja de prueba",
+      "stock_actual": 5,
+      "costo_unitario": 10
+    },
+    {
+      "id": "rp2",
+      "nombre": "Correa de prueba",
+      "stock_actual": 0,
+      "costo_unitario": 30
+    }
+  ],
+  "compras_repuestos": [],
+  "averia_repuestos": []
 }

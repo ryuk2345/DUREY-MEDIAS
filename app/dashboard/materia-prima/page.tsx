@@ -3,14 +3,15 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { esStockBajoMateriaPrima, cantidadEnCaminoPorInsumo } from '@/lib/domain/inventario'
-import { resumirCuentasPorPagar, deudaPendientePorProveedor, METODOS_PAGO_PROVEEDOR, type MetodoPagoProveedor } from '@/lib/domain/finance'
+import { resumirCuentasPorPagar, deudaPendientePorProveedor, gastoMantenimiento, METODOS_PAGO_PROVEEDOR, type MetodoPagoProveedor } from '@/lib/domain/finance'
 import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
+import { filtrarRepuestos, totalCompraRepuesto, type FiltroStockRepuesto } from '@/lib/domain/repuestos'
 import { formatearMoneda } from '@/lib/utils'
 import { toast } from 'sonner'
 import { 
   Database, Plus, Check, X, RefreshCw, Truck, FileText, AlertTriangle, 
   TrendingUp, TrendingDown, CreditCard, DollarSign, BarChart3, Wrench, Info, Scale, ShoppingCart, Trash2, PackageCheck,
-  Building2, Phone, MessageCircle, User, ExternalLink, Edit2, CalendarClock, History, Clock
+  Building2, Phone, MessageCircle, User, ExternalLink, Edit2, CalendarClock, History, Clock, Search
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import CustomSelect from '@/components/ui/CustomSelect'
@@ -156,6 +157,12 @@ export default function MateriaPrimaPage() {
   const [nuevaFechaCuota, setNuevaFechaCuota] = useState('')
   const [proveedorForm, setProveedorForm] = useState({ nombre: '', ruc: '', contacto: '', telefono: '' })
   const [adjustRepuestoForm, setAdjustRepuestoForm] = useState({ tipo: 'ingreso', cantidad: '', motivo: '' })
+  // Fase 3: buscador, filtro y compras de repuestos al contado (migración 029)
+  const [busquedaRepuesto, setBusquedaRepuesto] = useState('')
+  const [filtroRepuesto, setFiltroRepuesto] = useState<FiltroStockRepuesto>('todos')
+  const [showCompraRepuestoModal, setShowCompraRepuestoModal] = useState(false)
+  const compraRepuestoVacia = { repuesto_id: '', proveedor_id: '', cantidad: '', precio_unitario: '', fecha: '', metodo_pago: 'efectivo', de_caja: true }
+  const [compraRepuestoForm, setCompraRepuestoForm] = useState(compraRepuestoVacia)
   
   const [compraForm, setCompraForm] = useState({
     proveedor_id: '',
@@ -202,7 +209,7 @@ export default function MateriaPrimaPage() {
         `).order('fecha_vencimiento'),
         supabase.from('egresos_adicionales').select('*').order('fecha', { ascending: false }),
         supabase.from('cobros').select('monto').eq('estado_validacion', 'validado'),
-        supabase.from('reparaciones').select('costo_total'),
+        supabase.from('reparaciones').select('costo_mano_obra'),
         supabase.from('pagos_proveedores').select(`
           id, monto, metodo_pago, fecha, caja_id, comprobante_url,
           proveedor:proveedores(nombre)
@@ -222,7 +229,7 @@ export default function MateriaPrimaPage() {
       setPagosProveedores((pagosRes.data ?? []) as unknown as PagoProveedor[])
       
       const totalRecaudadoVentas = (ventasRes.data ?? []).reduce((s, c) => s + c.monto, 0)
-      const totalReparaciones = (repairsRes.data ?? []).reduce((s, r) => s + (Number(r.costo_total) || 0), 0)
+      const totalReparaciones = gastoMantenimiento(repairsRes.data ?? [])
       setVentasTotal(totalRecaudadoVentas)
       setRepairsTotal(totalReparaciones)
 
@@ -483,10 +490,57 @@ export default function MateriaPrimaPage() {
   }
 
   // ── ELIMINAR REPUESTO ────────────────────────────────────────────────────
+  const abrirCompraRepuesto = (repuestoId = '') => {
+    setCompraRepuestoForm({ ...compraRepuestoVacia, repuesto_id: repuestoId })
+    setShowCompraRepuestoModal(true)
+  }
+
+  // Compra al contado: stock + último precio + gasto (+ caja si es efectivo de la caja del día), todo en la base
+  const handleCompraRepuesto = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const f = compraRepuestoForm
+    const cantidad = Number(f.cantidad)
+    const precio = Number(f.precio_unitario)
+    if (!f.repuesto_id) { toast.error('Elige el repuesto'); return }
+    if (!Number.isInteger(cantidad) || cantidad <= 0) { toast.error('La cantidad debe ser un número entero mayor a 0'); return }
+    if (f.precio_unitario === '' || !Number.isFinite(precio) || precio < 0) { toast.error('Indica el precio unitario pagado (0 si es garantía)'); return }
+    if (saving) return
+    setSaving(true)
+    try {
+      const usuario = await obtenerUsuarioActual()
+      const { data, error } = await supabase.rpc('registrar_compra_repuesto', {
+        p_repuesto_id: f.repuesto_id,
+        p_cantidad: cantidad,
+        p_precio_unitario: precio,
+        p_metodo_pago: f.metodo_pago,
+        p_fecha: f.fecha || null,
+        p_proveedor_id: f.proveedor_id || null,
+        p_de_caja: f.metodo_pago === 'efectivo' && f.de_caja,
+        p_usuario_id: usuario?.id ?? null,
+      })
+      if (error) throw error
+      const r = data as { total: number; descontado_de_caja: boolean; caja_de: string | null }
+      toast.success(`Compra registrada: ${formatearMoneda(Number(r?.total ?? 0))}`)
+      if (f.metodo_pago === 'efectivo' && f.de_caja) {
+        if (r?.descontado_de_caja) toast.info(`Descontado de la caja: ${r.caja_de ?? 'caja del día'}`)
+        else if (Number(r?.total ?? 0) > 0) toast.warning('No hay una caja abierta hoy: la compra quedó como gasto, sin descontar de caja')
+      }
+      setShowCompraRepuestoModal(false)
+      setCompraRepuestoForm(compraRepuestoVacia)
+      cargarDatos()
+    } catch (err) {
+      toast.error(`No se pudo registrar la compra: ${err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleEliminarRepuesto = async (rep: Repuesto) => {
     if (!confirm(`¿Estás seguro de eliminar el repuesto "${rep.nombre}"? Esta acción no se puede deshacer.`)) return
     try {
       const { error } = await supabase.from('repuestos').delete().eq('id', rep.id)
+      // Con compras o usos en fallas registrados, el historial lo protege (clave foránea)
+      if (error?.code === '23503') { toast.error(`No se puede eliminar "${rep.nombre}": tiene compras o usos en fallas registrados.`); return }
       if (error) throw error
     
       toast.success('Repuesto eliminado correctamente')
@@ -884,13 +938,22 @@ export default function MateriaPrimaPage() {
           )}
 
           {activeTab === 'repuestos' && (
-            <button 
-              type="button"
-              onClick={() => setShowAddRepuestoModal(true)} 
-              className="btn-primary text-xs py-2.5 px-4 rounded-2xl bg-cyan-600 hover:bg-cyan-500 border-none flex items-center gap-1.5 font-bold shadow-lg"
-            >
-              + Nuevo Repuesto
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => abrirCompraRepuesto()}
+                className="btn-secondary text-xs py-2.5 px-4 rounded-2xl flex items-center gap-1.5 font-bold"
+              >
+                <ShoppingCart className="w-4 h-4 text-amber-400" /> Registrar compra de repuesto
+              </button>
+              <button 
+                type="button"
+                onClick={() => setShowAddRepuestoModal(true)} 
+                className="btn-primary text-xs py-2.5 px-4 rounded-2xl bg-cyan-600 hover:bg-cyan-500 border-none flex items-center gap-1.5 font-bold shadow-lg"
+              >
+                + Nuevo Repuesto
+              </button>
+            </>
           )}
 
 
@@ -1508,6 +1571,28 @@ export default function MateriaPrimaPage() {
                 🔧 Repuestos Mecánicos (Agujas, Hormas, Sensores, etc.)
               </h2>
 
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="search"
+                    aria-label="Buscar repuesto"
+                    placeholder="Buscar repuesto por nombre..."
+                    value={busquedaRepuesto}
+                    onChange={e => setBusquedaRepuesto(e.target.value)}
+                    className="input-dark w-full text-xs pl-9 py-2"
+                  />
+                </div>
+                <div className="flex gap-1 p-1 rounded-2xl bg-slate-900/60 border border-white/[0.06]" role="group" aria-label="Filtrar por stock">
+                  {([['todos', 'Todos'], ['con_stock', 'Con stock'], ['agotados', 'Agotados']] as [FiltroStockRepuesto, string][]).map(([v, label]) => (
+                    <button key={v} type="button" aria-pressed={filtroRepuesto === v} onClick={() => setFiltroRepuesto(v)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold ${filtroRepuesto === v ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="overflow-x-auto rounded-2xl border border-white/[0.06]">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-white/[0.03] text-slate-400 font-bold uppercase tracking-wider text-[10px]">
@@ -1521,7 +1606,12 @@ export default function MateriaPrimaPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/[0.04] text-slate-300">
-                    {repuestos.map((rep) => {
+                    {filtrarRepuestos(repuestos, busquedaRepuesto, filtroRepuesto).length === 0 && (
+                      <tr><td colSpan={6} className="p-6 text-center text-slate-500">
+                        {repuestos.length === 0 ? 'No hay repuestos registrados.' : 'Ningún repuesto coincide con la búsqueda o el filtro.'}
+                      </td></tr>
+                    )}
+                    {filtrarRepuestos(repuestos, busquedaRepuesto, filtroRepuesto).map((rep) => {
                       const isLow = rep.stock_actual <= 5
                       return (
                         <tr key={rep.id} className="hover:bg-white/[0.01] transition-colors">
@@ -1542,12 +1632,21 @@ export default function MateriaPrimaPage() {
                           </td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => abrirCompraRepuesto(rep.id)}
+                                className="px-2.5 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold"
+                                aria-label={`Comprar ${rep.nombre}`}
+                              >
+                                Comprar
+                              </button>
                               <button 
                                 type="button"
                                 onClick={() => abrirModalAjusteRepuesto(rep)}
                                 className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-bold"
+                                title="Corrige el stock tras un conteo; no crea gasto"
                               >
-                                Ingreso / Salida
+                                Corregir stock
                               </button>
                               <button
                                 type="button"
@@ -2097,11 +2196,12 @@ export default function MateriaPrimaPage() {
       <Modal
         open={showAdjustRepuestoModal && Boolean(selectedRepuesto)}
         onClose={() => setShowAdjustRepuestoModal(false)}
-        title="🔧 Ajustar Inventario de Repuesto"
+        title="🔧 Corregir Inventario de Repuesto"
         maxWidth="md"
       >
         {selectedRepuesto && (
           <>
+            <p className="text-[11px] text-slate-400 mb-3">Para corregir el stock tras un conteo. No crea gasto: las compras se registran con «Registrar compra».</p>
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] mb-4 space-y-2 text-xs">
               <div className="flex justify-between"><span className="text-slate-400">Repuesto:</span> <span className="font-bold text-white">{selectedRepuesto.nombre}</span></div>
               <div className="flex justify-between"><span className="text-slate-400">Stock Actual:</span> <span className="font-bold text-white font-mono">{selectedRepuesto.stock_actual} Unid.</span></div>
@@ -2147,12 +2247,12 @@ export default function MateriaPrimaPage() {
                 </div>
                 {adjustRepuestoForm.tipo === 'salida' && (
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">Motivo / Descripción de Mantenimiento</label>
+                    <label className="block text-slate-300 font-bold mb-1">Motivo de la corrección</label>
                     <input 
                       type="text" 
                       value={adjustRepuestoForm.motivo} 
                       onChange={e => setAdjustRepuestoForm(prev => ({ ...prev, motivo: e.target.value }))}
-                      placeholder="Ej: Reparación aguja máquina M01" 
+                      placeholder="Ej: Conteo físico del 25/11" 
                       className="input-dark w-full text-sm py-2.5"
                       required
                     />
@@ -2181,6 +2281,79 @@ export default function MateriaPrimaPage() {
             </form>
           </>
         )}
+      </Modal>
+
+      {/* ── MODAL: COMPRA DE REPUESTO (al contado) ──────────────────────────── */}
+      <Modal
+        open={showCompraRepuestoModal}
+        onClose={() => setShowCompraRepuestoModal(false)}
+        title="🛒 Registrar Compra de Repuesto"
+        maxWidth="md"
+      >
+        <form onSubmit={handleCompraRepuesto} className="space-y-4 text-xs">
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">Repuesto</label>
+            <CustomSelect
+              value={compraRepuestoForm.repuesto_id}
+              onChange={val => setCompraRepuestoForm(prev => ({ ...prev, repuesto_id: val }))}
+              options={[{ value: '', label: 'Elegir repuesto...' }, ...repuestos.map(r => ({ value: r.id, label: `${r.nombre} (stock ${r.stock_actual})` }))]}
+            />
+          </div>
+          <div>
+            <label className="block text-slate-300 font-bold mb-1">Proveedor (opcional)</label>
+            <CustomSelect
+              value={compraRepuestoForm.proveedor_id}
+              onChange={val => setCompraRepuestoForm(prev => ({ ...prev, proveedor_id: val }))}
+              options={[{ value: '', label: 'Sin proveedor (ferretería, etc.)' }, ...proveedores.map(p => ({ value: p.id, label: p.nombre }))]}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="compra-rep-cantidad" className="block text-slate-300 font-bold mb-1">Cantidad</label>
+              <input id="compra-rep-cantidad" type="number" min="1" step="1" required value={compraRepuestoForm.cantidad}
+                onChange={e => setCompraRepuestoForm(prev => ({ ...prev, cantidad: e.target.value }))} className="input-dark w-full text-sm py-2.5 font-bold" />
+            </div>
+            <div>
+              <label htmlFor="compra-rep-precio" className="block text-slate-300 font-bold mb-1">Precio unitario pagado (S/)</label>
+              <input id="compra-rep-precio" type="number" min="0" step="0.01" required value={compraRepuestoForm.precio_unitario}
+                onChange={e => setCompraRepuestoForm(prev => ({ ...prev, precio_unitario: e.target.value }))} className="input-dark w-full text-sm py-2.5 font-bold" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="compra-rep-fecha" className="block text-slate-300 font-bold mb-1">Fecha (vacío = hoy)</label>
+              <input id="compra-rep-fecha" type="date" value={compraRepuestoForm.fecha}
+                onChange={e => setCompraRepuestoForm(prev => ({ ...prev, fecha: e.target.value }))} className="input-dark w-full text-sm py-2.5" />
+            </div>
+            <div>
+              <label className="block text-slate-300 font-bold mb-1">Método de pago (al contado)</label>
+              <CustomSelect
+                value={compraRepuestoForm.metodo_pago}
+                onChange={val => setCompraRepuestoForm(prev => ({ ...prev, metodo_pago: val }))}
+                options={METODOS_PAGO_PROVEEDOR.map(m => ({ value: m.value, label: m.label }))}
+              />
+            </div>
+          </div>
+          {compraRepuestoForm.metodo_pago === 'efectivo' && (
+            <label className="flex items-center gap-2 text-slate-300">
+              <input type="checkbox" checked={compraRepuestoForm.de_caja}
+                onChange={e => setCompraRepuestoForm(prev => ({ ...prev, de_caja: e.target.checked }))} />
+              Pagado con efectivo de la caja del día (se descuenta de la caja abierta de hoy)
+            </label>
+          )}
+          <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.08] flex justify-between">
+            <span className="text-slate-400">Total (queda como gasto de repuestos):</span>
+            <span className="text-white font-bold" data-testid="total-compra-repuesto">
+              {formatearMoneda(totalCompraRepuesto(Number(compraRepuestoForm.cantidad) || 0, Number(compraRepuestoForm.precio_unitario) || 0))}
+            </span>
+          </div>
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setShowCompraRepuestoModal(false)} className="btn-secondary flex-1 justify-center py-2.5">Cancelar</button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center py-2.5 bg-amber-600 hover:bg-amber-500 border-none font-bold text-white">
+              {saving ? 'Procesando...' : 'Registrar compra'}
+            </button>
+          </div>
+        </form>
       </Modal>
 
       {/* ── MODAL: COMPRA / ADQUISICIÓN ──────────────────────────────────────── */}

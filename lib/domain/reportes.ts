@@ -7,6 +7,7 @@
  * fecha y turno. El operario por máquina y turno llega con la Fase 5.
  */
 import { formatearFecha } from '@/lib/utils'
+import { nombreMecanico } from '@/lib/domain/repuestos'
 
 export const SIN_REGISTRAR = 'Sin registrar'
 
@@ -139,7 +140,9 @@ export type AveriaReporte = {
   estado: string
   maquina?: ConCodigo
   reportado_por?: ConNombre
-  reparaciones?: { costo_total?: number | null; tecnico?: ConNombre }[] | null
+  mecanico?: { nombre?: string | null; apellido?: string | null } | null
+  asignado_a?: string | null
+  reparaciones?: { costo_total?: number | null; mecanico?: { nombre?: string | null; apellido?: string | null } | null }[] | null
 }
 
 export function filasMantenimiento(averias: AveriaReporte[]): Fila[] {
@@ -150,7 +153,8 @@ export function filasMantenimiento(averias: AveriaReporte[]): Fila[] {
       Máquina: codigo(a.maquina),
       'Descripción Problema': a.descripcion_operador,
       'Reportado por': nombre(a.reportado_por),
-      Técnico: rep ? nombre(rep.tecnico) : 'Pendiente',
+      // Fase 3: el mecánico de la reparación; si no, el de la falla; si no, el nombre guardado como texto (fallas antiguas)
+      Mecánico: rep?.mecanico ? nombreMecanico(rep.mecanico) : a.mecanico ? nombreMecanico(a.mecanico) : a.asignado_a?.trim() || 'Sin asignar',
       Estado: a.estado,
       'Costo Total (S/)': rep?.costo_total != null ? Number(rep.costo_total) : null,
       Reparada: rep ? 'Sí' : 'No',

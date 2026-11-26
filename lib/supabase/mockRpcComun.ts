@@ -33,3 +33,22 @@ export function ejecutarHandler(
     return { data: null, error: { message: e instanceof Error ? e.message : String(e) } }
   }
 }
+
+const hoyIso = () => new Date().toISOString().split('T')[0]
+
+/**
+ * Caja abierta de hoy para quien paga: la suya; si no tiene, la general (sin asesora);
+ * si no, la más antigua. Igual que el SQL de las migraciones 027 y 029 (_caja_abierta_hoy).
+ */
+export function cajaAbiertaHoy(db: Db, usuario: string | null): any | null {
+  const abiertas = tabla(db, 'cajas_diarias')
+    .filter(c => c.fecha === hoyIso() && c.estado === 'abierta')
+    .sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))
+  return (usuario && abiertas.find(c => c.asesora_id === usuario)) ?? abiertas.find(c => c.asesora_id == null) ?? abiertas[0] ?? null
+}
+
+/** "Caja general" o el nombre de la asesora dueña de la caja. */
+export function nombreCaja(db: Db, caja: any | null): string | null {
+  if (!caja) return null
+  return caja.asesora_id == null ? 'Caja general' : (tabla(db, 'usuarios').find(u => u.id === caja.asesora_id)?.nombre ?? null)
+}

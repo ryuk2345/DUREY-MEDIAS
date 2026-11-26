@@ -57,7 +57,6 @@ export default function LoginPage() {
 
       let redirectPath = '/dashboard/admin'
       if (user.rol === 'vendedora') redirectPath = '/dashboard/ventas'
-      else if (user.rol === 'tecnico') redirectPath = '/dashboard/mantenimiento'
       else if (user.rol === 'supervisor') redirectPath = '/dashboard/usuarios'
       else if (user.rol === 'operador') redirectPath = '/dashboard/produccion'
       else if (user.rol === 'almacenero') redirectPath = '/dashboard/almacen'

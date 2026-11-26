@@ -9,6 +9,7 @@ import {
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import { toast } from 'sonner'
+import { gastoMantenimiento } from '@/lib/domain/finance'
 
 interface KPI {
   ingresos_recaudados: number
@@ -40,7 +41,7 @@ export default function AdminPage() {
     const [cobros, cuotasPend, reparaciones, comprasMes, egresosMes] = await Promise.all([
       supabase.from('cobros').select('monto').gte('fecha', inicioMes).eq('estado_validacion', 'validado'),
       supabase.from('cuotas').select('monto').neq('estado', 'pagada'),
-      supabase.from('reparaciones').select('costo_total').gte('fecha_reparacion', inicioMes),
+      supabase.from('reparaciones').select('costo_mano_obra').gte('fecha_reparacion', inicioMes),
       supabase.from('compras_materia_prima').select('costo_total').eq('estado', 'recibida').gte('fecha', inicioMes),
       supabase.from('egresos_adicionales').select('monto').gte('fecha', inicioMes),
     ])
@@ -54,7 +55,7 @@ export default function AdminPage() {
     // Number(): los NUMERIC de Postgres llegan como texto y "+" los concatenaría
     const ingresosRecaudados = (cobros.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
     const cuentasCobrar = (cuotasPend.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
-    const gastosMantenimiento = (reparaciones.data ?? []).reduce((s, r) => s + Number(r.costo_total ?? 0), 0)
+    const gastosMantenimiento = gastoMantenimiento(reparaciones.data ?? [])
     const comprasMateriaPrima = (comprasMes.data ?? []).reduce((s, c) => s + Number(c.costo_total ?? 0), 0)
     const egresosAdicionales = (egresosMes.data ?? []).reduce((s, e) => s + Number(e.monto ?? 0), 0)
 
@@ -102,7 +103,7 @@ export default function AdminPage() {
     const promesasMeses = mesesFiltro.map(async (m) => {
       const [cobRes, repRes, compRes, egrRes] = await Promise.all([
         supabase.from('cobros').select('monto').eq('estado_validacion', 'validado').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
-        supabase.from('reparaciones').select('costo_total').gte('fecha_reparacion', m.inicio).lt('fecha_reparacion', m.finSiguiente),
+        supabase.from('reparaciones').select('costo_mano_obra').gte('fecha_reparacion', m.inicio).lt('fecha_reparacion', m.finSiguiente),
         supabase.from('compras_materia_prima').select('costo_total').eq('estado', 'recibida').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
         supabase.from('egresos_adicionales').select('monto').gte('fecha', m.inicio).lt('fecha', m.finSiguiente),
       ])
@@ -110,7 +111,7 @@ export default function AdminPage() {
       // Misma definición que Balance: dinero cobrado − (compras recibidas + reparaciones + egresos).
       // El costo estándar de producción no se suma: duplicaría lo ya pagado en materia prima.
       const ingresos = (cobRes.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
-      const costManto = (repRes.data ?? []).reduce((s, r) => s + Number(r.costo_total ?? 0), 0)
+      const costManto = gastoMantenimiento(repRes.data ?? [])
       const costMat = (compRes.data ?? []).reduce((s, c) => s + Number(c.costo_total ?? 0), 0)
       const costEgr = (egrRes.data ?? []).reduce((s, e) => s + Number(e.monto ?? 0), 0)
 

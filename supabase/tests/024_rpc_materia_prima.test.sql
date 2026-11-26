@@ -63,7 +63,8 @@ SELECT pg_temp.verificar((SELECT stock_kg = 30 AND color = 'Negro-24' FROM mater
 SELECT pg_temp.debe_fallar($$SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000005c1', 'salida', 6, 'x')$$, 'Solo hay 5');
 SELECT pg_temp.verificar((SELECT count(*) = 0 FROM egresos_adicionales WHERE concepto LIKE 'Consumo repuesto: Repuesto 24%'), 'sin stock no se registra gasto (antes sí)');
 SELECT pg_temp.verificar((SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000005c1', 'salida', 2, 'Cambio') = 3), 'salida de 2 deja 3');
-SELECT pg_temp.verificar((SELECT monto = 20 FROM egresos_adicionales WHERE concepto LIKE 'Consumo repuesto: Repuesto 24%'), 'gasto 2 × 10 = 20');
+-- Desde la 029 (Fase 3) el gasto se cuenta al comprar: el ajuste manual ya no crea egreso
+SELECT pg_temp.verificar((SELECT count(*) = 0 FROM egresos_adicionales WHERE concepto LIKE 'Consumo repuesto: Repuesto 24%'), 'el ajuste manual no crea gasto (029)');
 SELECT pg_temp.verificar((SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000005c1', 'ingreso', 4, NULL) = 7), 'ingreso de 4 deja 7');
 
 SELECT 'OK: todas las pruebas de la migración 024 pasaron' AS resultado;

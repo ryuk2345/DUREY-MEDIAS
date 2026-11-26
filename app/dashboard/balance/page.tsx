@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
+import { gastoMantenimiento } from '@/lib/domain/finance'
 import {
   TrendingUp, TrendingDown, DollarSign, BarChart3, Scale,
   Building2, Package, Wrench, AlertTriangle, Loader2, RefreshCw,
@@ -52,7 +53,7 @@ export default function BalancePage() {
       const [ventasRes, comprasRes, repRes, egrRes] = await Promise.all([
         supabase.from('cobros').select('monto').eq('estado_validacion', 'validado'),
         supabase.from('compras_materia_prima').select('costo_total, estado, fecha'),
-        supabase.from('reparaciones').select('costo_total'),
+        supabase.from('reparaciones').select('costo_mano_obra'),
         supabase.from('egresos_adicionales').select('*').order('fecha', { ascending: false })
       ])
 
@@ -64,8 +65,7 @@ export default function BalancePage() {
         .reduce((s, c) => s + (Number(c.costo_total) || 0), 0)
       setComprasTotal(totalCompras)
 
-      const totalRepairs = (repRes.data ?? [])
-        .reduce((s, r) => s + (Number(r.costo_total) || 0), 0)
+      const totalRepairs = gastoMantenimiento(repRes.data ?? [])
       setRepairsTotal(totalRepairs)
 
       // Solo datos de la base (antes se mezclaban egresos guardados en este navegador)

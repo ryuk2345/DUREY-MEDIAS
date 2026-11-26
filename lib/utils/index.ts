@@ -130,7 +130,6 @@ export const ROLES_LABELS: Record<string, string> = {
   preparador: 'Preparador (Empaques)',
   almacenero: 'Almacenero y Despacho',
   vendedora: 'Asesora de Ventas',
-  tecnico: 'Técnico de Mantenimiento',
   operador: 'Operador Multifuncional',
 }
 
@@ -146,7 +145,6 @@ export const MODULOS_POR_ROL: Record<string, string[]> = {
   preparador: ['preparado'],
   almacenero: ['almacen', 'despacho', 'materia_prima'],
   vendedora: ['ventas', 'clientes', 'catalogo', 'despacho'],
-  tecnico: ['maquinas', 'mantenimiento'],
   operador: ['produccion', 'remallado', 'disenos', 'planchado', 'preparado', 'almacen', 'mantenimiento'],
 }
 

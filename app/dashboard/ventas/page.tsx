@@ -710,7 +710,7 @@ export default function VentasPage() {
             <p className={`font-semibold text-sm ${caja.estado === 'abierta' ? 'text-emerald-300' : 'text-slate-400'}`}>
               Caja {caja.estado === 'abierta' ? 'Abierta' : 'Cerrada'} · Saldo inicial: {formatearMoneda(caja.saldo_inicial)}
             </p>
-            <p className="text-xs text-slate-500">Ventas efectivo: {formatearMoneda(caja.ventas_efectivo ?? 0)} · Cobros efectivo: {formatearMoneda(caja.cobros_efectivo ?? 0)} · Pagos a proveedores: {formatearMoneda(caja.pagos_efectivo ?? 0)}</p>
+            <p className="text-xs text-slate-500">Ventas efectivo: {formatearMoneda(caja.ventas_efectivo ?? 0)} · Cobros efectivo: {formatearMoneda(caja.cobros_efectivo ?? 0)} · Pagos a proveedores y compras: {formatearMoneda(caja.pagos_efectivo ?? 0)}</p>
           </div>
         </div>
       )}
@@ -1102,7 +1102,7 @@ export default function VentasPage() {
                 { label: 'Saldo Inicial', value: caja?.saldo_inicial ?? 0, color: 'text-slate-300' },
                 { label: 'Ventas en Efectivo', value: caja?.ventas_efectivo ?? 0, color: 'text-emerald-400' },
                 { label: 'Cobros en Efectivo', value: caja?.cobros_efectivo ?? 0, color: 'text-blue-400' },
-                { label: 'Pagos a Proveedores (Efectivo)', value: -(caja?.pagos_efectivo ?? 0), color: 'text-red-400' },
+                { label: 'Pagos a Proveedores y Compras (Efectivo)', value: -(caja?.pagos_efectivo ?? 0), color: 'text-red-400' },
                 { label: 'Total Esperado en Caja', value: calcularEfectivoEsperadoCaja(caja), color: 'text-white' },
               ].map(s => (
                 <div key={s.label} className="glass rounded-3xl p-5 border border-white/[0.08]">
