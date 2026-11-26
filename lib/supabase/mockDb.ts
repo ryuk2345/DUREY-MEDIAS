@@ -7,6 +7,7 @@ import { ejecutarRpcProcesos, RPC_PROCESOS } from './mockRpcProcesos'
 import { ejecutarRpcMateriaPrima, RPC_MATERIA_PRIMA } from './mockRpcMateriaPrima'
 import { ejecutarRpcLogistica, RPC_LOGISTICA } from './mockRpcLogistica'
 import { ejecutarRpcMantenimiento, RPC_MANTENIMIENTO } from './mockRpcMantenimiento'
+import { construirHistoriaMock } from './mockHistoria'
 
 const SEMILLAS = {
   usuarios: [
@@ -161,6 +162,10 @@ const SEMILLAS = {
   ],
   compras_repuestos: [],
   averia_repuestos: [],
+  // Fase 4 (migración 031)
+  planes_mantenimiento: [],
+  mantenimientos_preventivos: [],
+  mantenimiento_repuestos: [],
   guias_remision: [],
   movimientos_stock: [],
   disenos: [],
@@ -322,6 +327,7 @@ class MockQueryBuilder {
         stock_docenas
       }));
     }
+    if (this.tableName === 'vista_historia_maquina') return construirHistoriaMock(db);
     return db[this.tableName] || [];
   }
 

@@ -14,6 +14,10 @@ export const RPC_MANTENIMIENTO = [
   'usar_repuesto_en_averia',
   'quitar_repuesto_de_averia',
   'cerrar_reparacion_averia',
+  'iniciar_mantenimiento_preventivo',
+  'usar_repuesto_en_mantenimiento',
+  'quitar_repuesto_de_mantenimiento',
+  'terminar_mantenimiento_preventivo',
 ] as const
 
 const METODOS_PAGO = ['efectivo', 'transferencia', 'yape_plin', 'otro']
@@ -135,6 +139,82 @@ function cerrarReparacion(db: Db, p: any) {
   return id
 }
 
+// ── Mantenimiento preventivo (migración 031) ──────────────────────────────
+function mantenimiento(db: Db, id: string) {
+  const m = tabla(db, 'mantenimientos_preventivos').find(x => x.id === id)
+  if (!m) throw new ErrorNegocio('Mantenimiento no encontrado')
+  return m
+}
+
+function iniciarPreventivo(db: Db, p: any) {
+  if (!p.p_mecanico_id) throw new ErrorNegocio('Elige el mecánico que hace el mantenimiento')
+  const plan = tabla(db, 'planes_mantenimiento').find(x => x.id === p.p_plan_id)
+  if (!plan) throw new ErrorNegocio('Plan de mantenimiento no encontrado')
+  if (!plan.activo) throw new ErrorNegocio(`El plan "${plan.tarea}" está desactivado`)
+  const mec = tabla(db, 'mecanicos').find(x => x.id === p.p_mecanico_id)
+  if (!mec) throw new ErrorNegocio('Elige el mecánico que hace el mantenimiento')
+  if (!mec.activo) throw new ErrorNegocio(`El mecánico ${nombreMecanico(mec)} no está activo`)
+  const maq = tabla(db, 'maquinas').find(x => x.id === plan.maquina_id)
+  if (!maq) throw new ErrorNegocio('Máquina no encontrada')
+  if (tabla(db, 'mantenimientos_preventivos').some(x => x.maquina_id === maq.id && x.estado === 'en_curso')) {
+    throw new ErrorNegocio(`La máquina ${maq.codigo} ya tiene un mantenimiento en curso`)
+  }
+  if (tabla(db, 'averias_maquinas').some(a => a.maquina_id === maq.id && ['pendiente', 'en_reparacion'].includes(a.estado))) {
+    throw new ErrorNegocio(`La máquina ${maq.codigo} tiene una falla abierta: primero repárala`)
+  }
+  if (!['activa', 'standby', 'inactiva'].includes(maq.estado)) {
+    throw new ErrorNegocio(`La máquina ${maq.codigo} está ${maq.estado} y no puede pasar a mantenimiento`)
+  }
+  const id = nuevoId()
+  tabla(db, 'mantenimientos_preventivos').push({
+    id, plan_id: plan.id, maquina_id: maq.id, mecanico_id: mec.id, estado: 'en_curso', fecha_inicio: ahora(), fecha_fin: null,
+    nota: null, costo_mano_obra: 0, costo_repuestos: 0, created_at: ahora(),
+  })
+  Object.assign(maq, { estado: 'mantenimiento', detalle_estado: 'MANTENIMIENTO PREVENTIVO' })
+  return id
+}
+
+function usarRepuestoPreventivo(db: Db, p: any) {
+  const cantidad = Math.trunc(num(p.p_cantidad))
+  if (cantidad <= 0) throw new ErrorNegocio('La cantidad debe ser mayor a 0')
+  const m = mantenimiento(db, p.p_mantenimiento_id)
+  if (m.estado !== 'en_curso') throw new ErrorNegocio('Solo se usan repuestos en un mantenimiento en curso')
+  const rep = tabla(db, 'repuestos').find(r => r.id === p.p_repuesto_id)
+  if (!rep) throw new ErrorNegocio('Repuesto no encontrado')
+  if (cantidad > num(rep.stock_actual)) throw new ErrorNegocio(`Solo hay ${num(rep.stock_actual)} unidades de ${rep.nombre}; no se pueden usar ${cantidad}`)
+  rep.stock_actual = num(rep.stock_actual) - cantidad
+  const id = nuevoId()
+  tabla(db, 'mantenimiento_repuestos').push({ id, mantenimiento_id: m.id, repuesto_id: rep.id, cantidad, costo_unitario: num(rep.costo_unitario), created_at: ahora() })
+  return id
+}
+
+function quitarRepuestoPreventivo(db: Db, p: any) {
+  const usos = tabla(db, 'mantenimiento_repuestos')
+  const i = usos.findIndex(u => u.id === p.p_uso_id)
+  if (i < 0) throw new ErrorNegocio('Ese repuesto ya no está en el mantenimiento')
+  if (mantenimiento(db, usos[i].mantenimiento_id).estado !== 'en_curso') throw new ErrorNegocio('Solo se quitan repuestos de un mantenimiento en curso')
+  const rep = tabla(db, 'repuestos').find(r => r.id === usos[i].repuesto_id)
+  if (rep) rep.stock_actual = num(rep.stock_actual) + num(usos[i].cantidad)
+  usos.splice(i, 1)
+  return null
+}
+
+function terminarPreventivo(db: Db, p: any) {
+  if (num(p.p_costo_mano_obra) < 0) throw new ErrorNegocio('La mano de obra no puede ser negativa')
+  const m = mantenimiento(db, p.p_mantenimiento_id)
+  if (m.estado !== 'en_curso') throw new ErrorNegocio('Solo se termina un mantenimiento en curso')
+  Object.assign(m, {
+    estado: 'terminado', fecha_fin: ahora(), nota: String(p.p_nota ?? '').trim() || null,
+    costo_mano_obra: redondearCentimos(num(p.p_costo_mano_obra)),
+    costo_repuestos: costoRepuestosUsados(tabla(db, 'mantenimiento_repuestos').filter(u => u.mantenimiento_id === m.id)),
+  })
+  const plan = tabla(db, 'planes_mantenimiento').find(x => x.id === m.plan_id)
+  if (plan) plan.ultima_fecha = hoy()
+  const maq = tabla(db, 'maquinas').find(x => x.id === m.maquina_id)
+  if (maq) Object.assign(maq, { estado: 'activa', detalle_estado: 'OPERATIVA' })
+  return null
+}
+
 export function ejecutarRpcMantenimiento(db: Db, fnName: string, params: any): ResultadoRpc | null {
   return ejecutarHandler({
     registrar_compra_repuesto: registrarCompraRepuesto,
@@ -143,5 +223,9 @@ export function ejecutarRpcMantenimiento(db: Db, fnName: string, params: any): R
     usar_repuesto_en_averia: usarRepuesto,
     quitar_repuesto_de_averia: quitarRepuesto,
     cerrar_reparacion_averia: cerrarReparacion,
+    iniciar_mantenimiento_preventivo: iniciarPreventivo,
+    usar_repuesto_en_mantenimiento: usarRepuestoPreventivo,
+    quitar_repuesto_de_mantenimiento: quitarRepuestoPreventivo,
+    terminar_mantenimiento_preventivo: terminarPreventivo,
   }, db, fnName, params)
 }
