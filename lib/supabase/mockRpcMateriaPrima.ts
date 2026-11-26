@@ -119,15 +119,24 @@ function registrarPagoProveedor(db: Db, p: any) {
   const cuota = tabla(db, 'cuotas_compras').find(q => q.id === p.p_cuota_id)
   if (!cuota) throw new ErrorNegocio('Cuota no encontrada')
   if (cuota.estado === 'pagada') throw new ErrorNegocio('Esta cuota ya fue pagada')
+  if (num(cuota.monto) <= 0) throw new ErrorNegocio('La cuota no tiene monto a pagar')
   const compra = tabla(db, 'compras_materia_prima').find(c => c.id === cuota.compra_id)
 
+  // Igual que el SQL: la caja de quien paga; si no tiene, la general (sin asesora); si no, la más antigua
+  const usuario = p.p_usuario_id ?? null
   let cajaId: string | null = null
+  let cajaDe: string | null = null
   if (p.p_metodo_pago === 'efectivo' && fecha === hoy()) {
-    const abiertas = tabla(db, 'cajas_diarias').filter(c => c.fecha === hoy() && c.estado === 'abierta')
-    const caja = abiertas.find(c => (c.asesora_id ?? null) === (p.p_usuario_id ?? null)) ?? abiertas[0]
+    const abiertas = tabla(db, 'cajas_diarias')
+      .filter(c => c.fecha === hoy() && c.estado === 'abierta')
+      .sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))
+    const caja = (usuario && abiertas.find(c => c.asesora_id === usuario))
+      ?? abiertas.find(c => c.asesora_id == null)
+      ?? abiertas[0]
     if (caja) {
       caja.pagos_efectivo = num(caja.pagos_efectivo) + num(cuota.monto)
       cajaId = caja.id
+      cajaDe = caja.asesora_id == null ? 'Caja general' : (tabla(db, 'usuarios').find(u => u.id === caja.asesora_id)?.nombre ?? null)
     }
   }
 
@@ -136,10 +145,10 @@ function registrarPagoProveedor(db: Db, p: any) {
   tabla(db, 'pagos_proveedores').push({
     id: pagoId, cuota_compra_id: cuota.id, proveedor_id: compra?.proveedor_id ?? null, monto: num(cuota.monto),
     metodo_pago: p.p_metodo_pago, fecha, comprobante_url: comprobante, caja_id: cajaId,
-    registrado_por: p.p_usuario_id ?? null, created_at: ahora(),
+    registrado_por: usuario, created_at: ahora(),
   })
   Object.assign(cuota, { estado: 'pagada', fecha_pago: fecha, metodo_pago: ETIQUETA_METODO[p.p_metodo_pago], comprobante_url: comprobante })
-  return { pago_id: pagoId, caja_id: cajaId, monto: num(cuota.monto), descontado_de_caja: cajaId !== null }
+  return { pago_id: pagoId, caja_id: cajaId, monto: num(cuota.monto), descontado_de_caja: cajaId !== null, caja_de: cajaDe }
 }
 
 function reprogramarCuotaCompra(db: Db, p: any) {

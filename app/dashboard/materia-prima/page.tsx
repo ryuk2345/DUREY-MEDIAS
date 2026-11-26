@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { esStockBajoMateriaPrima, cantidadEnCaminoPorInsumo } from '@/lib/domain/inventario'
-import { resumirCuentasPorPagar, METODOS_PAGO_PROVEEDOR, type MetodoPagoProveedor } from '@/lib/domain/finance'
+import { resumirCuentasPorPagar, deudaPendientePorProveedor, METODOS_PAGO_PROVEEDOR, type MetodoPagoProveedor } from '@/lib/domain/finance'
 import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import { formatearMoneda } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -694,7 +694,7 @@ export default function MateriaPrimaPage() {
       })
       if (error) throw error
 
-      const r = data as { descontado_de_caja?: boolean } | null
+      const r = data as { descontado_de_caja?: boolean; caja_de?: string | null } | null
       if (payCuotaForm.metodo_pago === 'efectivo' && !r?.descontado_de_caja) {
         toast.warning(
           payCuotaForm.fecha === hoyISO()
@@ -704,7 +704,7 @@ export default function MateriaPrimaPage() {
         )
       } else {
         toast.success(r?.descontado_de_caja
-          ? `💸 Pago de ${formatearMoneda(selectedCuota.monto)} registrado y restado de la caja del día`
+          ? `💸 Pago de ${formatearMoneda(selectedCuota.monto)} registrado y restado de la caja del día (${r.caja_de ?? 'caja abierta'})`
           : `💸 Pago de ${formatearMoneda(selectedCuota.monto)} registrado`)
       }
       setShowPayCuotaModal(false)
@@ -755,14 +755,12 @@ export default function MateriaPrimaPage() {
   const resumenPorPagar = useMemo(() => resumirCuentasPorPagar(cuotasCompras, hoyISO()), [cuotasCompras])
 
   const proveedoresInfo = useMemo(() => {
+    const deudas = deudaPendientePorProveedor(cuotasCompras)
     return proveedores.map(p => {
       const misCompras = compras.filter(c => c.proveedor_id === p.id)
       const totalComprado = misCompras.reduce((sum, c) => sum + Number(c.costo_total || 0), 0)
 
-      const misCuotas = cuotasCompras.filter(q => q.compra?.proveedor_id === p.id)
-      const saldoPendiente = misCuotas
-        .filter(q => q.estado === 'pendiente')
-        .reduce((sum, q) => sum + Number(q.monto || 0), 0)
+      const saldoPendiente = deudas[p.id] ?? 0
 
       return {
         ...p,

@@ -18,7 +18,7 @@ import path from 'node:path'
 import { ejecutarRpcMateriaPrima } from '@/lib/supabase/mockRpcMateriaPrima'
 import { ejecutarRpcLogistica } from '@/lib/supabase/mockRpcLogistica'
 import type { Db } from '@/lib/supabase/mockRpcComun'
-import { calcularEfectivoEsperadoCaja, resumirCuentasPorPagar } from '@/lib/domain/finance'
+import { calcularEfectivoEsperadoCaja, resumirCuentasPorPagar, deudaPendientePorProveedor } from '@/lib/domain/finance'
 import { cantidadEnCaminoPorInsumo } from '@/lib/domain/inventario'
 import { filtrarMaquinasPorGrupo, GRUPOS_ESTADO_MAQUINA } from '@/lib/domain/machines'
 import { construirCopiaAsignacion, type TurnoPrevio } from '@/lib/domain/tejido'
@@ -274,5 +274,102 @@ describe('Migración 027: checklist de AGENTS.md', () => {
   })
   it('migra los datos antes de crear la restricción de nombre único', () => {
     expect(sql.indexOf('INSERT INTO public.agencias')).toBeLessThan(sql.indexOf('CREATE UNIQUE INDEX IF NOT EXISTS agencias_nombre_unico'))
+  })
+})
+
+describe('Revisión del panel: casos límite añadidos', () => {
+  it('[NEGOCIO] la deuda del proveedor (cards) suma solo sus cuotas pendientes', () => {
+    const cuotas = compraACredito(3, 300)
+    rpc('registrar_pago_proveedor', { p_cuota_id: cuotas[0].id, p_metodo_pago: 'transferencia' })
+    const conCompra = db.cuotas_compras.map(q => ({ ...q, compra: db.compras_materia_prima.find(c => c.id === q.compra_id) }))
+    expect(deudaPendientePorProveedor(conCompra)).toEqual({ prov1: 200 })
+    // Sin proveedor_id en la compra (el fallo original de la consulta) no se inventa deuda
+    expect(deudaPendientePorProveedor(conCompra.map(q => ({ ...q, compra: { fecha: 'x' } as never })))).toEqual({})
+  })
+
+  it('[NEGOCIO] con varias cajas abiertas, el efectivo sale de la caja de quien paga', () => {
+    db.cajas_diarias = [
+      { id: 'general', asesora_id: null, fecha: hoy(), estado: 'abierta', pagos_efectivo: 0, created_at: '2026-01-01T08:00:00Z' },
+      { id: 'cajaX', asesora_id: 'X', fecha: hoy(), estado: 'abierta', pagos_efectivo: 0, created_at: '2026-01-01T07:00:00Z' },
+      { id: 'cajaY', asesora_id: 'Y', fecha: hoy(), estado: 'abierta', pagos_efectivo: 0, created_at: '2026-01-01T09:00:00Z' },
+    ]
+    const [q1, q2] = compraACredito()
+    expect(rpc('registrar_pago_proveedor', { p_cuota_id: q1.id, p_metodo_pago: 'efectivo', p_usuario_id: 'Y' }).data).toMatchObject({ caja_id: 'cajaY' })
+    // Quien paga no tiene caja: va a la caja general, no a la de otra vendedora
+    expect(rpc('registrar_pago_proveedor', { p_cuota_id: q2.id, p_metodo_pago: 'efectivo', p_usuario_id: 'Z' }).data).toMatchObject({ caja_id: 'general', caja_de: 'Caja general' })
+    expect(db.cajas_diarias.find(c => c.id === 'cajaX')!.pagos_efectivo).toBe(0)
+  })
+
+  it('[NEGOCIO] una caja cerrada no recibe pagos en efectivo', () => {
+    db.cajas_diarias[0].estado = 'cerrada_cuadrada'
+    const [q1] = compraACredito()
+    const r = rpc('registrar_pago_proveedor', { p_cuota_id: q1.id, p_metodo_pago: 'efectivo' })
+    expect(r.data).toMatchObject({ descontado_de_caja: false })
+    expect(db.cajas_diarias[0].pagos_efectivo).toBe(0)
+  })
+
+  it('BLOQUEA pagar una cuota sin monto (CHECK monto > 0 del SQL)', () => {
+    const [q1] = compraACredito()
+    q1.monto = 0
+    expect(rpc('registrar_pago_proveedor', { p_cuota_id: q1.id, p_metodo_pago: 'transferencia' }).error?.message).toContain('no tiene monto')
+  })
+
+  it('la cuota guarda la etiqueta del método y el comprobante (no siempre "Efectivo")', () => {
+    const [q1, q2] = compraACredito()
+    rpc('registrar_pago_proveedor', { p_cuota_id: q1.id, p_metodo_pago: 'transferencia', p_comprobante_url: ' https://x/1.pdf ' })
+    rpc('registrar_pago_proveedor', { p_cuota_id: q2.id, p_metodo_pago: 'yape_plin' })
+    expect(q1).toMatchObject({ metodo_pago: 'Transferencia', comprobante_url: 'https://x/1.pdf' })
+    expect(q2).toMatchObject({ metodo_pago: 'Yape/Plin', comprobante_url: null })
+  })
+
+  it('límites de las cards: +8 no es "7 días"; +30 sí es "30 días"; +31 no', () => {
+    const r = resumirCuentasPorPagar([
+      { monto: 1, fecha_vencimiento: '2026-12-03', estado: 'pendiente' }, // +8
+      { monto: 10, fecha_vencimiento: '2026-12-25', estado: 'pendiente' }, // +30
+      { monto: 100, fecha_vencimiento: '2026-12-26', estado: 'pendiente' }, // +31
+    ], '2026-11-25')
+    expect(r.venceEstaSemana).toBe(0)
+    expect(r.venceEsteMes).toBe(11)
+  })
+
+  it('[NEGOCIO] copiar asignación: tampoco copia máquinas en mantenimiento, ocupadas o en stand-by', () => {
+    const maquinas = ['activa', 'mantenimiento', 'ocupada', 'standby'].map((estado, i) => ({ id: `m${i}`, codigo: `M0${i}`, marca_id: 'mk', estado }))
+    const turno: TurnoPrevio = { fecha: '2026-11-24', horario: 'dia', duracion_horas: undefined as never, tejedor_id: 't', turno_maquinas: maquinas.map(m => ({ maquina_id: m.id, catalogo_media_id: 'c1' })) }
+    const r = construirCopiaAsignacion([turno], maquinas, new Set(['c1']), 'dia', 'mk')
+    expect(r.copia!.maquinas_seleccionadas).toEqual({ m0: 'c1' })
+    expect(r.copia!.omitidas.map(o => o.motivo)).toEqual(['está mantenimiento', 'está ocupada', 'está standby'])
+    expect(r.copia!.duracion_horas).toBe('12')
+  })
+
+  it('renombrar un almacén solo cambiando mayúsculas está permitido', () => {
+    expect(rpc('renombrar_ubicacion', { p_id: 'u1', p_nombre: 'SALÓN A' }).error).toBeNull()
+    expect(db.ubicaciones[0].nombre).toBe('SALÓN A')
+  })
+
+  it('[NEGOCIO] crear un almacén con el nombre de uno eliminado lo reactiva (con su historial)', () => {
+    rpc('desactivar_ubicacion', { p_id: 'u2' })
+    expect(rpc('renombrar_ubicacion', { p_id: 'u1', p_nombre: 'salón b' }).error?.message).toContain('almacén eliminado')
+    expect(rpc('crear_ubicacion', { p_nombre: 'Salón B' }).data).toBe('u2')
+    expect(db.ubicaciones.find(u => u.id === 'u2')!.activo).toBe(true)
+    expect(db.ubicaciones).toHaveLength(2)
+    expect(rpc('crear_ubicacion', { p_nombre: 'salón a' }).error?.message).toContain('Ya existe un almacén')
+  })
+})
+
+describe('Migración 027: estructura completa', () => {
+  const sql = readFileSync(path.join(process.cwd(), 'supabase/migrations/027_agencias_pagos_proveedores_almacenes.sql'), 'utf-8')
+  it('[NEGOCIO] toda tabla creada tiene RLS, y ninguna función ni tabla se abre a PUBLIC o anon', () => {
+    const tablas = [...sql.matchAll(/CREATE TABLE IF NOT EXISTS public\.(\w+)/g)].map(m => m[1])
+    expect(tablas.length).toBeGreaterThan(0)
+    for (const t of tablas) expect(sql).toContain(`ALTER TABLE public.${t} ENABLE ROW LEVEL SECURITY`)
+    expect(sql).not.toMatch(/GRANT[^;]*\bTO\b[^;]*\b(anon|PUBLIC)\b/i)
+    const funciones = [...sql.matchAll(/CREATE OR REPLACE FUNCTION public\.(\w+)/g)].map(m => m[1])
+    for (const f of funciones) {
+      expect(sql, `${f} sin REVOKE`).toMatch(new RegExp(`REVOKE ALL ON FUNCTION public\\.${f}\\([^)]*\\) FROM PUBLIC, anon`))
+      expect(sql, `${f} sin GRANT`).toMatch(new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${f}\\([^)]*\\) TO authenticated, service_role`))
+    }
+  })
+  it('[NEGOCIO] quien paga sale de la sesión (auth.uid), no solo del parámetro', () => {
+    expect(sql).toContain('COALESCE(auth.uid(), p_usuario_id)')
   })
 })

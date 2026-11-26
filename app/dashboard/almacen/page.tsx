@@ -100,11 +100,8 @@ export default function AlmacenPage() {
 
     setGuardandoSalon(true)
     try {
-      const { error } = await supabase.from('ubicaciones').insert({
-        nombre: nuevoSalonNombre.trim(),
-        tipo: 'salon',
-        activo: true
-      })
+      // crear_ubicacion (027): valida el nombre y reactiva un salón eliminado con ese nombre
+      const { error } = await supabase.rpc('crear_ubicacion', { p_nombre: nuevoSalonNombre, p_tipo: 'salon' })
 
       if (error) throw error
 

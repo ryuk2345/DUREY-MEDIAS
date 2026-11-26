@@ -8,6 +8,7 @@ import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoR
 
 export const RPC_LOGISTICA = [
   'registrar_agencia',
+  'crear_ubicacion',
   'renombrar_ubicacion',
   'desactivar_ubicacion',
 ] as const
@@ -28,13 +29,31 @@ function registrarAgencia(db: Db, p: any) {
   return id
 }
 
+function crearUbicacion(db: Db, p: any) {
+  const nombre = String(p.p_nombre ?? '').trim()
+  const tipo = p.p_tipo ?? 'salon'
+  if (!nombre) throw new ErrorNegocio('Ingresa el nombre del almacén')
+  if (!['salon', 'almacen_general'].includes(tipo)) throw new ErrorNegocio('Tipo de almacén inválido')
+  const existente = tabla(db, 'ubicaciones').find(u => normalizar(u.nombre) === nombre.toLowerCase())
+  if (existente) {
+    if (existente.activo !== false) throw new ErrorNegocio(`Ya existe un almacén llamado ${nombre}`)
+    existente.activo = true
+    return existente.id
+  }
+  const id = nuevoId()
+  tabla(db, 'ubicaciones').push({ id, nombre, tipo, activo: true })
+  return id
+}
+
 function renombrarUbicacion(db: Db, p: any) {
   const nombre = String(p.p_nombre ?? '').trim()
   if (!nombre) throw new ErrorNegocio('Ingresa el nombre del almacén')
   const ub = tabla(db, 'ubicaciones').find(u => u.id === p.p_id)
   if (!ub) throw new ErrorNegocio('Almacén no encontrado')
-  if (tabla(db, 'ubicaciones').some(u => u.id !== p.p_id && normalizar(u.nombre) === nombre.toLowerCase())) {
-    throw new ErrorNegocio(`Ya existe un almacén llamado ${nombre}`)
+  const otros = tabla(db, 'ubicaciones').filter(u => u.id !== p.p_id && normalizar(u.nombre) === nombre.toLowerCase())
+  if (otros.some(u => u.activo !== false)) throw new ErrorNegocio(`Ya existe un almacén llamado ${nombre}`)
+  if (otros.length > 0) {
+    throw new ErrorNegocio(`El nombre ${nombre} pertenece a un almacén eliminado. Créalo con ese nombre para reactivarlo.`)
   }
   ub.nombre = nombre
   return null
@@ -54,6 +73,7 @@ function desactivarUbicacion(db: Db, p: any) {
 export function ejecutarRpcLogistica(db: Db, fnName: string, params: any): ResultadoRpc | null {
   return ejecutarHandler({
     registrar_agencia: registrarAgencia,
+    crear_ubicacion: crearUbicacion,
     renombrar_ubicacion: renombrarUbicacion,
     desactivar_ubicacion: desactivarUbicacion,
   }, db, fnName, params)

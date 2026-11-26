@@ -107,6 +107,19 @@ export function resumirCuentasPorPagar(cuotas: CuotaPorPagar[], hoyISO: string):
   }
 }
 
+/** Deuda pendiente por proveedor (cuotas no pagadas), para las tarjetas de proveedores. */
+export function deudaPendientePorProveedor(
+  cuotas: { monto: number; estado: string; compra?: { proveedor_id?: string | null } | null }[]
+): Record<string, number> {
+  const mapa: Record<string, number> = {}
+  for (const c of cuotas) {
+    const prov = c.compra?.proveedor_id
+    if (!prov || c.estado === 'pagada') continue
+    mapa[prov] = Math.round(((mapa[prov] ?? 0) + (Number(c.monto) || 0)) * 100) / 100
+  }
+  return mapa
+}
+
 /** Métodos de pago a proveedores (CHECK de pagos_proveedores, migración 027). */
 export const METODOS_PAGO_PROVEEDOR = [
   { value: 'transferencia', label: 'Transferencia Bancaria' },

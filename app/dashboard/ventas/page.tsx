@@ -637,8 +637,11 @@ export default function VentasPage() {
 
   const cerrarCaja = async () => {
     if (!caja) return
-    // Entra lo vendido y cobrado en efectivo; sale lo pagado a proveedores en efectivo (027)
-    const esperadoEfectivo = calcularEfectivoEsperadoCaja(caja)
+    // Entra lo vendido y cobrado en efectivo; sale lo pagado a proveedores en efectivo (027).
+    // Se relee la caja: un pago o cobro hecho en otra pantalla cambia el esperado.
+    const { data: cajaActual, error: errCaja } = await supabase.from('cajas_diarias').select('*').eq('id', caja.id).single()
+    if (errCaja || !cajaActual) { toast.error('No se pudo leer la caja actualizada'); return }
+    const esperadoEfectivo = calcularEfectivoEsperadoCaja(cajaActual)
     const declaradoEfectivo = parseFloat(cierreForm.efectivo || '0')
     const diferencia = declaradoEfectivo - esperadoEfectivo
     const estado = diferencia === 0 ? 'cerrada_cuadrada' : diferencia < 0 ? 'cerrada_faltante' : 'cerrada_sobrante'

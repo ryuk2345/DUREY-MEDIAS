@@ -11,7 +11,11 @@
 --    pago igual queda en el historial (mismo criterio que los cobros).
 --    Las cuotas ya pagadas pasan al historial (sin tocar ninguna caja).
 -- 3. Reprogramar la fecha de vencimiento de una cuota pendiente.
--- 4. Almacenes (tabla `ubicaciones`): renombrar y desactivar (borrado suave).
+--    Quien paga es el usuario de la sesión (auth.uid()); el parámetro p_usuario_id
+--    solo se usa si no hay sesión (service_role). La caja elegida: la de quien
+--    paga; si no tiene, la caja general (sin asesora); si no, la más antigua.
+-- 4. Almacenes (tabla `ubicaciones`): crear (reactiva uno eliminado con el mismo
+--    nombre), renombrar y desactivar (borrado suave).
 --    No se desactiva un almacén con paquetes dentro (estado distinto de
 --    'entregado'): las filas antiguas siguen apuntando a él y el historial no se pierde.
 --
@@ -118,6 +122,8 @@ DECLARE
   v_caja_id  UUID;
   v_pago_id  UUID;
   v_etiqueta TEXT;
+  v_usuario  UUID := COALESCE(auth.uid(), p_usuario_id);  -- la sesión manda; el parámetro no se puede suplantar
+  v_caja_de  UUID;
 BEGIN
   IF COALESCE(p_metodo_pago, '') NOT IN ('efectivo', 'transferencia', 'yape_plin', 'otro') THEN
     RAISE EXCEPTION 'Método de pago inválido';
@@ -133,13 +139,17 @@ BEGIN
   IF v_cuota.estado = 'pagada' THEN
     RAISE EXCEPTION 'Esta cuota ya fue pagada';
   END IF;
+  IF COALESCE(v_cuota.monto, 0) <= 0 THEN
+    RAISE EXCEPTION 'La cuota no tiene monto a pagar';
+  END IF;
   SELECT proveedor_id INTO v_prov_id FROM compras_materia_prima WHERE id = v_cuota.compra_id;
 
-  -- Efectivo de hoy: sale de la caja abierta del día (la de quien paga, si tiene)
+  -- Efectivo de hoy: sale de la caja abierta del día (la de quien paga; si no
+  -- tiene, la caja general; si no, la más antigua)
   IF p_metodo_pago = 'efectivo' AND v_fecha = CURRENT_DATE THEN
-    SELECT id INTO v_caja_id FROM cajas_diarias
+    SELECT id, asesora_id INTO v_caja_id, v_caja_de FROM cajas_diarias
      WHERE fecha = CURRENT_DATE AND estado = 'abierta'
-     ORDER BY (asesora_id IS NOT DISTINCT FROM p_usuario_id) DESC, created_at
+     ORDER BY COALESCE(asesora_id = v_usuario, false) DESC, (asesora_id IS NULL) DESC, created_at
      LIMIT 1
      FOR UPDATE;
     IF v_caja_id IS NOT NULL THEN
@@ -148,7 +158,7 @@ BEGIN
   END IF;
 
   INSERT INTO pagos_proveedores (cuota_compra_id, proveedor_id, monto, metodo_pago, fecha, comprobante_url, caja_id, registrado_por)
-  VALUES (v_cuota.id, v_prov_id, v_cuota.monto, p_metodo_pago, v_fecha, NULLIF(btrim(COALESCE(p_comprobante_url, '')), ''), v_caja_id, p_usuario_id)
+  VALUES (v_cuota.id, v_prov_id, v_cuota.monto, p_metodo_pago, v_fecha, NULLIF(btrim(COALESCE(p_comprobante_url, '')), ''), v_caja_id, v_usuario)
   RETURNING id INTO v_pago_id;
 
   v_etiqueta := CASE p_metodo_pago
@@ -160,7 +170,10 @@ BEGIN
    WHERE id = v_cuota.id;
 
   RETURN jsonb_build_object('pago_id', v_pago_id, 'caja_id', v_caja_id, 'monto', v_cuota.monto,
-                            'descontado_de_caja', v_caja_id IS NOT NULL);
+                            'descontado_de_caja', v_caja_id IS NOT NULL,
+                            'caja_de', CASE WHEN v_caja_id IS NULL THEN NULL
+                                            WHEN v_caja_de IS NULL THEN 'Caja general'
+                                            ELSE (SELECT nombre FROM usuarios WHERE id = v_caja_de) END);
 END;
 $$;
 
@@ -186,6 +199,32 @@ $$;
 -- ------------------------------------------------------------------------------
 -- 3. ALMACENES (ubicaciones): renombrar y desactivar
 -- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.crear_ubicacion(p_nombre TEXT, p_tipo TEXT DEFAULT 'salon')
+RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_nombre TEXT := btrim(COALESCE(p_nombre, ''));
+  v_id     UUID;
+  v_activo BOOLEAN;
+BEGIN
+  IF v_nombre = '' THEN
+    RAISE EXCEPTION 'Ingresa el nombre del almacén';
+  END IF;
+  IF COALESCE(p_tipo, '') NOT IN ('salon', 'almacen_general') THEN
+    RAISE EXCEPTION 'Tipo de almacén inválido';
+  END IF;
+  SELECT id, activo INTO v_id, v_activo FROM ubicaciones WHERE lower(btrim(nombre)) = lower(v_nombre) LIMIT 1 FOR UPDATE;
+  IF v_id IS NOT NULL THEN
+    IF v_activo THEN
+      RAISE EXCEPTION 'Ya existe un almacén llamado %', v_nombre;
+    END IF;
+    UPDATE ubicaciones SET activo = true WHERE id = v_id;  -- se había eliminado: se reactiva con su historial
+    RETURN v_id;
+  END IF;
+  INSERT INTO ubicaciones (nombre, tipo, activo) VALUES (v_nombre, p_tipo, true) RETURNING id INTO v_id;
+  RETURN v_id;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.renombrar_ubicacion(p_id UUID, p_nombre TEXT)
 RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -198,8 +237,11 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Almacén no encontrado';
   END IF;
-  IF EXISTS (SELECT 1 FROM ubicaciones WHERE id <> p_id AND lower(btrim(nombre)) = lower(v_nombre)) THEN
+  IF EXISTS (SELECT 1 FROM ubicaciones WHERE id <> p_id AND lower(btrim(nombre)) = lower(v_nombre) AND activo) THEN
     RAISE EXCEPTION 'Ya existe un almacén llamado %', v_nombre;
+  END IF;
+  IF EXISTS (SELECT 1 FROM ubicaciones WHERE id <> p_id AND lower(btrim(nombre)) = lower(v_nombre)) THEN
+    RAISE EXCEPTION 'El nombre % pertenece a un almacén eliminado. Créalo con ese nombre para reactivarlo.', v_nombre;
   END IF;
   UPDATE ubicaciones SET nombre = v_nombre WHERE id = p_id;
 END;
@@ -240,11 +282,13 @@ GRANT ALL ON TABLE public.agencias, public.pagos_proveedores TO service_role;
 REVOKE ALL ON FUNCTION public.registrar_agencia(TEXT) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.registrar_pago_proveedor(UUID, TEXT, DATE, TEXT, UUID) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.reprogramar_cuota_compra(UUID, DATE) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.crear_ubicacion(TEXT, TEXT) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.renombrar_ubicacion(UUID, TEXT) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.desactivar_ubicacion(UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.registrar_agencia(TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.registrar_pago_proveedor(UUID, TEXT, DATE, TEXT, UUID) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.reprogramar_cuota_compra(UUID, DATE) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.crear_ubicacion(TEXT, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.renombrar_ubicacion(UUID, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.desactivar_ubicacion(UUID) TO authenticated, service_role;
 
