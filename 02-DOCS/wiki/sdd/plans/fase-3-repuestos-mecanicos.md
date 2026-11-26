@@ -59,3 +59,14 @@ Spec aprobada: [fase-3-repuestos-mecanicos](../specs/fase-3-repuestos-mecanicos.
 | T9 | Caja y reportes | AC1 | 2 (money) | tests |
 | T10 | Cierre: pruebas completas, panel de 3, PR | todos | 2 | DoD de la constitución |
 | T11 | Tras fusionar: 029 en base real + verificación | — | 2 | SQL + advisors |
+
+## Evidencia (2026-11-26)
+- T1-T9 hechas. `supabase/tests/local/probar_migraciones.sh`: tests SQL 021-029 en verde y "PASA reversión 029" (huella exacta del esquema).
+- `npm test` 220/220 (tests/e2e/17 nuevo; 10, 11, 16 y 024 actualizados al cambio de reglas). `npm run test:browser` 44/44. Build y `tsc` en verde; ESLint sin errores nuevos frente a main.
+- Panel de 3 revisores sobre a598093: 0 bloqueos. Corregido en el commit siguiente:
+  - Tests SQL: anon y authenticated en las 6 funciones; `search_path` sin falso verde; controles de estado (no cerrar sin iniciar, no cerrar dos veces, no iniciar dos veces, máquina malograda, asignar a resuelta); usar justo el stock que queda; elección de caja (la propia primero, nunca cerrada ni de otro día, sin caja se registra igual); la sesión manda sobre `p_usuario_id`; errores del ajuste; fecha del gasto; detalle OPERATIVA. 7 mutantes que sobrevivían ahora mueren.
+  - Precio con más de 2 decimales: se redondea antes de calcular el total (base y mock), y el total del navegador sin error de coma flotante.
+  - Borrar un repuesto con historial: mensaje claro en vez del error de Postgres.
+  - `proxy.ts`: quitada la ruta muerta del rol `tecnico`.
+- Riesgo aceptado (modelo de la 026/027): cualquier usuario con sesión puede registrar compras y mover la caja; no hay control por rol dentro de las funciones. Se anota para decidir en la Fase 6 o 7.
+- Orden de despliegue: al fusionar, aplicar la 029 enseguida (la web nueva usa funciones de la 029 y la 029 retira las antiguas).
