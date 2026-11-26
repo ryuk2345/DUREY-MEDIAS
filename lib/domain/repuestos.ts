@@ -28,8 +28,11 @@ export function filtrarRepuestos<T extends RepuestoBuscable>(items: T[], texto: 
  */
 export function redondearCentimos(n: number): number {
   if (!Number.isFinite(n)) return n
-  const r = Math.round(Number(`${Math.abs(n)}e2`))
-  return Math.sign(n) * Number(`${r}e-2`)
+  const a = Math.abs(n)
+  if (a < 0.005) return 0                    // incluye -0 y números como 1e-7 (se escriben con exponente)
+  if (a >= 1e15) return n                    // ya no tiene céntimos representables (y 1e21 se escribe con exponente)
+  const r = Math.round(Number(`${a}e2`)) / 100
+  return n < 0 ? -r : r
 }
 
 /** Total de una compra al contado: cantidad × precio unitario redondeado a céntimos (igual que la base). */

@@ -37,10 +37,12 @@ SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM information_schema.role_table
 -- Postgres 17 (base real) tiene además MAINTAIN, que information_schema no lista: se comprueba aparte
 DO $$
 BEGIN
-  IF current_setting('server_version_num')::int >= 170000 AND EXISTS (
-    SELECT 1 FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')
-       AND has_table_privilege('authenticated', c.oid, 'MAINTAIN')) THEN
-    RAISE EXCEPTION 'FALLO: authenticated conserva MAINTAIN en alguna tabla';
+  -- IF anidado: en Postgres 16 'MAINTAIN' no existe y no debe evaluarse
+  IF current_setting('server_version_num')::int >= 170000 THEN
+    IF EXISTS (SELECT 1 FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')
+                  AND has_table_privilege('authenticated', c.oid, 'MAINTAIN')) THEN
+      RAISE EXCEPTION 'FALLO: authenticated conserva MAINTAIN en alguna tabla';
+    END IF;
   END IF;
 END $$;
 

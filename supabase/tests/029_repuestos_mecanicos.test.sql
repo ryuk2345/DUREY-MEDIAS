@@ -141,6 +141,8 @@ UPDATE cajas_diarias SET estado = 'cerrada_cuadrada' WHERE fecha = CURRENT_DATE;
 CREATE TEMP TABLE t_sincaja ON COMMIT DROP AS
   SELECT registrar_compra_repuesto('00000000-0000-0000-0000-0000000029b1', 1, 7, 'efectivo', NULL, NULL, true, NULL) AS r;
 SELECT pg_temp.verificar((SELECT NOT (r->>'descontado_de_caja')::boolean AND (r->>'egreso_id') IS NOT NULL FROM t_sincaja), 'sin caja abierta: compra y gasto, sin caja');
+SELECT pg_temp.verificar((SELECT de_caja AND caja_id IS NULL FROM compras_repuestos WHERE id = (SELECT (r->>'compra_id')::uuid FROM t_sincaja)),
+  'sin caja abierta: queda marcada como de caja (se quiso pagar de la caja) aunque no se descontó');
 UPDATE cajas_diarias SET estado = 'abierta' WHERE id IN ('00000000-0000-0000-0000-0000000029e1', '00000000-0000-0000-0000-0000000029e2');
 UPDATE repuestos SET stock_actual = 5, costo_unitario = 12 WHERE id = '00000000-0000-0000-0000-0000000029b1';
 
