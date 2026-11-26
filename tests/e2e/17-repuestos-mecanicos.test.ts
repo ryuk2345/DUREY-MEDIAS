@@ -35,9 +35,10 @@ describe('lib/domain/repuestos', () => {
     expect(filtrarRepuestos(lista, 'correa', 'con_stock')).toEqual([])
   })
 
-  it('total de compra redondeado a céntimos', () => {
+  it('total de compra: cantidad × precio redondeado a céntimos (igual que la base)', () => {
     expect(totalCompraRepuesto(3, 12)).toBe(36)
-    expect(totalCompraRepuesto(3, 0.335)).toBe(1.01)
+    expect(totalCompraRepuesto(100, 0.125)).toBe(13) // 0.125 → 0.13 × 100
+    expect(totalCompraRepuesto(1, 1.005)).toBe(1.01) // sin error de coma flotante
     expect(totalCompraRepuesto(2, 0)).toBe(0)
   })
 
@@ -108,6 +109,26 @@ describe('mock: compra de repuestos (AC1)', () => {
     expect(db.egresos_adicionales).toHaveLength(0)
   })
 
+  it('la caja de quien paga va primero; nunca una cerrada ni de otro día; compra de otro día no toca la caja', () => {
+    db.cajas_diarias.push(
+      { id: 'c2', fecha: hoy(), estado: 'abierta', asesora_id: 'u1', pagos_efectivo: 0, created_at: '2' },
+      { id: 'c3', fecha: hoy(), estado: 'cerrada_cuadrada', asesora_id: null, pagos_efectivo: 0, created_at: '0' },
+      { id: 'c4', fecha: '2000-01-01', estado: 'abierta', asesora_id: null, pagos_efectivo: 0, created_at: '0' },
+    )
+    rpcMant(db, 'registrar_compra_repuesto', { p_repuesto_id: 'r1', p_cantidad: 1, p_precio_unitario: 7, p_metodo_pago: 'efectivo', p_de_caja: true, p_usuario_id: 'u1' })
+    expect(db.cajas_diarias.map(c => c.pagos_efectivo)).toEqual([0, 7, 0, 0])
+    rpcMant(db, 'registrar_compra_repuesto', { p_repuesto_id: 'r1', p_cantidad: 1, p_precio_unitario: 7, p_metodo_pago: 'efectivo', p_de_caja: true, p_fecha: '2026-01-01' })
+    expect(db.cajas_diarias.map(c => c.pagos_efectivo)).toEqual([0, 7, 0, 0])
+    expect(db.egresos_adicionales.at(-1)).toMatchObject({ fecha: '2026-01-01', monto: 7 })
+  })
+
+  it('sin caja abierta la compra se registra igual (gasto, sin caja)', () => {
+    db.cajas_diarias = []
+    const r = rpcMant(db, 'registrar_compra_repuesto', { p_repuesto_id: 'r1', p_cantidad: 1, p_precio_unitario: 7, p_metodo_pago: 'efectivo', p_de_caja: true })
+    expect(r.data).toMatchObject({ descontado_de_caja: false, total: 7 })
+    expect(db.egresos_adicionales).toHaveLength(1)
+  })
+
   it('el ajuste manual de stock ya no crea egreso', () => {
     const r = rpcMp(db, 'ajustar_stock_repuesto', { p_repuesto_id: 'r1', p_tipo: 'salida', p_cantidad: 2, p_motivo: 'conteo' })
     expect(r.data).toBe(3)
@@ -144,11 +165,30 @@ describe('mock: fallas con mecánico y repuestos (AC2-AC4)', () => {
     expect(db.maquinas[0].estado).toBe('mantenimiento')
   })
 
-  it('sin stock suficiente se rechaza y no descuenta (AC2)', () => {
+  it('sin stock suficiente se rechaza y no descuenta; usar justo lo que queda sí se puede (AC2)', () => {
     iniciar()
     const r = rpcMant(db, 'usar_repuesto_en_averia', { p_averia_id: 'a1', p_repuesto_id: 'r2', p_cantidad: 3 })
     expect(r.error?.message).toBe('Solo hay 2 unidades de Correa; no se pueden usar 3')
     expect(db.repuestos[1].stock_actual).toBe(2)
+    expect(rpcMant(db, 'usar_repuesto_en_averia', { p_averia_id: 'a1', p_repuesto_id: 'r2', p_cantidad: 2 }).error).toBeNull()
+    expect(db.repuestos[1].stock_actual).toBe(0)
+  })
+
+  it('controles de estado: no se cierra sin iniciar, no se inicia dos veces, no se cierra dos veces', () => {
+    expect(rpcMant(db, 'cerrar_reparacion_averia', { p_averia_id: 'a1', p_descripcion: 'x', p_costo_mano_obra: 0 }).error?.message).toContain('Primero inicia')
+    iniciar()
+    expect(iniciar().error?.message).toContain('pendiente')
+    expect(rpcMant(db, 'cerrar_reparacion_averia', { p_averia_id: 'a1', p_descripcion: 'x', p_costo_mano_obra: 10 }).error).toBeNull()
+    expect(rpcMant(db, 'cerrar_reparacion_averia', { p_averia_id: 'a1', p_descripcion: 'x', p_costo_mano_obra: 10 }).error?.message).toContain('Primero inicia')
+    expect(db.reparaciones).toHaveLength(1)
+    expect(db.maquinas[0]).toMatchObject({ estado: 'activa', detalle_estado: 'OPERATIVA' })
+    expect(rpcMant(db, 'asignar_mecanico_averia', { p_averia_id: 'a1', p_mecanico_id: 'm1' }).error?.message).toContain('resuelta')
+  })
+
+  it('iniciar exige la máquina malograda', () => {
+    db.maquinas[0].estado = 'activa'
+    expect(iniciar().error?.message).toContain('malograda')
+    expect(db.averias_maquinas[0].estado).toBe('pendiente')
   })
 
   it('usar baja el stock sin egreso; quitar lo devuelve; cerrar suma lo usado (AC3)', () => {

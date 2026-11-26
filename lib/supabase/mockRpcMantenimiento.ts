@@ -5,7 +5,7 @@
  * repuestos usados. Validan todo antes de escribir.
  */
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, cajaAbiertaHoy, nombreCaja, type Db, type ResultadoRpc } from './mockRpcComun'
-import { totalCompraRepuesto, costoRepuestosUsados, nombreMecanico } from '@/lib/domain/repuestos'
+import { totalCompraRepuesto, costoRepuestosUsados, nombreMecanico, redondearCentimos } from '@/lib/domain/repuestos'
 
 export const RPC_MANTENIMIENTO = [
   'registrar_compra_repuesto',
@@ -32,7 +32,7 @@ function registrarCompraRepuesto(db: Db, p: any) {
   const rep = tabla(db, 'repuestos').find(r => r.id === p.p_repuesto_id)
   if (!rep) throw new ErrorNegocio('Repuesto no encontrado')
 
-  const precio = num(p.p_precio_unitario)
+  const precio = redondearCentimos(num(p.p_precio_unitario))
   const total = totalCompraRepuesto(cantidad, precio)
   rep.stock_actual = num(rep.stock_actual) + cantidad
   rep.costo_unitario = precio

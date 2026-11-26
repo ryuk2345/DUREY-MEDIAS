@@ -539,6 +539,8 @@ export default function MateriaPrimaPage() {
     if (!confirm(`¿Estás seguro de eliminar el repuesto "${rep.nombre}"? Esta acción no se puede deshacer.`)) return
     try {
       const { error } = await supabase.from('repuestos').delete().eq('id', rep.id)
+      // Con compras o usos en fallas registrados, el historial lo protege (clave foránea)
+      if (error?.code === '23503') { toast.error(`No se puede eliminar "${rep.nombre}": tiene compras o usos en fallas registrados.`); return }
       if (error) throw error
     
       toast.success('Repuesto eliminado correctamente')

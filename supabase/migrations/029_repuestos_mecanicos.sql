@@ -123,6 +123,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   v_rep       RECORD;
   v_fecha     DATE := COALESCE(p_fecha, CURRENT_DATE);
+  v_precio    NUMERIC(12,2) := round(p_precio_unitario, 2);  -- se guarda con 2 decimales: el total se calcula con ese mismo precio
   v_total     NUMERIC(12,2);
   v_usuario   UUID := COALESCE(auth.uid(), p_usuario_id);  -- la sesión manda; el parámetro solo sin sesión
   v_caja_id   UUID;
@@ -143,8 +144,8 @@ BEGIN
   SELECT id, nombre INTO v_rep FROM repuestos WHERE id = p_repuesto_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Repuesto no encontrado'; END IF;
 
-  v_total := round(p_cantidad * p_precio_unitario, 2);
-  UPDATE repuestos SET stock_actual = stock_actual + p_cantidad, costo_unitario = p_precio_unitario WHERE id = p_repuesto_id;
+  v_total := p_cantidad * v_precio;
+  UPDATE repuestos SET stock_actual = stock_actual + p_cantidad, costo_unitario = v_precio WHERE id = p_repuesto_id;
 
   IF v_total > 0 THEN
     INSERT INTO egresos_adicionales (concepto, monto, categoria, fecha)
@@ -162,7 +163,7 @@ BEGIN
   END IF;
 
   INSERT INTO compras_repuestos (repuesto_id, proveedor_id, cantidad, precio_unitario, total, metodo_pago, de_caja, fecha, caja_id, egreso_id, registrado_por)
-  VALUES (p_repuesto_id, p_proveedor_id, p_cantidad, p_precio_unitario, v_total, p_metodo_pago,
+  VALUES (p_repuesto_id, p_proveedor_id, p_cantidad, v_precio, v_total, p_metodo_pago,
           p_metodo_pago = 'efectivo' AND COALESCE(p_de_caja, false), v_fecha, v_caja_id, v_egreso_id, v_usuario)
   RETURNING id INTO v_compra_id;
 

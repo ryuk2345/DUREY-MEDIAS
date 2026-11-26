@@ -29,7 +29,6 @@ const ROLE_ROUTES: Record<string, string[]> = {
   preparador: ['/preparado'],
   almacenero: ['/almacen', '/despacho', '/materia-prima'],
   vendedora: ['/ventas', '/clientes', '/catalogo', '/despacho'],
-  tecnico: ['/maquinas', '/mantenimiento'],
   volteador: ['/volteado'],
 }
 

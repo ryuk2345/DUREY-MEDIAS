@@ -21,9 +21,14 @@ export function filtrarRepuestos<T extends RepuestoBuscable>(items: T[], texto: 
   })
 }
 
-/** Total de una compra al contado, redondeado a céntimos (igual que la base). */
+/** Redondeo a céntimos sin el error de coma flotante (1.005 → 1.01, como round() de Postgres). */
+export function redondearCentimos(n: number): number {
+  return Math.round((n + Math.sign(n) * Number.EPSILON) * 100) / 100
+}
+
+/** Total de una compra al contado: cantidad × precio unitario redondeado a céntimos (igual que la base). */
 export function totalCompraRepuesto(cantidad: number, precioUnitario: number): number {
-  return Math.round(cantidad * precioUnitario * 100) / 100
+  return redondearCentimos(cantidad * redondearCentimos(precioUnitario))
 }
 
 /** Costo de los repuestos usados en una falla: cantidad × costo del momento en que se usó. */
