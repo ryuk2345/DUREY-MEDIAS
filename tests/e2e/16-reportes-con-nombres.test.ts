@@ -180,23 +180,28 @@ describe('filasPlanchado y filasPreparado', () => {
 })
 
 describe('filasMantenimiento', () => {
-  it('muestra quién reportó y qué técnico reparó', () => {
+  it('muestra quién reportó y qué mecánico reparó (Fase 3: mecánicos, no usuarios)', () => {
     const [fila] = filasMantenimiento([{
-      fecha_reporte: '2026-11-20T10:00:00Z', descripcion_operador: 'Se rompió una aguja', estado: 'reparada',
+      fecha_reporte: '2026-11-20T10:00:00Z', descripcion_operador: 'Se rompió una aguja', estado: 'resuelto',
       maquina: { codigo: 'M01' }, reportado_por: { nombre: 'Rosa' },
-      reparaciones: [{ costo_total: 45, tecnico: { nombre: 'Pedro Técnico' } }],
+      reparaciones: [{ costo_total: 45, mecanico: { nombre: 'Juan', apellido: 'Pérez' } }],
     }])
     expect(fila['Reportado por']).toBe('Rosa')
-    expect(fila.Técnico).toBe('Pedro Técnico')
+    expect(fila.Mecánico).toBe('Juan Pérez')
     expect(fila['Costo Total (S/)']).toBe(45)
     expect(fila.Reparada).toBe('Sí')
   })
 
-  it('sin reparación: técnico pendiente, no reparada', () => {
-    const [fila] = filasMantenimiento([{ fecha_reporte: '2026-11-20T10:00:00Z', descripcion_operador: 'x', estado: 'pendiente', reparaciones: [] }])
-    expect(fila.Técnico).toBe('Pendiente')
-    expect(fila.Reparada).toBe('No')
-    expect(fila['Reportado por']).toBe(SIN_REGISTRAR)
+  it('sin reparación: el mecánico asignado a la falla; si no, el texto antiguo; si no, "Sin asignar"', () => {
+    const base = { fecha_reporte: '2026-11-20T10:00:00Z', descripcion_operador: 'x', estado: 'pendiente', reparaciones: [] }
+    const [asignada] = filasMantenimiento([{ ...base, mecanico: { nombre: 'Luis', apellido: 'Rojas' } }])
+    expect(asignada.Mecánico).toBe('Luis Rojas')
+    expect(asignada.Reparada).toBe('No')
+    expect(asignada['Reportado por']).toBe(SIN_REGISTRAR)
+    const [antigua] = filasMantenimiento([{ ...base, asignado_a: 'Carlos Mendoza' }])
+    expect(antigua.Mecánico).toBe('Carlos Mendoza')
+    const [sinNadie] = filasMantenimiento([base])
+    expect(sinNadie.Mecánico).toBe('Sin asignar')
   })
 })
 

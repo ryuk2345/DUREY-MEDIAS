@@ -40,7 +40,6 @@ const ROLES_LISTA = [
   { id: 'preparador', label: 'Preparador (Empaques y Paquetes)', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
   { id: 'almacenero', label: 'Almacenero y Despacho', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
   { id: 'vendedora', label: 'Asesora de Ventas', color: 'bg-pink-500/20 text-pink-300 border-pink-500/30' },
-  { id: 'tecnico', label: 'Técnico de Mantenimiento', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
   { id: 'operador', label: 'Operador Multifuncional', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
 ]
 
@@ -680,7 +679,6 @@ export default function UsuariosPage() {
               { id: 'preparador', nombre: 'Preparador (Empaques)', modulos: ['Módulo de Preparado y Etiquetado', 'Registro de Paquetes Terminados', 'Empaque de Docenas Listas'], color: 'border-emerald-500/40 text-emerald-300' },
               { id: 'almacenero', nombre: 'Almacenero y Despacho', modulos: ['Módulo de Almacén Central', 'Módulo de Despacho a Agencias', 'Gestión de Materia Prima e Hilados'], color: 'border-cyan-500/40 text-cyan-300' },
               { id: 'vendedora', nombre: 'Asesora de Ventas', modulos: ['Módulo de Ventas y Pedidos', 'Catálogo de Medias y Precios', 'Despacho y Agencias de Envío'], color: 'border-pink-500/40 text-pink-300' },
-              { id: 'tecnico', nombre: 'Técnico de Mantenimiento', modulos: ['Machinery Monitor en Vivo', 'Registro y Reparación de Averías', 'Control de Stock de Repuestos'], color: 'border-amber-500/40 text-amber-300' },
               { id: 'operador', nombre: 'Operador Multifuncional', modulos: ['Módulos según Turno Asignado (Tejido, Remallado, Planchado, Preparado, Almacén)'], color: 'border-indigo-500/40 text-indigo-300' },
             ].map(r => (
               <div key={r.id} className={`p-5 rounded-2xl bg-slate-900/60 border ${r.color} space-y-3`}>

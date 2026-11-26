@@ -9,7 +9,8 @@
 # 2. Carga la simulación de Supabase (stub_supabase.sql).
 # 3. Aplica supabase/migrations/002..último en orden (000 y 001 son anteriores a la línea base 002).
 #    Justo antes de la última migración NNN guarda una huella del esquema public
-#    (opciones de tablas y vistas, RLS, permisos, funciones con su configuración, políticas).
+#    (opciones de tablas y vistas, RLS, permisos —ordenados, el orden interno no importa—,
+#    funciones con su configuración, políticas).
 # 4. Corre supabase/tests/*.sql (cada test corre en una transacción que se revierte).
 # 5. Si existe supabase/scripts/revertir_NNN.sql: lo ejecuta y exige que la huella vuelva a ser
 #    EXACTAMENTE la de antes de la NNN (la reversión deshace todo, no solo una parte); luego
@@ -30,11 +31,11 @@ PSQL="psql -h $HOST -p $PORT -U postgres -v ON_ERROR_STOP=1 -q"
 
 HUELLA_SQL="SELECT md5(string_agg(x, E'\n' ORDER BY x)) FROM (
   SELECT 'rel ' || c.relname || ' ' || c.relkind::text || ' ' || COALESCE(array_to_string(c.reloptions, ','), '-')
-         || ' rls=' || c.relrowsecurity || ' acl=' || COALESCE(c.relacl::text, '-') AS x
+         || ' rls=' || c.relrowsecurity || ' acl=' || COALESCE((SELECT string_agg(a::text, ',' ORDER BY a::text) FROM unnest(c.relacl) a), '-') AS x
     FROM pg_class c WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r','p','v','m','S')
   UNION ALL
   SELECT 'fn ' || p.oid::regprocedure::text || ' secdef=' || p.prosecdef || ' cfg=' || COALESCE(array_to_string(p.proconfig, ','), '-')
-         || ' acl=' || COALESCE(p.proacl::text, '-') || ' src=' || md5(p.prosrc)
+         || ' acl=' || COALESCE((SELECT string_agg(a::text, ',' ORDER BY a::text) FROM unnest(p.proacl) a), '-') || ' src=' || md5(p.prosrc)
     FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
   UNION ALL
   SELECT 'pol ' || tablename || ' ' || policyname || ' ' || cmd || ' ' || array_to_string(roles, ',') FROM pg_policies WHERE schemaname = 'public'

@@ -127,7 +127,7 @@ describe('Route handlers protegidos', () => {
     const sinSesion = await listarUsuarios(await req('/api/usuarios-lista?rol=admin&campos=*'))
     expect(sinSesion.status).toBe(401)
 
-    const t = await token('tecnico')
+    const t = await token('tejedor')
     const hash = await listarUsuarios(await req('/api/usuarios-lista?rol=admin&campos=id,password_hash', { token: t }))
     expect(hash.status).toBe(400)
 

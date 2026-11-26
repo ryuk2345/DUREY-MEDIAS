@@ -98,7 +98,7 @@ export default function ReportesPage() {
         case 'mantenimiento': {
           const { data: rows, error } = await supabase
             .from('averias_maquinas')
-            .select('fecha_reporte, descripcion_operador, estado, maquina:maquinas(codigo), reportado_por:usuarios(nombre), reparaciones(costo_repuestos, costo_mano_obra, costo_total, tecnico:usuarios(nombre))')
+            .select('fecha_reporte, descripcion_operador, estado, maquina:maquinas(codigo), asignado_a, reportado_por:usuarios!averias_maquinas_reportado_por_id_fkey(nombre), mecanico:mecanicos!averias_maquinas_mecanico_id_fkey(nombre, apellido), reparaciones(costo_repuestos, costo_mano_obra, costo_total, mecanico:mecanicos(nombre, apellido))')
             .gte('fecha_reporte', fechaInicio).lt('fecha_reporte', finExclusivo)
           if (error) throw new Error(`Error al generar reporte de mantenimiento: ${error.message}`)
           data = filasMantenimiento((rows ?? []) as unknown as AveriaReporte[])

@@ -6,6 +6,7 @@ import { ejecutarRpcProduccion, RPC_PRODUCCION } from './mockRpcProduccion'
 import { ejecutarRpcProcesos, RPC_PROCESOS } from './mockRpcProcesos'
 import { ejecutarRpcMateriaPrima, RPC_MATERIA_PRIMA } from './mockRpcMateriaPrima'
 import { ejecutarRpcLogistica, RPC_LOGISTICA } from './mockRpcLogistica'
+import { ejecutarRpcMantenimiento, RPC_MANTENIMIENTO } from './mockRpcMantenimiento'
 
 const SEMILLAS = {
   usuarios: [
@@ -21,9 +22,6 @@ const SEMILLAS = {
     { id: '7', nombre: 'Juan Almacenero', email: 'almacenero@durey.com', rol: 'operador', activo: true, estado: 'disponible' },
     { id: '8', nombre: 'Sofia Vendedora', email: 'vendedora@durey.com', rol: 'vendedora', activo: true, estado: 'disponible' },
     { id: '8b', nombre: 'Elena Vendedora', email: 'elena_vend@durey.com', rol: 'vendedora', activo: true, estado: 'disponible' },
-    { id: '9', nombre: 'Pedro Técnico (Planta)', email: 'tecnico@durey.com', rol: 'tecnico', activo: true, estado: 'disponible', especialidad: 'Mantenimiento General de Planta', telefono: '+51 912 345 678', tipo: 'interno' },
-    { id: '10', nombre: 'Carlos Mendoza', email: 'carlos_mendoza@siemens.com', rol: 'tecnico', activo: true, estado: 'disponible', especialidad: 'Especialista Motores Siemens', telefono: '+54 11 4930-XXXX', tipo: 'externo' },
-    { id: '11', nombre: 'Jorge Ramírez', email: 'jramirez@automation.com', rol: 'tecnico', activo: true, estado: 'en_reparacion', especialidad: 'Sensores y Sistemas Neumáticos', telefono: '+51 955 443 322', tipo: 'externo' },
     { id: '12', nombre: 'Tomas Volteador', email: 'volteador@durey.com', rol: 'operador', activo: true, estado: 'disponible' }
   ],
   marcas_maquinas: [],
@@ -156,6 +154,13 @@ const SEMILLAS = {
     { id: 'av3', maquina_id: 'maq3', descripcion_operador: 'M03: CALIBRACIÓN DE SENSORES — Ajuste de fotoceldas de empaque por desalineación en cajas de 12 unidades.', tipo_averia: 'ELECTRÓNICA', estado: 'resuelto', fecha_reporte: '2026-08-08 16:40:00', asignado_a: 'Jorge Ramírez', nivel: 'RESUELTO' }
   ],
   reparaciones: [],
+  // Fase 3 (migración 029): los mecánicos no son usuarios
+  mecanicos: [
+    { id: 'mec1', nombre: 'Pedro', apellido: 'Quispe', telefono: '912345678', activo: true },
+    { id: 'mec2', nombre: 'Carlos', apellido: 'Mendoza', telefono: '987654321', activo: true },
+  ],
+  compras_repuestos: [],
+  averia_repuestos: [],
   guias_remision: [],
   movimientos_stock: [],
   disenos: [],
@@ -472,9 +477,14 @@ class MockQueryBuilder {
             ...a,
             maquina: db.maquinas.find((m: any) => m.id === a.maquina_id) || null,
             reportado_por: db.usuarios.find((u: any) => u.id === a.reportado_por_id) || null,
+            mecanico: (db.mecanicos || []).find((m: { id: string }) => m.id === a.mecanico_id) || null,
+            averia_repuestos: (db.averia_repuestos || []).filter((u: { averia_id: string }) => u.averia_id === a.id).map((u: { repuesto_id: string }) => ({
+              ...u,
+              repuesto: (db.repuestos || []).find((r: { id: string }) => r.id === u.repuesto_id) || null
+            })),
             reparaciones: db.reparaciones.filter((r: any) => r.averia_id === a.id).map((r: any) => ({
               ...r,
-              tecnico: db.usuarios.find((u: any) => u.id === r.tecnico_id) || null
+              mecanico: (db.mecanicos || []).find((m: { id: string }) => m.id === r.mecanico_id) || null
             }))
           }));
         } else if (self.tableName === 'disenos') {
@@ -507,6 +517,12 @@ class MockQueryBuilder {
               } : null
             };
           });
+        } else if (self.tableName === 'compras_repuestos') {
+          result = result.map(c => ({
+            ...c,
+            repuesto: (db.repuestos || []).find((r: { id: string }) => r.id === c.repuesto_id) || null,
+            proveedor: (db.proveedores || []).find((p: { id: string }) => p.id === c.proveedor_id) || null
+          }));
         } else if (self.tableName === 'pagos_proveedores') {
           result = result.map(p => ({
             ...p,
@@ -758,12 +774,13 @@ export function createMockClient() {
       return new MockQueryBuilder(tableName);
     },
     async rpc(fnName: string, params: any) {
-      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA].includes(fnName as never)) {
+      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO].includes(fnName as never)) {
         const db = await getMockDb();
         const resultado = (ejecutarRpcProduccion(db, fnName, params)
           ?? ejecutarRpcProcesos(db, fnName, params)
           ?? ejecutarRpcMateriaPrima(db, fnName, params)
-          ?? ejecutarRpcLogistica(db, fnName, params))!;
+          ?? ejecutarRpcLogistica(db, fnName, params)
+          ?? ejecutarRpcMantenimiento(db, fnName, params))!;
         if (!resultado.error) await saveMockDb(db);
         return resultado;
       }

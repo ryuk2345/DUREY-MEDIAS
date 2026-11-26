@@ -51,7 +51,8 @@ test('Ventas: registrar una venta genera el código V-1001', async ({ page }) =>
   await elegirSiFalta(page, 'Seleccionar Vendedora...', /Vendedora Prueba/)
   await page.getByPlaceholder('Ej. 45678912 o 20601234567').fill('45678912')
   await page.getByPlaceholder(/Juan Carlos Pérez/).fill('Cliente de Prueba')
-  await elegir(page, 'Tipo de media...', /TST-1/)
+  // La fila nueva toma el primer producto si el catálogo ya cargó: elegir solo si quedó vacía
+  await elegirSiFalta(page, 'Tipo de media...', /TST-1/)
   await page.getByPlaceholder('Docenas').first().fill('2')
   await page.getByPlaceholder('S/ Docena').first().fill('40')
   await page.getByRole('button', { name: /Confirmar y Generar Venta/ }).click()

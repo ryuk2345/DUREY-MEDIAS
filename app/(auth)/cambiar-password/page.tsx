@@ -69,7 +69,6 @@ function CambiarPasswordContent() {
       const rol = document.cookie.split('; ').find(r => r.startsWith('durey_user_role='))?.split('=')[1] ?? 'vendedora'
       let redirect = '/dashboard/admin'
       if (rol === 'vendedora') redirect = '/dashboard/ventas'
-      else if (rol === 'tecnico') redirect = '/dashboard/mantenimiento'
       else if (rol === 'supervisor') redirect = '/dashboard/usuarios'
       else if (rol === 'operador') redirect = '/dashboard/produccion'
       else if (rol === 'almacenero') redirect = '/dashboard/almacen'

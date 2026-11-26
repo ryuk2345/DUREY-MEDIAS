@@ -43,7 +43,8 @@ describe('roles', () => {
     expect(normalizarRol('')).toBeNull()
     expect(normalizarRol('hacker')).toBeNull()
     expect(normalizarRol('Administrador')).toBe('admin')
-    expect(normalizarRol('Técnico')).toBe('tecnico')
+    // Fase 3: el rol técnico ya no existe (los mecánicos no son usuarios): sin acceso
+    expect(normalizarRol('Técnico')).toBeNull()
     expect(normalizarRol('volteador')).toBe('volteador')
   })
 })

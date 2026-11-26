@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
+import { gastoMantenimiento } from '@/lib/domain/finance'
 import {
   DollarSign, Plus, Search, Filter, Trash2, Calendar, FileText,
   TrendingDown, Building2, Package, Wrench, AlertTriangle, Loader2,
@@ -81,7 +82,7 @@ export default function EgresosPage() {
       const [egrRes, comprasRes, repRes] = await Promise.all([
         supabase.from('egresos_adicionales').select('*').order('fecha', { ascending: false }),
         supabase.from('compras_materia_prima').select('costo_total, estado'),
-        supabase.from('reparaciones').select('costo_total')
+        supabase.from('reparaciones').select('costo_mano_obra')
       ])
 
       // La base es la única fuente: antes, si no había egresos en la base se mostraban
@@ -96,8 +97,7 @@ export default function EgresosPage() {
         .reduce((s, c) => s + (Number(c.costo_total) || 0), 0)
       setTotalComprasRecibidas(comprasCosto)
 
-      const repCosto = (repRes.data ?? [])
-        .reduce((s, r) => s + (Number(r.costo_total) || 0), 0)
+      const repCosto = gastoMantenimiento(repRes.data ?? [])
       setTotalReparaciones(repCosto)
     } catch (err: any) {
       toast.error(`Error al cargar egresos: ${err.message}`)

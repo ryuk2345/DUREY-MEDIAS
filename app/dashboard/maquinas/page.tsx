@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
-import { listarUsuarios } from '@/lib/api/usuarios'
+import { nombreMecanico } from '@/lib/domain/repuestos'
 import { formatearFecha } from '@/lib/utils'
 import {
   Cpu, Plus, Search, Trash2, Edit2, Loader2, X, Check,
@@ -41,14 +41,13 @@ interface Maquina {
   marca?: { nombre: string }
 }
 
-interface Tecnico {
+// Fase 3: los mecánicos no son usuarios (tabla mecanicos, migración 029)
+interface Mecanico {
   id: string
   nombre: string
-  email: string
-  especialidad: string
+  apellido: string
   telefono: string
-  tipo: 'interno' | 'externo'
-  estado: string
+  activo: boolean
 }
 
 interface AveriaTimeline {
@@ -66,7 +65,10 @@ interface AveriaTimeline {
 export default function MaquinasPage() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([])
   const [marcas, setMarcas] = useState<Marca[]>([])
-  const [tecnicos, setTecnicos] = useState<Tecnico[]>([])
+  const [mecanicos, setMecanicos] = useState<Mecanico[]>([])
+  const mecanicosActivos = mecanicos.filter(m => m.activo)
+  const [mecanicoForm, setMecanicoForm] = useState<{ id: string; nombre: string; apellido: string; telefono: string } | null>(null)
+  const [guardandoMecanico, setGuardandoMecanico] = useState(false)
   const [averiasTimeline, setAveriasTimeline] = useState<AveriaTimeline[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'monitor' | 'gestion'>('monitor')
@@ -76,7 +78,7 @@ export default function MaquinasPage() {
     maquina_id: '',
     tipo_averia: 'MECÁNICA',
     descripcion: '',
-    tecnico_asignado: ''
+    mecanico_id: ''
   })
   const [enviandoReporte, setEnviandoReporte] = useState(false)
   const [showConfirmReporte, setShowConfirmReporte] = useState(false)
@@ -109,7 +111,7 @@ export default function MaquinasPage() {
     const [maq, mar, tec, av] = await Promise.all([
       supabase.from('maquinas').select('*, marca:marcas_maquinas(nombre)').order('codigo'),
       supabase.from('marcas_maquinas').select('*').order('nombre'),
-      listarUsuarios({ rol: 'tecnico', campos: 'id,nombre,email,estado' }).catch((e: Error) => e),
+      supabase.from('mecanicos').select('id, nombre, apellido, telefono, activo').order('nombre'),
       supabase.from('averias_maquinas').select(`
         *, maquina:maquinas(codigo, tipo)
       `).order('fecha_reporte', { ascending: false }).limit(10)
@@ -121,8 +123,8 @@ export default function MaquinasPage() {
     if (mar.error) {
       toast.error(`Error cargando marcas: ${mar.error.message || mar.error.details}`)
     }
-    if (tec instanceof Error) {
-      toast.error(`Error cargando técnicos: ${tec.message}`)
+    if (tec.error) {
+      toast.error(`Error cargando mecánicos: ${tec.error.message}`)
     }
     if (av.error) {
       toast.error(`Error cargando averías: ${av.error.message || av.error.details}`)
@@ -131,7 +133,7 @@ export default function MaquinasPage() {
     const maqData = (maq.data ?? []) as unknown as Maquina[]
     setMaquinas(maqData)
     setMarcas(mar.data ?? [])
-    setTecnicos((Array.isArray(tec) ? tec : []) as unknown as Tecnico[])
+    setMecanicos((tec.data ?? []) as Mecanico[])
     setAveriasTimeline((av.data ?? []) as unknown as AveriaTimeline[])
 
     // Preseleccionar una máquina a la que se le pueda reportar falla (activa u ocupada)
@@ -195,7 +197,6 @@ export default function MaquinasPage() {
     }
 
     setEnviandoReporte(true)
-    const tecObj = tecnicos.find(t => t.id === reporteForm.tecnico_asignado)
     const reportadoPorId = (await obtenerUsuarioActual())?.id ?? null
 
     // Una sola operación atómica: avería + máquina malograda + cierre del turno activo
@@ -203,7 +204,7 @@ export default function MaquinasPage() {
       p_maquina_id: reporteForm.maquina_id,
       p_tipo_averia: reporteForm.tipo_averia,
       p_descripcion: `${maqObj?.codigo || ''}: ${reporteForm.descripcion.trim()}`,
-      p_asignado_a: tecObj ? tecObj.nombre : null,
+      p_asignado_a: null,
       p_reportado_por_id: reportadoPorId
     })
     setEnviandoReporte(false)
@@ -217,6 +218,11 @@ export default function MaquinasPage() {
     if (data?.turnos_cerrados > 0) {
       toast.warning('Se cerró automáticamente el turno activo de la máquina y se liberó al operador.')
     }
+    // El mecánico se asigna con su propia función (guarda su nombre en la falla)
+    if (reporteForm.mecanico_id && data?.averia_id) {
+      const { error: errAsig } = await supabase.rpc('asignar_mecanico_averia', { p_averia_id: data.averia_id, p_mecanico_id: reporteForm.mecanico_id })
+      if (errAsig) toast.error(`La falla se reportó, pero no se pudo asignar el mecánico: ${errAsig.message}`)
+    }
     toast.success(`Reporte crítico enviado para ${maqObj?.codigo || 'la máquina'}.`, { duration: 4000 })
 
     // Limpiar el formulario; cargarDatos preselecciona otra máquina reportable
@@ -224,6 +230,30 @@ export default function MaquinasPage() {
     cargarDatos()
   }
 
+
+  // ── MECÁNICOS (no son usuarios) ──────────────────────────────────────────
+  const guardarMecanico = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!mecanicoForm) return
+    const datos = { nombre: mecanicoForm.nombre.trim(), apellido: mecanicoForm.apellido.trim(), telefono: mecanicoForm.telefono.trim() }
+    if (!datos.nombre || !datos.apellido || !datos.telefono) { toast.error('Completa nombre, apellido y teléfono'); return }
+    setGuardandoMecanico(true)
+    const { error } = mecanicoForm.id
+      ? await supabase.from('mecanicos').update(datos).eq('id', mecanicoForm.id)
+      : await supabase.from('mecanicos').insert({ ...datos, activo: true })
+    setGuardandoMecanico(false)
+    if (error) { toast.error(`No se pudo guardar el mecánico: ${error.message}`); return }
+    toast.success(mecanicoForm.id ? 'Mecánico actualizado' : `Mecánico ${datos.nombre} ${datos.apellido} registrado`)
+    setMecanicoForm(null)
+    cargarDatos()
+  }
+
+  const cambiarActivoMecanico = async (m: Mecanico) => {
+    const { error } = await supabase.from('mecanicos').update({ activo: !m.activo }).eq('id', m.id)
+    if (error) { toast.error(`No se pudo actualizar: ${error.message}`); return }
+    toast.success(m.activo ? `${nombreMecanico(m)} dado de baja` : `${nombreMecanico(m)} reactivado`)
+    cargarDatos()
+  }
 
   // Guardar Máquina CRUD
   const guardarMaquina = async (e: React.FormEvent) => {
@@ -602,20 +632,17 @@ export default function MaquinasPage() {
                     />
                   </div>
 
-                  {/* ASIGNAR TÉCNICO ESPECIALISTA */}
+                  {/* ASIGNAR MECÁNICO */}
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                      ASIGNAR TÉCNICO ESPECIALISTA
+                      ASIGNAR MECÁNICO
                     </label>
                     <CustomSelect
-                      value={reporteForm.tecnico_asignado}
-                      onChange={val => setReporteForm({ ...reporteForm, tecnico_asignado: val })}
+                      value={reporteForm.mecanico_id}
+                      onChange={val => setReporteForm({ ...reporteForm, mecanico_id: val })}
                       options={[
                         { value: '', label: 'Sin asignación inmediata' },
-                        ...tecnicos.map(t => ({
-                          value: t.id,
-                          label: `${t.nombre} (${t.especialidad || 'Mantenimiento General'})`
-                        }))
+                        ...mecanicosActivos.map(m => ({ value: m.id, label: `${nombreMecanico(m)} · ${m.telefono}` }))
                       ]}
                       triggerClassName="text-xs font-semibold text-cyan-300 border-cyan-500/30"
                     />
@@ -693,50 +720,59 @@ export default function MaquinasPage() {
                 </div>
               </div>
 
-              {/* TÉCNICOS DISPONIBLES (INTERNOS Y EXTERNOS) */}
+              {/* MECÁNICOS: registro propio, no son usuarios (Fase 3) */}
               <div className="glass p-6 rounded-3xl border border-white/[0.08] shadow-xl">
-                <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/[0.08]">
-                  <UserCheck className="w-5 h-5 text-pink-400" />
-                  <h2 className="text-base font-black text-white uppercase tracking-wider">
-                    TÉCNICOS DISPONIBLES (INTERNOS Y EXTERNOS)
-                  </h2>
+                <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-white/[0.08]">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="w-5 h-5 text-pink-400" />
+                    <h2 className="text-base font-black text-white uppercase tracking-wider">MECÁNICOS</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMecanicoForm({ id: '', nombre: '', apellido: '', telefono: '' })}
+                    className="btn-primary text-[10px] py-1.5 px-3 rounded-xl flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> Añadir mecánico
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {tecnicos.length === 0 ? (
-                    <p className="text-slate-500 text-xs col-span-2 text-center py-4">No hay técnicos activos registrados</p>
-                  ) : tecnicos.map(t => (
-                    <div key={t.id} className="p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-300 font-bold flex items-center justify-center border border-cyan-500/30 text-sm">
-                          👨‍🔧
-                        </div>
-                        <div>
-                          <p className="font-bold text-white text-xs uppercase">{t.nombre}</p>
-                          <p className="text-[10px] text-slate-400 uppercase font-semibold">{t.especialidad || 'Mantenimiento de Planta'}</p>
-                          {(t.telefono || t.email) && (
-                            <span className="text-[10px] font-mono text-emerald-400 font-bold block mt-0.5">
-                              {t.telefono || t.email}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                {mecanicoForm && (
+                  <form onSubmit={guardarMecanico} className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-4 p-3 rounded-2xl bg-slate-900/60 border border-cyan-500/20">
+                    <input aria-label="Nombre del mecánico" placeholder="Nombre" value={mecanicoForm.nombre} onChange={e => setMecanicoForm({ ...mecanicoForm, nombre: e.target.value })} className="input-dark text-xs" />
+                    <input aria-label="Apellido del mecánico" placeholder="Apellido" value={mecanicoForm.apellido} onChange={e => setMecanicoForm({ ...mecanicoForm, apellido: e.target.value })} className="input-dark text-xs" />
+                    <input aria-label="Teléfono del mecánico" placeholder="Teléfono" inputMode="tel" value={mecanicoForm.telefono} onChange={e => setMecanicoForm({ ...mecanicoForm, telefono: e.target.value })} className="input-dark text-xs" />
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={guardandoMecanico} className="btn-primary text-xs flex-1 justify-center">
+                        {guardandoMecanico ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Guardar
+                      </button>
+                      <button type="button" onClick={() => setMecanicoForm(null)} className="btn-secondary text-xs" aria-label="Cancelar">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </form>
+                )}
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {mecanicos.length === 0 ? (
+                    <p className="text-slate-500 text-xs col-span-2 text-center py-4">No hay mecánicos registrados. Añade el primero.</p>
+                  ) : mecanicos.map(m => (
+                    <div key={m.id} className={`p-4 rounded-2xl bg-slate-900/60 border border-white/[0.06] flex items-center justify-between gap-3 ${m.activo ? '' : 'opacity-50'}`}>
+                      <div>
+                        <p className="font-bold text-white text-xs uppercase">{nombreMecanico(m)}</p>
+                        <a href={`tel:${m.telefono}`} className="text-[10px] font-mono text-emerald-400 font-bold flex items-center gap-1 mt-0.5">
+                          <Phone className="w-3 h-3" /> {m.telefono}
+                        </a>
+                        {!m.activo && <span className="badge text-[9px] bg-slate-700 text-slate-300 mt-1">DADO DE BAJA</span>}
+                      </div>
                       <div className="flex flex-col items-end gap-2">
-                        <span className={`badge text-[9px] font-bold uppercase ${
-                          t.estado === 'disponible' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
-                        }`}>
-                          {t.estado === 'disponible' ? 'DISPONIBLE' : 'OCUPADO'}
-                        </span>
-                        {/* Teléfono si existe; si no, correo. Sin datos de contacto no se muestra el botón. */}
-                        {(t.telefono || t.email) && (
-                          <a
-                            href={t.telefono ? `tel:${t.telefono}` : `mailto:${t.email}`}
-                            className="btn-primary text-[10px] py-1 px-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold border-none rounded-xl flex items-center gap-1"
-                          >
-                            <Phone className="w-3 h-3" /> CONTACTAR
-                          </a>
-                        )}
+                        <button type="button" onClick={() => setMecanicoForm({ id: m.id, nombre: m.nombre, apellido: m.apellido, telefono: m.telefono })}
+                          className="text-[10px] text-cyan-300 flex items-center gap-1" aria-label={`Editar ${nombreMecanico(m)}`}>
+                          <Edit2 className="w-3 h-3" /> Editar
+                        </button>
+                        <button type="button" onClick={() => cambiarActivoMecanico(m)}
+                          className={`text-[10px] flex items-center gap-1 ${m.activo ? 'text-red-300' : 'text-emerald-300'}`}>
+                          {m.activo ? <><Trash2 className="w-3 h-3" /> Dar de baja</> : <><Check className="w-3 h-3" /> Reactivar</>}
+                        </button>
                       </div>
                     </div>
                   ))}

@@ -4,7 +4,7 @@
  * 024_rpc_materia_prima.sql. Validan todo antes de escribir; mockDb.ts guarda
  * la base solo si no hubo error.
  */
-import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
+import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, cajaAbiertaHoy, nombreCaja, type Db, type ResultadoRpc } from './mockRpcComun'
 
 export const RPC_MATERIA_PRIMA = [
   'editar_materia_prima',
@@ -100,14 +100,8 @@ function ajustarStockRepuesto(db: Db, p: any) {
     throw new ErrorNegocio(`Solo hay ${num(rep.stock_actual)} unidades de ${rep.nombre}; no se pueden sacar ${cantidad}`)
   }
 
+  // Desde la 029 el ajuste solo corrige inventario: el gasto se cuenta al comprar (registrar_compra_repuesto)
   rep.stock_actual = num(rep.stock_actual) + (p.p_tipo === 'ingreso' ? cantidad : -cantidad)
-  if (p.p_tipo === 'salida') {
-    tabla(db, 'egresos_adicionales').push({
-      id: nuevoId(),
-      concepto: `Consumo repuesto: ${rep.nombre} (${cantidad} uds.) — ${String(p.p_motivo ?? '').trim() || 'Mantenimiento'}`,
-      monto: cantidad * num(rep.costo_unitario), categoria: 'repuestos', fecha: hoy(), created_at: ahora(),
-    })
-  }
   return rep.stock_actual
 }
 
@@ -127,16 +121,11 @@ function registrarPagoProveedor(db: Db, p: any) {
   let cajaId: string | null = null
   let cajaDe: string | null = null
   if (p.p_metodo_pago === 'efectivo' && fecha === hoy()) {
-    const abiertas = tabla(db, 'cajas_diarias')
-      .filter(c => c.fecha === hoy() && c.estado === 'abierta')
-      .sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))
-    const caja = (usuario && abiertas.find(c => c.asesora_id === usuario))
-      ?? abiertas.find(c => c.asesora_id == null)
-      ?? abiertas[0]
+    const caja = cajaAbiertaHoy(db, usuario)
     if (caja) {
       caja.pagos_efectivo = num(caja.pagos_efectivo) + num(cuota.monto)
       cajaId = caja.id
-      cajaDe = caja.asesora_id == null ? 'Caja general' : (tabla(db, 'usuarios').find(u => u.id === caja.asesora_id)?.nombre ?? null)
+      cajaDe = nombreCaja(db, caja)
     }
   }
 

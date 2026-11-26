@@ -128,3 +128,13 @@ export const METODOS_PAGO_PROVEEDOR = [
   { value: 'otro', label: 'Otro' },
 ] as const
 export type MetodoPagoProveedor = typeof METODOS_PAGO_PROVEEDOR[number]['value']
+
+/**
+ * Gasto de mantenimiento de un conjunto de reparaciones: solo la mano de obra.
+ * Los repuestos ya son gasto al comprarlos (registrar_compra_repuesto, migración 029,
+ * decisión del dueño 2026-11-25); sumar `costo_total` los contaría dos veces.
+ * Única definición: la usan Panel, Balance, Egresos y Materia Prima.
+ */
+export function gastoMantenimiento(reparaciones: { costo_mano_obra?: number | string | null }[]): number {
+  return Math.round(reparaciones.reduce((s, r) => s + (Number(r.costo_mano_obra) || 0), 0) * 100) / 100
+}

@@ -73,17 +73,36 @@ test('Producción: la máquina malograda no se puede cargar; cargar lote y regis
   await expect(page.getByText('0 En Marcha')).toBeVisible()
 })
 
-test('Mantenimiento: iniciar reparación y marcar como resuelta deja la máquina activa', async ({ page }) => {
+test('Mantenimiento: entra el mecánico, usa un repuesto del stock y al cerrar el costo sale solo', async ({ page }) => {
   await page.goto('/dashboard/mantenimiento')
+  // Sin mecánico no se inicia la reparación
+  await page.getByRole('button', { name: /Iniciar Reparación/ }).first().click()
+  await expect(page.getByText('Elige el mecánico que hace la reparación')).toBeVisible()
+
+  await elegir(page, 'Mecánico que entra...', 'Mecánico Prueba')
   await page.getByRole('button', { name: /Iniciar Reparación/ }).first().click()
   await expect(page.getByText(/Reparación iniciada/)).toBeVisible()
+  await expect(page.getByText('Mecánico: Mecánico Prueba')).toBeVisible()
+
+  // Más de lo que hay: se rechaza y no descuenta
+  await elegir(page, 'Elegir repuesto...', 'Aguja de prueba (5 en stock)')
+  await page.getByLabel('Cantidad de repuesto').fill('9')
+  await page.getByRole('button', { name: 'Usar' }).click()
+  await expect(page.getByText('Solo hay 5 unidades de Aguja de prueba; no se pueden usar 9')).toBeVisible()
+
+  // El repuesto sigue elegido: solo se corrige la cantidad
+  await page.getByLabel('Cantidad de repuesto').fill('2')
+  await page.getByRole('button', { name: 'Usar' }).click()
+  await expect(page.getByText('Repuesto descontado del stock')).toBeVisible()
+  await expect(page.getByText(/2 × Aguja de prueba/)).toBeVisible()
 
   await page.getByRole('button', { name: /Registrar Reparación/ }).first().click()
-  await page.getByPlaceholder('Diagnóstico del técnico...').fill('Cambio de aguja y ajuste')
-  const costos = page.locator('input[type="number"]')
-  await costos.nth(0).fill('30')
-  await costos.nth(1).fill('20')
-  await page.getByRole('button', { name: /Marcar como Resuelto/ }).click()
+  const modal = page.getByRole('dialog')
+  await modal.getByPlaceholder('Diagnóstico del técnico...').fill('Cambio de aguja y ajuste')
+  await expect(modal.getByLabel('Costo de repuestos usados')).toHaveText('S/ 20.00')
+  await modal.locator('input[type="number"]').fill('30')
+  await expect(modal.getByText('S/ 50.00')).toBeVisible()
+  await modal.getByRole('button', { name: /Marcar como Resuelto/ }).click()
   await expect(page.getByText(/Reparación registrada/)).toBeVisible()
 
   await page.goto('/dashboard/maquinas')

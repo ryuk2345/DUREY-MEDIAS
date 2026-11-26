@@ -81,8 +81,8 @@ describe('repuestos', () => {
     expect(db).toEqual(antes)
   })
 
-  it('una salida válida descuenta y registra el gasto real', () => {
+  it('una salida válida descuenta y no crea gasto (Fase 3: el gasto se cuenta al comprar)', () => {
     expect(rpc('ajustar_stock_repuesto', { p_repuesto_id: 'r1', p_tipo: 'salida', p_cantidad: 2, p_motivo: 'Cambio' }).data).toBe(3)
-    expect(db.egresos_adicionales[0].monto).toBe(20)
+    expect(db.egresos_adicionales ?? []).toHaveLength(0)
   })
 })
