@@ -14,6 +14,7 @@ Se ratifica junto con la constitución (`02-DOCS/wiki/sdd/constitution.md`). Se 
 - Fechas: un `new Date('AAAA-MM-DD')` mostrado sin `formatearFecha` (en Lima sale el día anterior); "hoy" calculado en UTC.
 - Un test que pasa también sin el cambio (no prueba nada) o una puerta de verificación que no puede fallar.
 - Un secreto en el código.
+- Textos al usuario que no están en español.
 
 ## Rutas que no se revisan
 `node_modules/`, `.next/`, `mock_db.json`, `mock_db.e2e.json`, `package-lock.json`, `02-DOCS/raw/`.
@@ -32,14 +33,19 @@ La lista que aplica `rsc risk` está en `.rsc-risk.json` (versionado en la raíz
 - `lib/auth/` (JWT, sesión, roles, token de base, usuario actual)
 - `proxy.ts` (y `middleware.ts` si existiera)
 - `app/api/auth/` (login, logout, sesión, cambio de contraseña, token de base)
-- `app/api/usuarios/` y `app/api/usuarios-lista/`
-- `app/api/diagnostico/`
+- `app/api/usuarios/` y `app/api/usuarios-lista/`; `lib/api/usuarios.ts`; `app/dashboard/usuarios/`
+- `app/api/diagnostico/` y `app/api/mock-db/` (su guarda 404 evita exponer la base local sin sesión)
 - `app/(auth)/` (pantallas de login y cambio de contraseña)
-- `lib/utils/index.ts`: solo las líneas de `MODULOS_POR_ROL` y `ROLES_LABELS`, incluidas las de cada rol (`tejedor: ['produccion', …]`)
+- `app/dashboard/layout.tsx` y `app/dashboard/page.tsx` (puerta del dashboard: rol desde el JWT y redirección al login)
+- `lib/supabase/admin.ts` (service role, se salta RLS), `lib/supabase/server.ts` y `lib/supabase/client.ts` (envían la sesión)
+- `supabase/scripts/` (reversiones que reabren tablas, purgas)
+- `lib/utils/index.ts`: las líneas de `MODULOS_POR_ROL` y `ROLES_LABELS`, incluidas las de cada rol (`tejedor: ['produccion', …]`, `admin: 'Administrador General'`). También atrapa las líneas de opciones de formato (`style: 'currency'`): falso positivo aceptado.
 
-**Caja, cobros y pagos**
+**Caja, cobros, pagos e ingresos**
 - `lib/domain/finance.ts`
 - `app/dashboard/ventas/` (ventas, cuotas, cobros y caja del día)
-- `app/dashboard/egresos/` y `app/dashboard/balance/`
-- `app/dashboard/materia-prima/`: solo las líneas que tocan pagos y cuotas a proveedores o la caja (`registrar_pago_proveedor`, `reprogramar_cuota_compra`, `cuotas_compras`, `pagos_proveedores`, `cajas_diarias`)
-- Migraciones SQL (`supabase/migrations/`): ya son nivel 2 por ser migraciones; incluye las funciones `registrar_cobro_cuotas`, `registrar_pago_proveedor` y `_sumar_a_caja`.
+- `app/dashboard/materia-prima/` (compras, cuotas y pagos a proveedores, salida de caja)
+- `app/dashboard/egresos/`, `app/dashboard/balance/` y `app/dashboard/admin/` (totales de ingresos)
+- Migraciones SQL (`supabase/migrations/`): ya son nivel 2 por ser migraciones; incluye `registrar_cobro_cuotas`, `registrar_pago_proveedor` y `_sumar_a_caja`.
+
+**Fuera a propósito**: los espejos del mock (`lib/supabase/mockRpc*.ts`, `lib/supabase/mockDb.ts`) no tocan la base real; sus errores los atrapan `npm test` y Playwright.

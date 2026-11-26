@@ -40,7 +40,7 @@ El dueño (aprueba) y los agentes que trabajan en el repositorio (cumplen y revi
 Leer en un solo sitio las reglas de la casa; saber de antemano qué cambios necesitan especificación y panel de 3 revisores.
 
 ## What result they get
-Un cambio en `lib/auth/`, `proxy.ts`, `app/api/auth/`, `app/api/usuarios*`, `app/api/diagnostico/`, `app/(auth)/`, las líneas de roles de `lib/utils/index.ts`, `lib/domain/finance.ts`, `app/dashboard/{ventas,egresos,balance}/` o las líneas de pagos/cuotas/caja de `app/dashboard/materia-prima/` da nivel 2 en `rsc risk`. Cualquier otro cambio de la app conserva su nivel.
+Un cambio en cualquier ruta de la lista de `REVIEW.md` (login, sesión, permisos, clientes de Supabase, gestión de usuarios, puerta del dashboard, scripts SQL manuales, líneas de roles de `lib/utils/index.ts`; caja, cobros, pagos e ingresos: `lib/domain/finance.ts`, `app/dashboard/{ventas,egresos,balance,materia-prima,admin}/`) da nivel 2 en `rsc risk`. Cualquier otro cambio de la app conserva su nivel.
 
 ## What it must respect
 - La política va en `.rsc-risk.json` (versionado; `rsc risk` la lee desde `main`), no en `.rsc/` (estado local ignorado por git).
