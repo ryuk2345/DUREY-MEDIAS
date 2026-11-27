@@ -23,6 +23,7 @@ Fuera: anular ventas pendientes; las ventas ya sobrevendidas antes de la 035 dej
 - [x] T3 Ventas: catálogo sin crudos, stock para vender, aviso antes de enviar — prueba: Playwright «Ventas no ofrece crudos y marca sin stock…».
 - [x] T4 Controles: `npm test` 301/301, Playwright 59/59, build y `tsc` en verde, ESLint sin errores nuevos.
 - [x] T5 `rsc risk` nivel 2: panel de 3 revisores, ronda 1 (L113-L117). Corregidos: prueba del orden del cerrojo, aviso previo en pantalla con lo vendible (no lo físico), orden del aviso con dos SKU y decimales. Aparcados: L116 formato 10.00 en la base frente a 10 en pantalla (igual que en la 6A); L117 el despacho con sobrante no toma el cerrojo (ventana mínima: una sobreventa por el sobrante, visible como saldo negativo).
+- [x] T5b Ronda 2: la prueba de pantalla falla a la vista si falta el stock previo (antes se saltaba); el orden del aviso con varios SKU queda aparcado (con estos datos Postgres devuelve el orden por código aun sin ORDER BY).
 - [ ] T6 PR, fusión y 035 en la base real.
 
 ## Next

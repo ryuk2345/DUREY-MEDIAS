@@ -113,7 +113,8 @@ test('Ventas avisa antes de enviar si se pide más de lo que hay para vender (no
   const comprometidas = db.items_venta.filter((i: { venta_id: string; catalogo_media_id: string }) => pendientes.has(i.venta_id) && i.catalogo_media_id === tst)
     .reduce((t: number, i: { docenas: number }) => t + Number(i.docenas), 0)
   const hay = Math.round((fisico - comprometidas) * 100) / 100
-  test.skip(hay <= 0, 'Hace falta stock para vender de TST-1')
+  // Si una prueba anterior del archivo no dejó stock, esto falla a la vista (no se salta)
+  expect(hay).toBeGreaterThan(0)
   expect(comprometidas).toBeGreaterThan(0)
 
   await page.goto('/dashboard/ventas')

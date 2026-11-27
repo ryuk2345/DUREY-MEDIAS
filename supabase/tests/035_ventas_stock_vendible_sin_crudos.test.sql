@@ -50,7 +50,12 @@ INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
   ('00000000-0000-0000-0000-0000000035a1', 'Vende 035', 've035@test', 'vendedora', true, 'disponible');
 INSERT INTO catalogo_medias (id, codigo, sku, modelo, publico, diseno_color, talla) VALUES
   ('00000000-0000-0000-0000-0000000035c1', 'T35-A', 'SKU-35A', 'M35', 'adulto', 'Azul', 'L'),
-  ('00000000-0000-0000-0000-0000000035c2', 'T35-B', 'SKU-35B', 'M35', 'adulto', 'Rojo', 'L');
+  ('00000000-0000-0000-0000-0000000035c2', 'T35-B', 'SKU-35B', 'M35', 'adulto', 'Rojo', 'L'),
+  -- Orden de código contrario al de id, para fijar que el aviso sigue el código
+  ('00000000-0000-0000-0000-0000000035d4', 'T35-Z1', 'SKU-35Z1', 'M35', 'adulto', 'Gris', 'L'),
+  ('00000000-0000-0000-0000-0000000035d3', 'T35-Z2', 'SKU-35Z2', 'M35', 'adulto', 'Negro', 'L'),
+  ('00000000-0000-0000-0000-0000000035d2', 'T35-Z3', 'SKU-35Z3', 'M35', 'adulto', 'Verde', 'L'),
+  ('00000000-0000-0000-0000-0000000035d1', 'T35-Z4', 'SKU-35Z4', 'M35', 'adulto', 'Lila', 'L');
 INSERT INTO catalogo_medias (id, codigo, modelo, publico, diseno_color, talla, es_crudo) VALUES
   ('00000000-0000-0000-0000-0000000035c9', 'CRU-35', 'M35', 'adulto', 'CRUDO', 'L', true);
 INSERT INTO ubicaciones (id, nombre, tipo, activo) VALUES ('00000000-0000-0000-0000-0000000035e1', 'Salón 35', 'salon', true);
@@ -77,10 +82,11 @@ SELECT pg_temp.debe_fallar($$SELECT pg_temp.vender('00000000-0000-0000-0000-0000
 SELECT pg_temp.debe_fallar($$SELECT registrar_venta('{"nombre":"C","numero_documento":"35353536"}'::jsonb, '00000000-0000-0000-0000-0000000035a1', 'directo', 0,
   '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000035c1","docenas":6,"precio_docena":1},{"catalogo_media_id":"00000000-0000-0000-0000-0000000035c1","docenas":5,"precio_docena":1}]'::jsonb, NULL, 'efectivo')$$,
   'pides 11 docenas');
--- Con dos productos sin stock, avisa del primero por código
+-- Con dos productos sin stock, avisa del primero por código (no por id)
 SELECT pg_temp.debe_fallar($$SELECT registrar_venta('{"nombre":"C","numero_documento":"35353537"}'::jsonb, '00000000-0000-0000-0000-0000000035a1', 'directo', 0,
-  '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000035c2","docenas":1,"precio_docena":1},{"catalogo_media_id":"00000000-0000-0000-0000-0000000035c1","docenas":99,"precio_docena":1}]'::jsonb, NULL, 'efectivo')$$,
-  'No hay stock suficiente de T35-A');
+  '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000035d1","docenas":4,"precio_docena":1},{"catalogo_media_id":"00000000-0000-0000-0000-0000000035d3","docenas":2,"precio_docena":1},
+    {"catalogo_media_id":"00000000-0000-0000-0000-0000000035d2","docenas":3,"precio_docena":1},{"catalogo_media_id":"00000000-0000-0000-0000-0000000035d4","docenas":1,"precio_docena":1}]'::jsonb, NULL, 'efectivo')$$,
+  'No hay stock suficiente de T35-Z1:');
 -- Exactamente lo que hay sí se vende
 SELECT pg_temp.vender('00000000-0000-0000-0000-0000000035c1', 8);
 RESET ROLE;
