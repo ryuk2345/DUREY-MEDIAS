@@ -30,7 +30,7 @@ Seguir asignando cada turno y llevar tintorería en un cuaderno. No basta: el st
 
 ## Goals
 - Tejido 24/6: cada máquina tiene un producto fijo que solo cambia el supervisor; cada turno (día y noche) se registra cuánto produjo cada máquina y qué operario la atendió.
-- Flujo en crudo: tejido → remallado → volteado → tintorería → planchado → preparado. Cada etapa toma de la anterior y deja en la siguiente.
+- Flujo en crudo: tejido → remallado → volteado → tintorería → planchado → preparado. Desde el remallado, cada etapa toma de la anterior y deja en la siguiente (entre tejido y remallado la asignación es manual).
 - Tintorería (interna, sin costo): enviar un lote crudo con su color; al volver, las docenas entran a planchado ya con su SKU de color; la diferencia es merma con motivo.
 - Preparado con la lógica de planchado (sin las tarjetas de resumen) y varios SKU por persona y día en planchado y preparado.
 - Botón "stock de fuera" en remallado, planchado y preparado: docenas, de dónde vino y quién lo ingresó, sin egreso.
@@ -46,11 +46,11 @@ Supervisor (asigna producto a cada máquina, asigna planchadores y preparadores)
 
 ## What the user can do
 - **Tejido:** ver cada máquina con su producto; el supervisor lo cambia cuando decide. En cada turno (día o noche) registrar, por máquina, las docenas producidas y el operario.
-- **Remallado:** tomar docenas crudas del stock de tejido; al terminar quedan listas para voltear.
+- **Remallado:** asignar a mano un lote crudo a la remalladora (como hoy, sin descontar de tejido); al terminar queda listo para voltear.
 - **Volteado:** tomar lo remallado; al terminar queda listo para tintorería.
 - **Tintorería:** enviar un lote (media cruda, docenas, color, material algodón o poliéster, operadora que remalló); al volver, registrar las docenas recibidas y la merma con motivo; lo recibido entra a planchado con el SKU de ese color.
 - **Planchado y preparado:** asignar a cada persona uno o varios SKU por día; registrar lo planchado o preparado; preparado toma de lo planchado.
-- **Stock de fuera:** en remallado, planchado y preparado, ingresar docenas de un producto con su origen; queda registrado quién lo ingresó.
+- **Stock de fuera:** ingresar docenas eligiendo la etapa en la que están (remallado, volteado, tintorería, planchado o preparado) y el producto, con su origen; queda registrado quién lo ingresó.
 Quién: usuarios con sesión y acceso al módulo (MODULOS_POR_ROL). Nadie sin sesión.
 
 ## What result they get
@@ -77,7 +77,7 @@ Quién: usuarios con sesión y acceso al módulo (MODULOS_POR_ROL). Nadie sin se
 
 ## Acceptance criteria
 - Given una máquina con producto fijo, When pasan varios turnos, Then no se vuelve a asignar; When el supervisor lo cambia, Then los turnos siguientes usan el nuevo.
-- Given el turno noche de una máquina, When se registran 12 docenas con el operario Juan, Then el reporte de tejido muestra 12 docenas de Juan en esa máquina y turno, y hay 12 docenas crudas por remallar.
+- Given el turno noche de una máquina, When se registran 12 docenas con el operario Juan, Then el reporte de tejido muestra 12 docenas de Juan en esa máquina y turno.
 - Given 12 docenas remalladas y volteadas, When se envían 12 a tintorería con color azul y vuelven 11 con 1 de merma "manchada", Then hay 11 docenas del SKU azul por planchar y la merma queda registrada.
 - Given 11 docenas por planchar, When un planchador asignado a ese SKU plancha 11, Then hay 11 por preparar; When se preparan, Then se descuentan.
 - Given 5 docenas traídas de fuera ingresadas en planchado, Then suben 5 por planchar y el registro dice de dónde vinieron y quién las ingresó, sin egreso.
@@ -88,8 +88,9 @@ Quién: usuarios con sesión y acceso al módulo (MODULOS_POR_ROL). Nadie sin se
 - **decidido (dueño, 2026-11-26)** — Tejido 24/6 se registra por turno, día y noche (2-A).
 - **decidido (dueño, 2026-11-26)** — Tintorería interna, sin costo (4). Stock de fuera sin egreso (5-A). Diferencia en tintorería = merma con motivo (7-A).
 - **decidido (dueño, 2026-11-26)** — Se sigue volteando; volteado va entre remallado y tintorería (6, opción A).
-- **por decidir** — C1. Stock de fuera: ¿entra a lo que la etapa *va a trabajar* (por ejemplo, en planchado, medias por planchar) o a lo que la etapa *ya terminó*? Recomendado: a lo que va a trabajar.
-- **por decidir** — C2. Remallado solo puede tomar lo que tejido produjo. Lo que hoy está en la planta sin registrar se cargaría una vez con "stock de fuera" o con un ajuste inicial. ¿De acuerdo, o remallado sigue sin control de stock?
+- **decidido (dueño, 2026-11-26)** — C1. Stock de fuera = medias que no salieron de las máquinas registradas: las ya producidas antes de usar el sistema y las traídas de otro lugar. Al ingresarlas se elige la etapa en la que están y el producto (crudo o SKU de color); entran como pendientes de esa etapa y siguen el flujo normal.
+- **decidido (dueño, 2026-11-26)** — C2. Sin control de stock entre tejido y remallado: el dueño junta lo que sacan las máquinas y asigna cada lote a mano a la remalladora, como hoy. El control de stock por etapa empieza al terminar el remallado.
+- **supuesto** — Stock de fuera en remallado: como remallado se asigna a mano, el lote se marca con origen "de fuera" (para separarlo de lo producido en la planta). *Riesgo:* bajo.
 - **por decidir** — C3. Hilo: hoy se descuenta un estimado de 15 docenas por máquina al abrir el turno. Recomendado: descontar según las docenas reales registradas en cada turno.
 - **supuesto** — La media cruda es un producto del catálogo con color "crudo" (mismo modelo, talla y público que sus SKU de color). Tintorería solo puede convertirla a un SKU de color con el mismo modelo, talla y público. *Riesgo:* si un modelo crudo da medias de otro modelo, cambia la regla.
 - **supuesto** — Un lote de tintorería lleva un solo color y vuelve en una sola entrega. *Riesgo:* si un lote se divide en varios colores, se envían como lotes separados.
@@ -102,4 +103,4 @@ Dos PRs en esta rama de trabajo:
 - **5B** (migración 033): catálogo crudo, remallado → volteado → tintorería → planchado, tintorería con merma.
 
 ## Approval
-Pendiente: respuestas a C1, C2 y C3 y aprobación del dueño.
+Respuestas del dueño a C1 y C2 (2026-11-26). Pendiente: C3 y aprobación del dueño.
