@@ -40,6 +40,22 @@
       "rol": "remalladora",
       "activo": true,
       "estado": "disponible"
+    },
+    {
+      "id": "plan1",
+      "nombre": "Planchador Prueba",
+      "email": "plan@test",
+      "rol": "planchador",
+      "activo": true,
+      "estado": "disponible"
+    },
+    {
+      "id": "prep1",
+      "nombre": "Preparador Prueba",
+      "email": "prep@test",
+      "rol": "preparador",
+      "activo": true,
+      "estado": "disponible"
     }
   ],
   "marcas_maquinas": [
@@ -94,6 +110,17 @@
       "peso_docena_g": 400,
       "materia_prima_id": "mp1",
       "sku": "SKU-TST-1"
+    },
+    {
+      "id": "media2",
+      "codigo": "TST-2",
+      "modelo": "Clasica",
+      "publico": "adulto",
+      "talla": "L",
+      "estado": "activo",
+      "peso_docena_g": 400,
+      "materia_prima_id": "mp1",
+      "sku": "SKU-TST-2"
     }
   ],
   "materia_prima": [
@@ -248,5 +275,15 @@
     }
   ],
   "mantenimientos_preventivos": [],
-  "mantenimiento_repuestos": []
+  "mantenimiento_repuestos": [],
+  "productos_maquina": [
+    {
+      "id": "pm1",
+      "maquina_id": "m1",
+      "catalogo_media_id": "media1",
+      "desde": "2026-01-01T00:00:00.000Z",
+      "hasta": null,
+      "asignado_por": null
+    }
+  ]
 }

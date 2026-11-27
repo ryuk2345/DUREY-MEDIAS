@@ -1,23 +1,26 @@
 'use client'
 
+// Preparado (Fase 5A, migración 032): igual que Planchado. Cronograma semanal con
+// uno o varios SKU por preparador y día; planilla diaria; al embolsar se descuenta
+// de "por preparar" (lo planchado y el stock de fuera) y se crea el saco con su QR,
+// todo en una función atómica (registrar_produccion_preparado).
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
-  Package, Plus, QrCode, Loader2, X, Check, Warehouse, ArrowRight,
-  Calendar, Printer, FileText, ChevronLeft, ChevronRight, Copy, Sparkles,
-  Save, User, Box, ShieldAlert, CheckCircle2, Layers, Tag, Scan, Barcode
+  Package, QrCode, Loader2, Check, Calendar, Printer, ChevronLeft, ChevronRight, Copy,
+  User, Layers, Scan, Barcode, Plus, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { generarCodigoPaquete, getSemanaAnio, getDiaSemana, formatearRangoSemana } from '@/lib/utils'
+import { getSemanaAnio, getDiaSemana, formatearRangoSemana, escaparHtml as h } from '@/lib/utils'
 import { convertirDocenasAPares, construirQrSacoMaestro, siguienteCodigoSaco } from '@/lib/domain/packaging'
 import QRCode from 'qrcode'
-import CustomSelect from '@/components/ui/CustomSelect'
 import SelectorMedia from '@/components/ui/SelectorMedia'
 import Modal from '@/components/ui/Modal'
+import IngresoStockFuera from '@/components/produccion/IngresoStockFuera'
 
 interface Preparador { id: string; nombre: string }
-interface StockEmpacar { id: string; docenas: number; catalogo_media_id: string; catalogo_media: { id: string; sku?: string; codigo: string; talla: string; publico: string } }
+interface StockPreparar { catalogo_media_id: string; docenas: number }
 interface Paquete {
   id: string
   codigo_paquete: string
@@ -30,36 +33,29 @@ interface Paquete {
   total_pares?: number
 }
 interface Ubicacion { id: string; nombre: string; tipo: string }
-interface Cronograma {
-  id: string
-  semana: number
-  anio: number
-  dia_semana: string
-  criterio: string
-  valor_criterio: string
-  preparador_id: string
-  preparador?: { nombre: string }
-}
+interface Cronograma { id: string; semana: number; anio: number; dia_semana: string; criterio: string; valor_criterio: string; preparador_id: string }
 interface CatalogoMedia { id: string; sku?: string; codigo: string; talla: string; publico: string; modelo?: string; diseno_color?: string }
-
-interface SacoMaestroGenerado {
+interface ItemSaco { catalogo_media_id: string; sku: string; codigo: string; docenas: number; defectuosas: number; pares: number }
+interface SacoPrevio {
   codigo_saco: string
-  preparador_id: string
-  preparador_nombre: string
-  salon_destino_id: string
-  salon_destino_nombre: string
-  items: { catalogo_media_id: string; sku: string; codigo: string; docenas: number; pares: number }[]
+  preparador: Preparador
+  salon_id: string
+  items: ItemSaco[]
   totalDocenas: number
   totalPares: number
-  qrDataURL: string
-  qrPayloadJson: string
 }
 
 const DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
 
 export default function PreparadoPage() {
+  const supabase = createClient()
+  const { semana: semanaHoy, anio: anioHoy } = getSemanaAnio()
+  const [semana, setSemana] = useState(semanaHoy)
+  const [anio, setAnio] = useState(anioHoy)
+  const [dia, setDia] = useState(getDiaSemana())
+
   const [preparadores, setPreparadores] = useState<Preparador[]>([])
-  const [stock, setStock] = useState<StockEmpacar[]>([])
+  const [stock, setStock] = useState<StockPreparar[]>([])
   const [paquetes, setPaquetes] = useState<Paquete[]>([])
   const [ubicaciones, setUbicaciones] = useState<Ubicacion[]>([])
   const [cronograma, setCronograma] = useState<Cronograma[]>([])
@@ -67,617 +63,374 @@ export default function PreparadoPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Semana y año actual del calendario
-  const { semana: semanaHoy, anio: anioHoy } = getSemanaAnio()
+  // Planilla del día: clave preparador__producto
+  const [planilla, setPlanilla] = useState<Record<string, { docenas: string; defectuosas: string }>>({})
+  const [extraPorPreparador, setExtraPorPreparador] = useState<Record<string, string[]>>({})
 
-  const [semanaSeleccionada, setSemanaSeleccionada] = useState<number>(semanaHoy)
-  const [anioSeleccionado, setAnioSeleccionado] = useState<number>(anioHoy)
-  const [diaSeleccionado, setDiaSeleccionado] = useState<string>(getDiaSemana())
+  // Asignación en el cronograma (varios SKU a la vez)
+  const [asignar, setAsignar] = useState<{ preparador_id: string; dia: string; actual: string; elegidos: string[] } | null>(null)
 
-  // Modales
-  const [showPaqueteModal, setShowPaqueteModal] = useState(false)
-  const [showQRModal, setShowQRModal] = useState(false)
-  const [showTraslado, setShowTraslado] = useState(false)
-  const [showCronoModal, setShowCronoModal] = useState(false)
-  const [showSacoMaestroModal, setShowSacoMaestroModal] = useState(false)
-
+  const [saco, setSaco] = useState<SacoPrevio | null>(null)
+  const [qrSaco, setQrSaco] = useState('')
   const [paqueteQR, setPaqueteQR] = useState<Paquete | null>(null)
-  const [qrDataURL, setQrDataURL] = useState('')
-  const [paqueteForm, setPaqueteForm] = useState({ catalogo_media_id: '', docenas: '' })
-  const [trasladoForm, setTrasladoForm] = useState({ paquete_id: '', ubicacion_id: '' })
+  const [qrPaquete, setQrPaquete] = useState('')
 
-  const [cronoForm, setCronoForm] = useState({
-    id: null as string | null,
-    preparador_id: '',
-    dia_semana: 'lunes',
-    criterio: 'media',
-    valor_criterio: ''
-  })
-
-  // Producción masiva por empacador
-  const [produccionMasiva, setProduccionMasiva] = useState<Record<string, { empacadas: string; defectuosas: string }>>({})
-  const [mediaManualPorPreparador, setMediaManualPorPreparador] = useState<Record<string, string>>({})
-
-  // Saco Maestro generado para vista previa e impresión de QR
-  const [sacoMaestroActual, setSacoMaestroActual] = useState<SacoMaestroGenerado | null>(null)
-
-  const supabase = createClient()
-
-  // ── CARGAR DATOS ──────────────────────────────────────────────────────────
-  const cargarDatos = useCallback(async () => {
-    setLoading(true)
-    const [st, pq, ub, cr, cat] = await Promise.all([
-      supabase.from('stock_listo_planchar').select('id, docenas, catalogo_media_id, catalogo_media:catalogo_medias(id, sku, codigo, talla, publico)').gt('docenas', 0),
+  const leer = useCallback(async () => {
+    const hoy = new Date().toISOString().split('T')[0]
+    const [st, pq, ub, cr, cat, esp, asig] = await Promise.all([
+      supabase.from('stock_listo_preparar').select('catalogo_media_id, docenas'),
       supabase.from('paquetes').select('id, codigo_paquete, docenas, total_pares, detalles_contenido, estado, preparador:usuarios(nombre), catalogo_media:catalogo_medias(sku, codigo), ubicacion:ubicaciones(nombre)').order('created_at', { ascending: false }).limit(30),
       supabase.from('ubicaciones').select('id, nombre, tipo').eq('activo', true),
-      supabase.from('cronograma_preparado').select('id, semana, anio, dia_semana, criterio, valor_criterio, preparador_id, preparador:usuarios(nombre)').eq('semana', semanaSeleccionada).eq('anio', anioSeleccionado),
+      supabase.from('cronograma_preparado').select('id, semana, anio, dia_semana, criterio, valor_criterio, preparador_id').eq('semana', semana).eq('anio', anio),
       supabase.from('catalogo_medias').select('id, sku, codigo, talla, publico, modelo, diseno_color').eq('estado', 'activo').order('codigo'),
-    ])
-
-    if (st.error) toast.error(`Error al cargar stock listo para planchar: ${st.error.message}`)
-    if (pq.error) toast.error(`Error al cargar sacos maestros: ${pq.error.message}`)
-    if (ub.error) toast.error(`Error al cargar ubicaciones: ${ub.error.message}`)
-    if (cr.error) toast.error(`Error al cargar cronograma de empaque: ${cr.error.message}`)
-    if (cat.error) toast.error(`Error al cargar catálogo de medias: ${cat.error.message}`)
-
-    const hoy = new Date().toISOString().split('T')[0]
-    const [espRes, asigRes] = await Promise.all([
       supabase.from('usuarios').select('id, nombre').eq('rol', 'preparador').eq('activo', true).order('nombre'),
-      supabase.from('asignaciones_turno').select('operador_id, operador:usuarios(id, nombre)').eq('area', 'preparado').eq('fecha', hoy)
+      supabase.from('asignaciones_turno').select('operador:usuarios(id, nombre)').eq('area', 'preparado').eq('fecha', hoy),
     ])
-
-    const mapaPreparadores = new Map<string, { id: string; nombre: string }>()
-    if (espRes.data) {
-      espRes.data.forEach((u: any) => mapaPreparadores.set(u.id, u))
+    for (const [nombre, r] of [['stock por preparar', st], ['sacos', pq], ['salones', ub], ['cronograma', cr], ['catálogo', cat], ['preparadores', esp]] as const) {
+      if (r.error) toast.error(`Error al cargar ${nombre}: ${r.error.message}`)
     }
-    if (asigRes.data) {
-      asigRes.data.forEach((a: any) => {
-        if (a.operador) {
-          mapaPreparadores.set(a.operador.id, a.operador)
-        }
-      })
+    const mapa = new Map<string, Preparador>(((esp.data ?? []) as Preparador[]).map(u => [u.id, u]))
+    for (const a of (asig.data ?? []) as unknown as { operador: Preparador | null }[]) if (a.operador) mapa.set(a.operador.id, a.operador)
+    return {
+      preparadores: [...mapa.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)),
+      stock: (st.data ?? []) as StockPreparar[],
+      paquetes: (pq.data ?? []) as unknown as Paquete[],
+      ubicaciones: (ub.data ?? []) as Ubicacion[],
+      cronograma: (cr.data ?? []) as Cronograma[],
+      catalogo: (cat.data ?? []) as CatalogoMedia[],
     }
+  }, [supabase, semana, anio])
 
-    const preparadoresList = Array.from(mapaPreparadores.values())
+  const aplicar = useCallback((d: Awaited<ReturnType<typeof leer>>) => {
+    setPreparadores(d.preparadores); setStock(d.stock); setPaquetes(d.paquetes); setUbicaciones(d.ubicaciones)
+    setCronograma(d.cronograma); setCatalogo(d.catalogo); setLoading(false)
+  }, [])
 
-    setPreparadores(preparadoresList)
-    setStock((st.data ?? []) as StockEmpacar[])
-    setPaquetes((pq.data ?? []) as Paquete[])
-    setUbicaciones(ub.data ?? [])
-    setCronograma((cr.data ?? []) as Cronograma[])
-    setCatalogo((cat.data ?? []) as CatalogoMedia[])
-    setLoading(false)
-  }, [semanaSeleccionada, anioSeleccionado, supabase])
+  useEffect(() => {
+    let vigente = true
+    ;(async () => { const d = await leer(); if (vigente) aplicar(d) })()
+    return () => { vigente = false }
+  }, [leer, aplicar])
+  const recargar = async () => aplicar(await leer())
 
+  const porCodigo = useMemo(() => new Map(catalogo.map(c => [c.codigo, c])), [catalogo])
+  const stockDe = (id: string) => Number(stock.find(s => s.catalogo_media_id === id)?.docenas ?? 0)
 
-  useEffect(() => { cargarDatos() }, [cargarDatos])
-
-  const irASemanaAnterior = () => {
-    if (semanaSeleccionada === 1) {
-      setSemanaSeleccionada(52)
-      setAnioSeleccionado(a => a - 1)
-    } else {
-      setSemanaSeleccionada(s => s - 1)
+  /** SKU de un preparador en el día elegido: los del cronograma y los añadidos a mano. */
+  const skusDelDia = useCallback((prepId: string) => {
+    const ids = new Set<string>()
+    for (const c of cronograma) {
+      if (c.preparador_id !== prepId || c.dia_semana !== dia) continue
+      const prod = porCodigo.get(c.valor_criterio) ?? catalogo.find(x => x.id === c.valor_criterio)
+      if (prod) ids.add(prod.id)
     }
-  }
+    for (const id of extraPorPreparador[prepId] ?? []) ids.add(id)
+    return [...ids].map(id => catalogo.find(c => c.id === id)!).filter(Boolean)
+  }, [cronograma, dia, porCodigo, catalogo, extraPorPreparador])
 
-  const irASemanaSiguiente = () => {
-    if (semanaSeleccionada === 52) {
-      setSemanaSeleccionada(1)
-      setAnioSeleccionado(a => a + 1)
-    } else {
-      setSemanaSeleccionada(s => s + 1)
-    }
-  }
+  const editar = (clave: string, campo: 'docenas' | 'defectuosas', valor: string) =>
+    setPlanilla(prev => ({ ...prev, [clave]: { docenas: '', defectuosas: '', ...prev[clave], [campo]: valor } }))
 
-  const clonarSemanaAnterior = async () => {
-    const semanaOrigen = semanaSeleccionada === 1 ? 52 : semanaSeleccionada - 1
-    const anioOrigen = semanaSeleccionada === 1 ? anioSeleccionado - 1 : anioSeleccionado
+  // ── Semanas ──
+  const semanaAnterior = () => { if (semana === 1) { setSemana(52); setAnio(a => a - 1) } else setSemana(s => s - 1) }
+  const semanaSiguiente = () => { if (semana === 52) { setSemana(1); setAnio(a => a + 1) } else setSemana(s => s + 1) }
 
+  const copiarSemanaAnterior = async () => {
+    const sOrigen = semana === 1 ? 52 : semana - 1
+    const aOrigen = semana === 1 ? anio - 1 : anio
     setSaving(true)
-    const { data: origen } = await supabase.from('cronograma_preparado')
-      .select('*').eq('semana', semanaOrigen).eq('anio', anioOrigen)
-
-    if (!origen || origen.length === 0) {
-      toast.error(`No existe programación previa para ${formatearRangoSemana(semanaOrigen, anioOrigen)} (Sem. ${semanaOrigen})`)
-      setSaving(false)
-      return
-    }
-
-    const { error: errLimpiar } = await supabase.from('cronograma_preparado')
-      .delete().eq('semana', semanaSeleccionada).eq('anio', anioSeleccionado)
-    if (errLimpiar) {
-      toast.error(`No se pudo preparar la semana destino: ${errLimpiar.message}`)
-      setSaving(false)
-      return
-    }
-
-    const nuevos = origen.map(item => ({
-      semana: semanaSeleccionada,
-      anio: anioSeleccionado,
-      dia_semana: item.dia_semana,
-      criterio: item.criterio,
-      valor_criterio: item.valor_criterio,
-      preparador_id: item.preparador_id
-    }))
-
-    const { error } = await supabase.from('cronograma_preparado').insert(nuevos)
-
-    if (error) {
-      toast.error('Error al copiar programación')
-    } else {
-      toast.success(`✓ Programación copiada de ${formatearRangoSemana(semanaOrigen, anioOrigen)} a ${formatearRangoSemana(semanaSeleccionada, anioSeleccionado)}`)
-      cargarDatos()
-    }
+    const { data: origen } = await supabase.from('cronograma_preparado').select('*').eq('semana', sOrigen).eq('anio', aOrigen)
+    if (!origen || origen.length === 0) { toast.error(`No existe programación previa para ${formatearRangoSemana(sOrigen, aOrigen)} (Sem. ${sOrigen})`); setSaving(false); return }
+    const { error: errLimpiar } = await supabase.from('cronograma_preparado').delete().eq('semana', semana).eq('anio', anio)
+    if (errLimpiar) { toast.error(`No se pudo preparar la semana destino: ${errLimpiar.message}`); setSaving(false); return }
+    const { error } = await supabase.from('cronograma_preparado').insert(origen.map(i => ({
+      semana, anio, dia_semana: i.dia_semana, criterio: i.criterio, valor_criterio: i.valor_criterio, preparador_id: i.preparador_id,
+    })))
     setSaving(false)
+    if (error) { toast.error('Error al copiar programación'); return }
+    toast.success(`Programación copiada de ${formatearRangoSemana(sOrigen, aOrigen)}`)
+    recargar()
   }
 
-  const handleProduccionChange = (prepId: string, field: 'empacadas' | 'defectuosas', val: string) => {
-    setProduccionMasiva(prev => ({
-      ...prev,
-      [prepId]: {
-        ...prev[prepId] || { empacadas: '', defectuosas: '' },
-        [field]: val
-      }
-    }))
+  // ── Cronograma: varios SKU por preparador y día ──
+  const guardarAsignacion = async () => {
+    if (!asignar) return
+    const yaTiene = new Set(cronograma.filter(c => c.preparador_id === asignar.preparador_id && c.dia_semana === asignar.dia).map(c => c.valor_criterio))
+    const valores = [...new Set([...asignar.elegidos, asignar.actual].filter(v => v && !yaTiene.has(v)))]
+    if (valores.length === 0) { toast.error('Elige al menos un SKU que no tenga ya asignado ese día'); return }
+    const { error } = await supabase.from('cronograma_preparado').insert(valores.map(v => ({
+      semana, anio, preparador_id: asignar.preparador_id, dia_semana: asignar.dia, criterio: 'media', valor_criterio: v,
+    })))
+    if (error) { toast.error(`Error al guardar asignación: ${error.message}`); return }
+    toast.success(valores.length > 1 ? `${valores.length} SKU asignados en el cronograma` : 'Nueva asignación agregada al cronograma')
+    setAsignar(null)
+    recargar()
   }
 
-  // ── GENERAR BOLSA GRANDE / SACO MAESTRO CON CÓDIGO QR ─────────────────────
-  // Media que empacó el preparador: la elegida a mano o la que identifica su asignación del día.
-  // Sin coincidencia devuelve undefined (antes se tomaba el primer producto del catálogo).
-  const identificarMediaPreparador = (prepId: string) => {
-    const elegida = catalogo.find(c => c.id === mediaManualPorPreparador[prepId])
-    if (elegida) return elegida
-    const asignacion = cronograma.find(c => c.preparador_id === prepId && c.dia_semana === diaSeleccionado)
-    if (!asignacion) return undefined
-    const criterio = asignacion.valor_criterio.toLowerCase()
-    return catalogo.find(c =>
-      c.codigo.toLowerCase().includes(criterio) ||
-      c.talla.toLowerCase() === criterio ||
-      c.publico.toLowerCase() === criterio
-    )
+  const quitarAsignacion = async (id: string) => {
+    if (!confirm('¿Quitar esta asignación del cronograma?')) return
+    const { error } = await supabase.from('cronograma_preparado').delete().eq('id', id)
+    if (error) { toast.error('Error al quitar asignación'); return }
+    toast.success('Asignación quitada del cronograma')
+    recargar()
   }
 
-  const abrirModalGenerarSacoMaestro = async (prep: Preparador) => {
-    const dataPrep = produccionMasiva[prep.id]
-    const docenasIngresadas = parseFloat(dataPrep?.empacadas || '0')
+  // ── Saco ──
+  const prepararSaco = async (prep: Preparador) => {
+    const items: ItemSaco[] = skusDelDia(prep.id).flatMap(c => {
+      const v = planilla[`${prep.id}__${c.id}`]
+      const docenas = Number(v?.docenas || 0)
+      const defectuosas = Number(v?.defectuosas || 0)
+      if (!(docenas > 0 || defectuosas > 0)) return []
+      return [{ catalogo_media_id: c.id, sku: c.sku || `SKU-${c.codigo.toUpperCase()}`, codigo: c.codigo, docenas, defectuosas, pares: Math.round(convertirDocenasAPares(docenas)) }]
+    })
+    if (items.some(i => !Number.isFinite(i.docenas) || !Number.isFinite(i.defectuosas) || i.docenas < 0 || i.defectuosas < 0)) { toast.error('Las docenas no pueden ser negativas'); return }
+    const totalDocenas = items.reduce((s, i) => s + i.docenas, 0)
+    if (totalDocenas <= 0) { toast.error(`Anota las docenas preparadas por ${prep.nombre}`); return }
+    const falta = items.find(i => i.docenas + i.defectuosas > stockDe(i.catalogo_media_id))
+    if (falta) { toast.error(`No hay suficiente stock por preparar de ${falta.codigo}: hay ${stockDe(falta.catalogo_media_id)} docenas`); return }
 
-    if (docenasIngresadas <= 0) {
-      toast.error(`Ingresa la cantidad de paquetes (docenas) producidos por ${prep.nombre}`)
-      return
-    }
-
-    const mediaObj = identificarMediaPreparador(prep.id)
-    // Antes, si no se identificaba la media, se usaba en silencio el primer producto
-    // del catálogo y el saco quedaba registrado con un producto equivocado.
-    if (!mediaObj) {
-      toast.error(`Selecciona la media que empacó ${prep.nombre}: no hay una asignación del día que la identifique`)
-      return
-    }
-
-    const skuMedia = mediaObj.sku || `SKU-${mediaObj.codigo.toUpperCase()}`
-    const totalPares = Math.round(convertirDocenasAPares(docenasIngresadas))
-
-    // Código de Saco Maestro (B-1005 / PKG-2005)
-    // Basado en los códigos existentes (contar filas repetía códigos tras eliminar sacos)
     const { data: codigosRes, error: codigosErr } = await supabase.from('paquetes').select('codigo_paquete')
-    if (codigosErr) {
-      toast.error(`No se pudo generar el código del saco: ${codigosErr.message}`)
-      return
+    if (codigosErr) { toast.error(`No se pudo generar el código del saco: ${codigosErr.message}`); return }
+    const salon = ubicaciones.find(u => /sal[oó]n a/i.test(u.nombre)) ?? ubicaciones[0]
+    if (!salon) { toast.error('No hay salones registrados en Almacén para recibir el saco'); return }
+    const previo: SacoPrevio = {
+      codigo_saco: siguienteCodigoSaco((codigosRes ?? []).map((r: { codigo_paquete: string }) => r.codigo_paquete)),
+      preparador: prep, salon_id: salon.id, items, totalDocenas, totalPares: Math.round(convertirDocenasAPares(totalDocenas)),
     }
-    const codigoSaco = siguienteCodigoSaco((codigosRes ?? []).map((r: { codigo_paquete: string }) => r.codigo_paquete))
-
-    const salonA = ubicaciones.find(u => u.nombre.toLowerCase().includes('salón a') || u.nombre.toLowerCase().includes('salon a')) || ubicaciones[0]
-    if (!salonA) {
-      toast.error('No hay salones registrados en Almacén para recibir el saco')
-      return
-    }
-
-    const items = [
-      {
-        catalogo_media_id: mediaObj.id,
-        sku: skuMedia,
-        codigo: mediaObj.codigo,
-        docenas: docenasIngresadas,
-        pares: totalPares
-      }
-    ]
-
-    const qrPayloadJson = construirQrSacoMaestro({
-      codigo_saco: codigoSaco,
-      preparador_id: prep.id,
-      preparador_nombre: prep.nombre,
-      salon_destino_id: salonA.id,
-      salon_destino_nombre: salonA.nombre,
-      total_docenas: docenasIngresadas,
-      total_pares: totalPares,
-      items: items.map(i => ({ sku: i.sku, codigo: i.codigo, docenas: i.docenas, pares: i.pares }))
-    })
-    const qrDataURL = await QRCode.toDataURL(qrPayloadJson, { width: 300, margin: 2 })
-
-    setSacoMaestroActual({
-      codigo_saco: codigoSaco,
-      preparador_id: prep.id,
-      preparador_nombre: prep.nombre,
-      salon_destino_id: salonA.id,
-      salon_destino_nombre: salonA.nombre,
-      items,
-      totalDocenas: docenasIngresadas,
-      totalPares,
-      qrDataURL,
-      qrPayloadJson
-    })
-
-    setShowSacoMaestroModal(true)
+    setSaco(previo)
+    setQrSaco(await QRCode.toDataURL(qrDe(previo), { width: 300, margin: 2 }))
   }
 
-  // ── CONFIRMAR Y GUARDAR SACO MAESTRO EN BD PARA BAJAR A ALMACÉN ───────────
-  const confirmarGuardarSacoMaestro = async () => {
-    if (!sacoMaestroActual) return
+  const qrDe = (s: SacoPrevio) => {
+    const salon = ubicaciones.find(u => u.id === s.salon_id)
+    return construirQrSacoMaestro({
+      codigo_saco: s.codigo_saco, preparador_id: s.preparador.id, preparador_nombre: s.preparador.nombre,
+      salon_destino_id: s.salon_id, salon_destino_nombre: salon?.nombre ?? null, total_docenas: s.totalDocenas, total_pares: s.totalPares,
+      items: s.items.map(i => ({ sku: i.sku, codigo: i.codigo, docenas: i.docenas, pares: i.pares })),
+    })
+  }
+
+  const cambiarSalon = async (id: string) => {
+    if (!saco) return
+    const nuevo = { ...saco, salon_id: id }
+    setSaco(nuevo)
+    setQrSaco(await QRCode.toDataURL(qrDe(nuevo), { width: 300, margin: 2 }))
+  }
+
+  const confirmarSaco = async () => {
+    if (!saco) return
     setSaving(true)
-
-    const payload = {
-      codigo_paquete: sacoMaestroActual.codigo_saco,
-      preparador_id: sacoMaestroActual.preparador_id,
-      docenas: sacoMaestroActual.totalDocenas,
-      total_pares: sacoMaestroActual.totalPares,
-      catalogo_media_id: sacoMaestroActual.items[0]?.catalogo_media_id,
-      ubicacion_id: sacoMaestroActual.salon_destino_id,
-      detalles_contenido: sacoMaestroActual.items,
-      estado: 'pendiente_almacenar'
-    }
-
-    const { error } = await supabase.from('paquetes').insert(payload)
-
-    if (error) {
-      toast.error('Error al registrar el Saco Maestro')
-      setSaving(false)
-      return
-    }
-
-    toast.success(`📦 Saco Maestro ${sacoMaestroActual.codigo_saco} registrado con ${sacoMaestroActual.totalPares} pares. Listo para bajar a ${sacoMaestroActual.salon_destino_nombre}.`)
-
-    // Limpiar entrada del preparador
-    setProduccionMasiva(prev => ({ ...prev, [sacoMaestroActual.preparador_id]: { empacadas: '', defectuosas: '' } }))
-
-    setShowSacoMaestroModal(false)
+    const { error } = await supabase.rpc('registrar_produccion_preparado', {
+      p_preparador_id: saco.preparador.id, p_codigo_paquete: saco.codigo_saco, p_ubicacion_id: saco.salon_id,
+      p_items: saco.items.map(i => ({ catalogo_media_id: i.catalogo_media_id, docenas: i.docenas, defectuosas: i.defectuosas })),
+      p_qr_data: qrDe(saco),
+    })
     setSaving(false)
-    cargarDatos()
+    if (error) { toast.error(`No se pudo registrar el saco: ${error.message}`); return }
+    const salon = ubicaciones.find(u => u.id === saco.salon_id)?.nombre ?? ''
+    toast.success(`Saco ${saco.codigo_saco} registrado con ${saco.totalPares} pares. Listo para bajar a ${salon}.`)
+    setPlanilla(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(`${saco.preparador.id}__`))))
+    setSaco(null)
+    recargar()
   }
 
-  // ── IMPRIMIR ETIQUETA MAESTRA FÍSICA PARA EL SACO ─────────────────────────
-  const imprimirEtiquetaSacoMaestro = () => {
-    if (!sacoMaestroActual) return
-
-    const filasHtml = sacoMaestroActual.items.map(i => `
-      <tr>
-        <td style="border:1px solid #cbd5e1;padding:6px;font-family:monospace;font-weight:bold;font-size:11px">${i.sku}</td>
-        <td style="border:1px solid #cbd5e1;padding:6px;font-size:11px">${i.codigo}</td>
-        <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;font-weight:bold;font-size:11px">${i.docenas} doc (${i.pares} pares)</td>
-      </tr>
-    `).join('')
-
-    const html = `
-      <html>
-        <head>
-          <title>Etiqueta de Saco Maestro — ${sacoMaestroActual.codigo_saco}</title>
-          <style>
-            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #0f172a; max-width: 450px; margin: 0 auto; }
-            .label-box { border: 3px solid #0f172a; border-radius: 16px; padding: 18px; background: #ffffff; text-align: center; }
-            h2 { margin: 0; font-size: 22px; color: #059669; }
-            .salon-badge { background: #10b981; color: white; font-size: 14px; font-weight: bold; padding: 6px 14px; border-radius: 9999px; display: inline-block; margin: 10px 0; }
-            .qr-img { width: 180px; height: 180px; margin: 10px auto; border: 2px solid #e2e8f0; border-radius: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
-            th { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 6px; font-size: 10px; text-transform: uppercase; }
-          </style>
-        </head>
-        <body>
-          <div class="label-box">
-            <h2>SACO MAESTRO DE EMPAQUE</h2>
-            <div style="font-family:monospace;font-size:18px;font-weight:bold;color:#0f172a;margin-top:2px">${sacoMaestroActual.codigo_saco}</div>
-
-            <div class="salon-badge">📍 DESTINO: ${sacoMaestroActual.salon_destino_nombre.toUpperCase()}</div>
-
-            <div><img src="${sacoMaestroActual.qrDataURL}" class="qr-img" /></div>
-
-            <p style="font-size:12px;margin:4px 0;color:#475569">
-              Empacador: <strong>${sacoMaestroActual.preparador_nombre}</strong> · Fecha: <strong>${new Date().toLocaleDateString('es-PE')}</strong>
-            </p>
-
-            <div style="margin-top:8px;background:#f0fdf4;border:1px solid #bbf7d0;padding:8px;border-radius:8px;font-size:13px;font-weight:bold;color:#15803d font-mono">
-              TOTAL CONTENIDO: ${sacoMaestroActual.totalDocenas} PACKS (${sacoMaestroActual.totalPares} PARES)
-            </div>
-
-            <table>
-              <thead>
-                <tr>
-                  <th>SKU Media</th>
-                  <th>Variante</th>
-                  <th style="text-align:center font-bold">Cantidad</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${filasHtml}
-              </tbody>
-            </table>
-          </div>
-        </body>
-      </html>`
-
+  const imprimirEtiqueta = () => {
+    if (!saco) return
+    const salon = ubicaciones.find(u => u.id === saco.salon_id)?.nombre ?? ''
+    // Todo texto de la base se escapa: un nombre o código con HTML no se ejecuta en la ventana de impresión
+    const filas = saco.items.map(i => `<tr><td style="border:1px solid #cbd5e1;padding:6px;font-family:monospace;font-weight:bold;font-size:11px">${h(i.sku)}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:11px">${h(i.codigo)}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;font-weight:bold;font-size:11px">${i.docenas} doc (${i.pares} pares)</td></tr>`).join('')
+    const html = `<html><head><title>Etiqueta de Saco Maestro — ${h(saco.codigo_saco)}</title></head>
+      <body style="font-family:Arial,sans-serif;padding:20px;max-width:450px;margin:0 auto">
+        <div style="border:3px solid #0f172a;border-radius:16px;padding:18px;text-align:center">
+          <h2 style="margin:0;color:#059669">SACO MAESTRO DE EMPAQUE</h2>
+          <div style="font-family:monospace;font-size:18px;font-weight:bold">${h(saco.codigo_saco)}</div>
+          <div style="background:#10b981;color:white;font-weight:bold;padding:6px 14px;border-radius:9999px;display:inline-block;margin:10px 0">DESTINO: ${h(salon.toUpperCase())}</div>
+          <div><img src="${qrSaco}" style="width:180px;height:180px" /></div>
+          <p style="font-size:12px">Preparador: <strong>${h(saco.preparador.nombre)}</strong> · Fecha: <strong>${new Date().toLocaleDateString('es-PE')}</strong></p>
+          <p style="font-weight:bold">TOTAL: ${saco.totalDocenas} DOCENAS (${saco.totalPares} PARES)</p>
+          <table style="width:100%;border-collapse:collapse"><thead><tr><th>SKU</th><th>Media</th><th>Cantidad</th></tr></thead><tbody>${filas}</tbody></table>
+        </div></body></html>`
     const win = window.open('', '_blank')
     if (win) { win.document.write(html); win.document.close(); win.print() }
   }
 
   const verQR = async (p: Paquete) => {
     setPaqueteQR(p)
-    // Misma estructura que la etiqueta original (antes la reimpresión usaba otros nombres de campo)
-    const payload = construirQrSacoMaestro({
-      codigo_saco: p.codigo_paquete,
-      preparador_nombre: p.preparador?.nombre ?? null,
-      salon_destino_nombre: p.ubicacion?.nombre ?? null,
-      total_docenas: p.docenas,
-      total_pares: p.total_pares
-    })
-    const url = await QRCode.toDataURL(payload, { width: 300, margin: 2 })
-    setQrDataURL(url)
-    setShowQRModal(true)
+    setQrPaquete(await QRCode.toDataURL(construirQrSacoMaestro({
+      codigo_saco: p.codigo_paquete, preparador_nombre: p.preparador?.nombre ?? null, salon_destino_nombre: p.ubicacion?.nombre ?? null,
+      total_docenas: p.docenas, total_pares: p.total_pares,
+    }), { width: 300, margin: 2 }))
   }
 
-  const isSemanaActual = semanaSeleccionada === semanaHoy && anioSeleccionado === anioHoy
+  const esSemanaActual = semana === semanaHoy && anio === anioHoy
 
   return (
     <div className="space-y-6 animate-fadeInUp pb-12">
-      {/* ── HEADER SUPERIOR ─────────────────────────────────────────────────── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 glass p-6 rounded-3xl border border-white/[0.08]">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-            <Package className="w-6 h-6" />
-          </div>
+          <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"><Package className="w-6 h-6" /></div>
           <div>
             <h1 className="text-2xl font-black text-white tracking-tight">Preparado y Embolsado</h1>
-            <p className="text-slate-400 text-xs font-medium">Embolsado por SKU de media (1 docena = 12 pares), empaque consolidado en Bolsa Grande / Saco Maestro y etiquetado QR para bajar a Salones de Almacén</p>
+            <p className="text-slate-400 text-xs font-medium">Programación semanal por SKU, registro diario por preparador y saco con QR para Almacén</p>
           </div>
         </div>
-
         <div className="flex items-center gap-2.5 flex-wrap">
-          <Link href="/dashboard/almacen" className="btn-primary text-xs py-2 px-4 rounded-2xl bg-cyan-600 hover:bg-cyan-500 border-none flex items-center gap-1.5 font-bold shadow-lg shadow-cyan-600/20">
-            <Scan className="w-4 h-4" /> 🔫 Escáner de Pistola / Salones
+          <IngresoStockFuera etapa="preparado" catalogo={catalogo} onIngreso={recargar} />
+          <Link href="/dashboard/almacen" className="btn-primary text-xs py-2 px-4 rounded-2xl bg-cyan-600 hover:bg-cyan-500 border-none flex items-center gap-1.5 font-bold">
+            <Scan className="w-4 h-4" /> Escáner / Salones
           </Link>
         </div>
       </div>
 
-      {/* ── CONTROL NAVEGADOR DE SEMANAS Y PROGRAMACIÓN ANTICIPADA ───────────── */}
       <div className="glass rounded-3xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-white/[0.08]">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1 bg-slate-900/80 p-1.5 rounded-2xl border border-white/[0.08]">
-            <button onClick={irASemanaAnterior} className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
+            <button onClick={semanaAnterior} aria-label="Semana anterior" className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-white/10"><ChevronLeft className="w-4 h-4" /></button>
             <div className="px-3 py-0.5 text-center min-w-[210px]">
               <div className="flex items-center justify-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                <span className="text-xs sm:text-sm font-black text-white">
-                  {formatearRangoSemana(semanaSeleccionada, anioSeleccionado)}
-                </span>
+                <Calendar className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="text-xs sm:text-sm font-black text-white">{formatearRangoSemana(semana, anio)}</span>
               </div>
-              <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
-                Semana N° {semanaSeleccionada} · {anioSeleccionado}
-              </span>
+              <span className="text-[10px] font-mono text-slate-400 block mt-0.5">Semana N° {semana} · {anio}</span>
             </div>
-            <button onClick={irASemanaSiguiente} className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors">
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            <button onClick={semanaSiguiente} aria-label="Semana siguiente" className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-white/10"><ChevronRight className="w-4 h-4" /></button>
           </div>
-
-          {!isSemanaActual && (
-            <button
-              onClick={() => {
-                setSemanaSeleccionada(semanaHoy)
-                setAnioSeleccionado(anioHoy)
-              }}
-              className="text-[11px] font-bold text-purple-400 hover:underline px-2"
-            >
-              Ir a Semana Actual ({formatearRangoSemana(semanaHoy, anioHoy, true, false)})
-            </button>
-          )}
-
-          {isSemanaActual ? (
-            <span className="badge bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs py-1 px-3">
-              Semana Actual (En Curso)
-            </span>
-          ) : (
-            <span className="badge bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs py-1 px-3">
-              Programación Anticipada
-            </span>
-          )}
+          {!esSemanaActual && <button onClick={() => { setSemana(semanaHoy); setAnio(anioHoy) }} className="text-[11px] font-bold text-emerald-400 hover:underline px-2">Ir a la semana actual</button>}
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={clonarSemanaAnterior}
-            disabled={saving}
-            className="btn-secondary text-xs py-2 px-3 rounded-2xl text-purple-300 border-purple-500/30 hover:bg-purple-500/10 flex items-center gap-1.5 font-bold"
-          >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5 text-purple-400" />}
-            Copiar Programación Anterior ({formatearRangoSemana(semanaSeleccionada === 1 ? 52 : semanaSeleccionada - 1, semanaSeleccionada === 1 ? anioSeleccionado - 1 : anioSeleccionado, true, false)})
-          </button>
-        </div>
+        <button onClick={copiarSemanaAnterior} disabled={saving} className="btn-secondary text-xs py-2 px-3 rounded-2xl">
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />} Copiar programación de la semana anterior
+        </button>
       </div>
 
-      {/* ── SELECTOR DE DÍAS DE LA SEMANA ROTATIVA ──────────────────────────── */}
-      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-white/[0.06]">
-        {DIAS.map(d => (
-          <button
-            key={d}
-            onClick={() => setDiaSeleccionado(d)}
-            className={`px-5 py-2.5 rounded-2xl text-xs font-bold capitalize transition-all whitespace-nowrap ${
-              diaSeleccionado === d
-                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
-                : 'glass text-slate-400 hover:text-slate-200 border border-white/[0.06]'
-            }`}
-          >
-            {d}
-          </button>
-        ))}
-      </div>
-
-      {/* ── CARDS DE EMPACADORES PARA REGISTRO Y CONSOLIDACIÓN EN SACO MAESTRO ─ */}
-      <div className="space-y-4">
-        <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-          <User className="w-4 h-4 text-emerald-400" />
-          Empacadores Activos — Día <span className="text-white capitalize">{diaSeleccionado}</span> · {formatearRangoSemana(semanaSeleccionada, anioSeleccionado, true, false)}
-        </h2>
-
-        {preparadores.length === 0 ? (
-          <div className="p-8 text-center bg-slate-900/40 rounded-3xl border border-white/[0.06] text-slate-400 text-xs font-medium">
-            ⚠️ No hay empacadores/preparadores asignados a esta área hoy — pide al supervisor que complete el Calendario de Turnos en el módulo de Personal.
-          </div>
+      {/* ── Cronograma semanal ── */}
+      <div className="glass rounded-3xl overflow-hidden border border-white/[0.08]">
+        <div className="px-6 py-4 border-b border-white/[0.06]">
+          <h2 className="text-sm font-bold text-white">Cronograma semanal — {formatearRangoSemana(semana, anio)}</h2>
+          <p className="text-xs text-slate-400">Toca una celda para asignar uno o varios SKU a ese preparador ese día</p>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-12"><Loader2 className="w-7 h-7 animate-spin text-emerald-400" /></div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {preparadores.map(prep => {
-            const asignacionDia = cronograma.find(c => c.preparador_id === prep.id && c.dia_semana === diaSeleccionado)
-            const inputVals = produccionMasiva[prep.id] || { empacadas: '', defectuosas: '' }
-
-            const mediaAsignadaObj = identificarMediaPreparador(prep.id)
-
-            const docenasNum = parseFloat(inputVals.empacadas || '0')
-            const paresCalculados = Math.round(convertirDocenasAPares(docenasNum))
-
-            return (
-              <div key={prep.id} className="glass rounded-3xl p-5 border border-white/[0.08] flex flex-col justify-between space-y-4 shadow-xl">
-                <div>
-                  <div className="flex items-center justify-between mb-3 pb-3 border-b border-white/[0.06]">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-300 font-bold flex items-center justify-center text-sm border border-emerald-500/30">
-                        📦
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-white text-sm">{prep.nombre}</h3>
-                        <span className="text-[10px] text-slate-400 font-medium block">Empacador de Turno</span>
-                      </div>
-                    </div>
-
-                    <span className="badge bg-emerald-500/10 text-emerald-300 border-emerald-500/20 text-[10px] font-bold">
-                      Preparado
-                    </span>
-                  </div>
-
-                  {/* Programación del día */}
-                  <div className="p-3 rounded-2xl bg-slate-900/60 border border-white/[0.04] mb-3 space-y-1">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Programado hoy:</span>
-                    {asignacionDia ? (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-emerald-300 font-bold capitalize">
-                          {asignacionDia.criterio}: {asignacionDia.valor_criterio}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-mono">{formatearRangoSemana(semanaSeleccionada, anioSeleccionado, true)}</span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-500 italic block">Sin programación fija. Selecciona abajo.</span>
-                    )}
-                  </div>
-
-                  {/* Selector de SKU de media */}
-                  <div className="mb-3">
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">SKU / Media a Embolsar</label>
-                    <SelectorMedia
-                      items={catalogo}
-                      value={mediaManualPorPreparador[prep.id] || mediaAsignadaObj?.id || ''}
-                      onChange={val => setMediaManualPorPreparador(prev => ({ ...prev, [prep.id]: val }))}
-                      toOption={c => ({
-                        value: c.id,
-                        label: `${c.sku ? `[${c.sku}] ` : ''}${c.codigo} (${c.publico})`
-                      })}
-                      triggerClassName="text-xs font-mono font-bold text-emerald-300 border-emerald-500/30"
-                      placeholder="Seleccionar SKU..."
-                    />
-                  </div>
-
-                  {/* Input de docenas empacadas */}
-                  <div className="grid grid-cols-2 gap-3 mb-2">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">
-                        Paquetes (Docenas)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={inputVals.empacadas}
-                        onChange={e => handleProduccionChange(prep.id, 'empacadas', e.target.value)}
-                        className="input-dark text-xs font-bold text-center w-full font-mono"
-                      />
-                    </div>
-
-                    <div className="flex flex-col justify-end">
-                      <div className="p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center">
-                        <span className="text-[9px] text-slate-400 block font-bold uppercase">Total Pares (12/pack):</span>
-                        <span className="text-sm font-black text-emerald-400 font-mono">
-                          {paresCalculados} PARES
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => abrirModalGenerarSacoMaestro(prep)}
-                  className="btn-primary w-full justify-center py-2.5 text-xs bg-emerald-600 hover:bg-emerald-500 border-none font-bold shadow-lg shadow-emerald-600/20 flex items-center gap-1.5"
-                >
-                  <Barcode className="w-4 h-4" />
-                  📦 Embolsar y Crear Saco Maestro / QR
-                </button>
-              </div>
-            )
-          })}
-        </div>
+          <div className="overflow-x-auto">
+            <table className="table-dark min-w-max">
+              <thead><tr><th className="w-48">Preparador</th>{DIAS.map(d => <th key={d} className={`capitalize text-center ${d === dia ? 'text-emerald-400' : ''}`}>{d}</th>)}</tr></thead>
+              <tbody>
+                {preparadores.length === 0 ? (
+                  <tr><td colSpan={DIAS.length + 1} className="text-center py-8 text-slate-400 text-xs">No hay preparadores registrados ni asignados hoy en el Calendario de Turnos</td></tr>
+                ) : preparadores.map(p => (
+                  <tr key={p.id}>
+                    <td className="font-bold text-white py-4"><span className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" />{p.nombre}</span></td>
+                    {DIAS.map(d => {
+                      const lista = cronograma.filter(c => c.preparador_id === p.id && c.dia_semana === d)
+                      return (
+                        <td key={d} onClick={() => setAsignar({ preparador_id: p.id, dia: d, actual: '', elegidos: [] })} aria-label={`Asignar a ${p.nombre} el ${d}`}
+                          className={`cursor-pointer hover:bg-white/[0.04] p-3 text-center ${d === dia ? 'bg-emerald-500/[0.04]' : ''}`}>
+                          {lista.length > 0 ? (
+                            <div className="space-y-1">
+                              {lista.map(a => (
+                                <div key={a.id} className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 text-[11px] font-bold w-full">
+                                  <span className="truncate max-w-[120px] font-mono">{a.valor_criterio}</span>
+                                  <button type="button" onClick={e => { e.stopPropagation(); quitarAsignacion(a.id) }} aria-label={`Quitar ${a.valor_criterio}`} className="text-slate-400 hover:text-red-400"><X className="w-3 h-3" /></button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : <span className="text-slate-700 text-xs"><Plus className="w-3.5 h-3.5 inline opacity-40" /></span>}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {/* ── LISTADO DE SACOS MAESTROS Y PAQUETES GENERADOS ───────────────────── */}
-      <div className="glass rounded-3xl p-6 border border-white/[0.08] space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Layers className="w-5 h-5 text-emerald-400" />
-            Sacos Maestros y Paquetes de Empaque Listos para Bajar a Almacén
-          </h2>
+      {/* ── Planilla del día ── */}
+      <div className="glass rounded-3xl p-6 border border-emerald-500/20 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h2 className="text-lg font-bold text-white">Registro diario — <span className="capitalize text-emerald-400">{dia}</span></h2>
+          <div className="flex gap-1 overflow-x-auto" role="group" aria-label="Día">
+            {DIAS.map(d => (
+              <button key={d} type="button" aria-pressed={dia === d} onClick={() => setDia(d)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize ${dia === d ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}>{d}</button>
+            ))}
+          </div>
         </div>
+        {preparadores.length === 0 ? (
+          <p className="text-center py-8 text-slate-400 text-xs">No hay preparadores</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-white/[0.03] text-slate-400 uppercase text-[10px]">
+                <tr><th className="p-3">Preparador</th><th className="p-3">SKU</th><th className="p-3 text-right">Por preparar</th>
+                  <th className="p-3 w-28">Preparadas</th><th className="p-3 w-28">Defectuosas</th><th className="p-3 text-right">Saco</th></tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04] text-slate-300">
+                {preparadores.map(p => {
+                  const skus = skusDelDia(p.id)
+                  return (
+                    <tr key={p.id} data-testid={`planilla-preparado-${p.nombre}`} className="align-top">
+                      <td className="p-3 font-bold text-white">{p.nombre}</td>
+                      <td className="p-3 space-y-2" colSpan={4}>
+                        {skus.length === 0 && <p className="text-slate-500">Sin SKU asignado este día</p>}
+                        {skus.map(c => {
+                          const clave = `${p.id}__${c.id}`
+                          const v = planilla[clave] ?? { docenas: '', defectuosas: '' }
+                          return (
+                            <div key={c.id} className="grid grid-cols-[1fr_6rem_7rem_7rem] gap-3 items-center">
+                              <span className="font-mono">{c.codigo}</span>
+                              <span className="text-right font-mono text-emerald-300">{stockDe(c.id)} doc.</span>
+                              <input type="number" min="0" step="0.5" aria-label={`Preparadas de ${c.codigo} por ${p.nombre}`} value={v.docenas}
+                                onChange={e => editar(clave, 'docenas', e.target.value)} className="input-dark text-xs py-1.5" />
+                              <input type="number" min="0" step="0.5" aria-label={`Defectuosas de ${c.codigo} por ${p.nombre}`} value={v.defectuosas}
+                                onChange={e => editar(clave, 'defectuosas', e.target.value)} className="input-dark text-xs py-1.5" />
+                            </div>
+                          )
+                        })}
+                        <div className="max-w-xs">
+                          <SelectorMedia items={catalogo} value="" onChange={val => val && setExtraPorPreparador(prev => ({ ...prev, [p.id]: [...new Set([...(prev[p.id] ?? []), val])] }))}
+                            emptyOption={{ value: '', label: '+ Añadir otro SKU hoy…' }} toOption={c => ({ value: c.id, label: c.codigo })}
+                            triggerClassName="text-[11px] py-1.5 font-mono" placeholder="+ Añadir otro SKU hoy…" />
+                        </div>
+                      </td>
+                      <td className="p-3 text-right">
+                        <button type="button" onClick={() => prepararSaco(p)} disabled={skus.length === 0}
+                          className="btn-primary text-xs py-2 bg-emerald-600 hover:bg-emerald-500 border-none disabled:opacity-40">
+                          <Barcode className="w-4 h-4" /> Embolsar y crear saco
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
+      {/* ── Sacos ── */}
+      <div className="glass rounded-3xl p-6 border border-white/[0.08] space-y-4">
+        <h2 className="text-base font-bold text-white flex items-center gap-2"><Layers className="w-5 h-5 text-emerald-400" />Sacos listos para bajar a Almacén</h2>
         <div className="overflow-x-auto">
           <table className="table-dark">
-            <thead>
-              <tr>
-                <th>Código Saco</th>
-                <th>SKU Media</th>
-                <th>Empacador</th>
-                <th>Paquetes (Doc.)</th>
-                <th>Total Pares</th>
-                <th>Salón Destino</th>
-                <th>Estado</th>
-                <th className="text-right">Acciones</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Código</th><th>SKU</th><th>Preparador</th><th>Docenas</th><th>Pares</th><th>Salón</th><th>Estado</th><th className="text-right">Acciones</th></tr></thead>
             <tbody>
               {paquetes.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-10 text-slate-500">No hay sacos maestros registrados aún</td></tr>
+                <tr><td colSpan={8} className="text-center py-10 text-slate-500">No hay sacos registrados aún</td></tr>
               ) : paquetes.map(p => (
                 <tr key={p.id}>
-                  <td><code className="text-emerald-300 font-mono text-xs bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 font-bold">{p.codigo_paquete}</code></td>
-                  <td className="font-mono text-xs text-slate-200">{p.catalogo_media?.sku || p.catalogo_media?.codigo || 'Sin SKU'}</td>
-                  <td className="text-white text-xs font-semibold">{p.preparador?.nombre || 'Sin preparador registrado'}</td>
-                  <td className="font-bold text-white font-mono">{p.docenas} doc.</td>
-                  <td className="font-black text-emerald-400 font-mono">{p.total_pares || convertirDocenasAPares(p.docenas)} pares</td>
-                  <td><span className="badge badge-info font-bold">📍 {p.ubicacion?.nombre || 'Sin salón'}</span></td>
-                  <td>
-                    <span className={`badge ${p.estado === 'almacenado' ? 'badge-success' : 'badge-warning'}`}>
-                      {p.estado === 'almacenado' ? 'Almacenado en Salón' : 'Pendiente de Almacenar'}
-                    </span>
-                  </td>
-                  <td className="text-right">
-                    <button onClick={() => verQR(p)} className="btn-secondary py-1.5 px-3 text-xs">
-                      <QrCode className="w-3.5 h-3.5 text-emerald-400" /> Ver QR
-                    </button>
-                  </td>
+                  <td><code className="text-emerald-300 font-mono text-xs font-bold">{p.codigo_paquete}</code></td>
+                  <td className="font-mono text-xs">{p.detalles_contenido?.length ? p.detalles_contenido.map(i => i.codigo).join(', ') : (p.catalogo_media?.sku || p.catalogo_media?.codigo || 'Sin SKU')}</td>
+                  <td className="text-white text-xs">{p.preparador?.nombre || 'Sin preparador registrado'}</td>
+                  <td className="font-mono">{p.docenas} doc.</td>
+                  <td className="font-mono text-emerald-400">{p.total_pares || convertirDocenasAPares(p.docenas)} pares</td>
+                  <td><span className="badge badge-info">{p.ubicacion?.nombre || 'Sin salón'}</span></td>
+                  <td><span className={`badge ${p.estado === 'almacenado' ? 'badge-success' : 'badge-warning'}`}>{p.estado === 'almacenado' ? 'Almacenado en Salón' : 'Pendiente de Almacenar'}</span></td>
+                  <td className="text-right"><button onClick={() => verQR(p)} className="btn-secondary py-1.5 px-3 text-xs"><QrCode className="w-3.5 h-3.5" /> Ver QR</button></td>
                 </tr>
               ))}
             </tbody>
@@ -685,112 +438,64 @@ export default function PreparadoPage() {
         </div>
       </div>
 
-      {/* ── MODAL: CREADOR Y PREVISUALIZACIÓN DE SACO MAESTRO (QR DE EMPAQUE) ───── */}
-      <Modal
-        open={Boolean(showSacoMaestroModal && sacoMaestroActual)}
-        onClose={() => setShowSacoMaestroModal(false)}
-        title="Bolsa Grande / Saco Maestro de Empaque"
-        maxWidth="lg"
-        footer={
-          <>
-            <button onClick={imprimirEtiquetaSacoMaestro} className="btn-secondary flex-1 justify-center py-2 text-xs border-emerald-500/30 text-emerald-300 hover:text-white">
-              <Printer className="w-4 h-4 text-emerald-400" /> Imprimir Etiqueta Saco
+      <Modal isOpen={!!asignar} onClose={() => setAsignar(null)} title="Asignar SKU"
+        subtitle={asignar ? `${preparadores.find(p => p.id === asignar.preparador_id)?.nombre ?? ''} · ${asignar.dia}` : undefined}
+        footer={<div className="flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setAsignar(null)}>Cancelar</button>
+          <button type="button" className="btn-primary" onClick={guardarAsignacion}>Guardar Asignación</button></div>}>
+        {asignar && (
+          <div className="space-y-2 text-xs">
+            <SelectorMedia items={catalogo} value={asignar.actual} onChange={v => setAsignar({ ...asignar, actual: v })} valorDe={c => c.codigo}
+              emptyOption={{ value: '', label: 'Seleccionar media...' }} toOption={c => ({ value: c.codigo, label: c.codigo })} placeholder="Seleccionar media..." />
+            <button type="button" className="btn-secondary text-[11px] py-1 px-2" disabled={!asignar.actual}
+              onClick={() => setAsignar({ ...asignar, elegidos: [...new Set([...asignar.elegidos, asignar.actual])], actual: '' })}>
+              <Plus className="w-3 h-3" /> Añadir otro SKU
             </button>
-            <button
-              onClick={confirmarGuardarSacoMaestro}
-              disabled={saving}
-              className="btn-primary flex-1 justify-center py-2 text-xs bg-emerald-600 hover:bg-emerald-500 border-none font-bold shadow-lg shadow-emerald-600/20"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              Confirmar y Bajar a Almacén
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-4 text-xs">
-          {/* Código y Salón Destino */}
-          <div className="p-4 rounded-2xl bg-slate-900/80 border border-emerald-500/20 text-center">
-            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Código del Saco Maestro</span>
-            <code className="text-2xl font-black text-emerald-400 font-mono block mb-2">{sacoMaestroActual?.codigo_saco}</code>
-
-            <div className="mt-2">
-              <label className="block text-[10px] font-bold text-slate-300 uppercase mb-1">📍 Salón Físico Destino para Almacenar</label>
-              <CustomSelect
-                value={sacoMaestroActual?.salon_destino_id || ''}
-                onChange={val => {
-                  const ub = ubicaciones.find(u => u.id === val)
-                  setSacoMaestroActual(prev => prev ? ({ ...prev, salon_destino_id: val, salon_destino_nombre: ub?.nombre || '' }) : null)
-                }}
-                options={ubicaciones.map(u => ({
-                  value: u.id,
-                  label: `📍 ${u.nombre}`
-                }))}
-                triggerClassName="text-xs font-bold text-center border-emerald-500/30 text-emerald-300"
-              />
-            </div>
-          </div>
-
-          {/* Imagen QR */}
-          <div className="p-4 rounded-2xl bg-white text-center shadow-inner">
-            <img src={sacoMaestroActual?.qrDataURL} alt="Código QR del Saco Maestro" className="w-44 h-44 mx-auto" />
-            <p className="text-[11px] text-slate-600 font-bold mt-1">Escaneable en Almacén con Pistola de Código de Barras / QR</p>
-          </div>
-
-          {/* Contenido Desglosado */}
-          <div className="p-3 rounded-2xl bg-slate-900/60 border border-white/[0.06] space-y-2">
-            <div className="flex justify-between items-center text-slate-300 font-bold">
-              <span>Empacador Responsable:</span>
-              <span className="text-white">{sacoMaestroActual?.preparador_nombre}</span>
-            </div>
-            <div className="flex justify-between items-center text-slate-300 font-bold">
-              <span>Total Contenido:</span>
-              <span className="text-emerald-400 font-mono">{sacoMaestroActual?.totalDocenas} Pack Docenas ({sacoMaestroActual?.totalPares} Pares)</span>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/[0.08] overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-white/[0.04] text-slate-400 font-bold">
-                <tr>
-                  <th className="p-2">SKU</th>
-                  <th className="p-2">Media</th>
-                  <th className="p-2 text-right">Pares</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                {sacoMaestroActual?.items?.map((item, idx) => (
-                  <tr key={idx}>
-                    <td className="p-2 font-mono font-bold text-emerald-300">{item.sku}</td>
-                    <td className="p-2 text-slate-300">{item.codigo}</td>
-                    <td className="p-2 text-right font-mono font-bold text-white">{item.pares} pares</td>
-                  </tr>
+            {asignar.elegidos.length > 0 && (
+              <div className="flex flex-wrap gap-1" data-testid="skus-elegidos">
+                {asignar.elegidos.map(v => (
+                  <span key={v} className="badge badge-success text-[10px] font-mono inline-flex items-center gap-1">{v}
+                    <button type="button" aria-label={`Quitar ${v}`} onClick={() => setAsignar({ ...asignar, elegidos: asignar.elegidos.filter(x => x !== v) })}><X className="w-3 h-3" /></button>
+                  </span>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal isOpen={!!saco} onClose={() => setSaco(null)} title="Saco Maestro de Empaque" maxWidth="lg"
+        footer={<>
+          <button onClick={imprimirEtiqueta} className="btn-secondary flex-1 justify-center py-2 text-xs"><Printer className="w-4 h-4" /> Imprimir Etiqueta Saco</button>
+          <button onClick={confirmarSaco} disabled={saving} className="btn-primary flex-1 justify-center py-2 text-xs bg-emerald-600 hover:bg-emerald-500 border-none font-bold">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Confirmar y Bajar a Almacén
+          </button></>}>
+        {saco && (
+          <div className="space-y-4 text-xs">
+            <div className="p-4 rounded-2xl bg-slate-900/80 border border-emerald-500/20 text-center">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Código del saco</span>
+              <code className="text-2xl font-black text-emerald-400 font-mono block mb-2">{saco.codigo_saco}</code>
+              <label htmlFor="saco-salon" className="block text-[10px] font-bold text-slate-300 uppercase mb-1">Salón destino</label>
+              <select id="saco-salon" value={saco.salon_id} onChange={e => cambiarSalon(e.target.value)} className="input-dark text-xs">
+                {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+              </select>
+            </div>
+            {qrSaco && <div className="p-4 rounded-2xl bg-white text-center"><img src={qrSaco} alt="Código QR del saco" className="w-44 h-44 mx-auto" /></div>}
+            <p className="text-slate-300 font-bold">Preparador: <span className="text-white">{saco.preparador.nombre}</span> · Total: <span className="text-emerald-400 font-mono">{saco.totalDocenas} docenas ({saco.totalPares} pares)</span></p>
+            <table className="w-full text-left text-xs">
+              <thead className="text-slate-400"><tr><th className="p-2">SKU</th><th className="p-2">Media</th><th className="p-2 text-right">Docenas</th><th className="p-2 text-right">Defectuosas</th></tr></thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {saco.items.map(i => <tr key={i.catalogo_media_id}><td className="p-2 font-mono text-emerald-300">{i.sku}</td><td className="p-2">{i.codigo}</td><td className="p-2 text-right font-mono">{i.docenas}</td><td className="p-2 text-right font-mono">{i.defectuosas}</td></tr>)}
               </tbody>
             </table>
           </div>
-        </div>
+        )}
       </Modal>
 
-      {/* ── MODAL: VER QR EXISTENTE ─────────────────────────────────────────── */}
-      <Modal
-        open={Boolean(showQRModal && paqueteQR)}
-        onClose={() => setShowQRModal(false)}
-        title={paqueteQR ? `Saco Maestro ${paqueteQR.codigo_paquete}` : 'Saco Maestro'}
-        subtitle={paqueteQR ? `Salón Destino: ${paqueteQR.ubicacion?.nombre || 'Sin salón'}` : undefined}
-        maxWidth="sm"
-        footer={
-          <button onClick={() => setShowQRModal(false)} className="btn-primary w-full justify-center py-2 text-xs bg-emerald-600 border-none font-bold">
-            Cerrar
-          </button>
-        }
-      >
-        <div className="p-4 rounded-2xl bg-white mb-4 text-center">
-          <img src={qrDataURL} alt="QR Saco Maestro" className="w-48 h-48 mx-auto" />
-        </div>
-
-        <p className="text-xs font-mono text-emerald-400 font-bold text-center">
-          {paqueteQR?.docenas} Docenas ({paqueteQR?.total_pares || convertirDocenasAPares(paqueteQR?.docenas || 0)} Pares Totales)
-        </p>
+      <Modal isOpen={!!paqueteQR} onClose={() => setPaqueteQR(null)} title={paqueteQR ? `Saco ${paqueteQR.codigo_paquete}` : 'Saco'}
+        subtitle={paqueteQR ? `Salón: ${paqueteQR.ubicacion?.nombre || 'Sin salón'}` : undefined} maxWidth="sm"
+        footer={<button onClick={() => setPaqueteQR(null)} className="btn-primary w-full justify-center py-2 text-xs">Cerrar</button>}>
+        {qrPaquete && <div className="p-4 rounded-2xl bg-white mb-4 text-center"><img src={qrPaquete} alt="QR del saco" className="w-48 h-48 mx-auto" /></div>}
+        <p className="text-xs font-mono text-emerald-400 font-bold text-center">{paqueteQR?.docenas} docenas ({paqueteQR?.total_pares || convertirDocenasAPares(paqueteQR?.docenas || 0)} pares)</p>
       </Modal>
     </div>
   )

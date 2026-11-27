@@ -95,3 +95,43 @@ export function construirCopiaAsignacion(
     },
   }
 }
+
+// ── Tejido 24/6 (Fase 5A, migración 032) ─────────────────────────────────
+/** Roles que cambian el producto de una máquina y corrigen un turno (decisiones P1-A y P2-A, 2026-11-26). */
+export const ROLES_SUPERVISAN_TEJIDO = ['admin', 'supervisor'] as const
+
+export function puedeSupervisarTejido(rol: string | null | undefined): boolean {
+  return !!rol && (ROLES_SUPERVISAN_TEJIDO as readonly string[]).includes(rol)
+}
+
+/** Peso por docena cuando el producto no lo tiene (mismo valor que el SQL). */
+export const PESO_DOCENA_POR_DEFECTO_G = 360
+
+/** Kg de hilo de una producción: docenas reales × peso por docena (decisión C3-A). */
+export function kgHilo(docenas: number, pesoDocenaG: number | null | undefined): number {
+  const peso = Number(pesoDocenaG) || PESO_DOCENA_POR_DEFECTO_G
+  return (Number(docenas) * peso) / 1000
+}
+
+export type ProductoMaquina = { maquina_id: string; catalogo_media_id: string; desde: string; hasta: string | null }
+
+/** Producto vigente de una máquina (el que no tiene "hasta"), o null. */
+export function productoVigente<T extends ProductoMaquina>(productos: T[], maquinaId: string): T | null {
+  return productos.find(p => p.maquina_id === maquinaId && !p.hasta) ?? null
+}
+
+/** Estados en los que una tejedora no registra producción. */
+export const ESTADOS_SIN_PRODUCCION = ['malograda', 'mantenimiento', 'inactiva'] as const
+
+export function registraProduccion(estado: string): boolean {
+  return !(ESTADOS_SIN_PRODUCCION as readonly string[]).includes(estado)
+}
+
+/** Docenas válidas de un turno: número entre 0 y 10 000 (igual que el SQL). */
+export const MAX_DOCENAS_TURNO = 10000
+
+export function docenasValidas(valor: unknown): boolean {
+  if (valor === null || valor === undefined || valor === '') return false
+  const n = Number(valor)
+  return Number.isFinite(n) && n >= 0 && n <= MAX_DOCENAS_TURNO
+}

@@ -1,861 +1,338 @@
 'use client'
 
+// Tejido 24/6 (Fase 5A, migración 032): cada tejedora tiene un producto fijo que
+// solo cambian administrador y supervisor; cada turno (día o noche) se registran,
+// por máquina, las docenas producidas y el operario. El hilo se descuenta por las
+// docenas reales. Las reglas viven en lib/domain/tejido.ts y en las funciones SQL.
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatearFecha } from '@/lib/utils'
 import { listarUsuarios } from '@/lib/api/usuarios'
-import {
-  Layers, Plus, Search, CheckCircle, Clock, ChevronDown, X,
-  Loader2, AlertTriangle, Cpu, Play, Pause, Activity, User, Wrench,
-  CheckCircle2, Sparkles, Filter, ShieldAlert, Copy
-} from 'lucide-react'
+import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
+import { Cpu, Search, Loader2, Save, RefreshCw, Pencil, Moon, Sun } from 'lucide-react'
 import { toast } from 'sonner'
-import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
-import { construirCopiaAsignacion, type TurnoPrevio } from '@/lib/domain/tejido'
-import CustomSelect from '@/components/ui/CustomSelect'
+import { productoVigente, registraProduccion, docenasValidas, puedeSupervisarTejido, type ProductoMaquina } from '@/lib/domain/tejido'
+import { hoyLocal } from '@/lib/domain/mantenimiento'
 import SelectorMedia from '@/components/ui/SelectorMedia'
 import Modal from '@/components/ui/Modal'
 
-
 interface Marca { id: string; nombre: string }
-interface Maquina {
-  id: string
-  codigo: string
-  marca_id: string
-  tipo: string
-  estado: string // 'activa', 'ocupada', 'mantenimiento'
-  caracteristicas?: string
-  marca?: { id: string; nombre: string }
-}
-interface Tejedor { id: string; nombre: string }
+interface Maquina { id: string; codigo: string; marca_id: string; estado: string; marca?: { nombre: string } | null }
+interface Persona { id: string; nombre: string }
 interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: string; talla: string; sku?: string; diseno_color?: string }
-interface TurnoMaquina { maquina_id: string; catalogo_media_id: string }
-interface Turno {
-  id: string
-  fecha: string
-  horario: string
-  duracion_horas: number
-  estado: string
-  tejedor_id: string
-  tejedor: { nombre: string }
-  turno_maquinas: TurnoMaquina[]
+interface Reporte { id: string; maquina_id: string; docenas_producidas: number; operario_id: string | null; created_at: string }
+interface TurnoRegistro { id: string; tejedor_id: string; tejedor?: { nombre: string } | null }
+
+const ESTADO_TEXTO: Record<string, string> = {
+  activa: 'En marcha', ocupada: 'En marcha', standby: 'Standby', malograda: 'Falla', mantenimiento: 'Mantenimiento', inactiva: 'Inactiva',
 }
 
 export default function ProduccionTejidoPage() {
+  const supabase = createClient()
   const [marcas, setMarcas] = useState<Marca[]>([])
   const [maquinas, setMaquinas] = useState<Maquina[]>([])
-  const [tejedores, setTejedores] = useState<Tejedor[]>([])
+  const [productos, setProductos] = useState<(ProductoMaquina & { id: string })[]>([])
   const [catalogo, setCatalogo] = useState<CatalogoMedia[]>([])
-  const [turnos, setTurnos] = useState<Turno[]>([])
+  const [personas, setPersonas] = useState<Persona[]>([])
+  const [rol, setRol] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Filtros de búsqueda
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedMarcaFilter, setSelectedMarcaFilter] = useState('todas')
-  const [selectedEstadoFilter, setSelectedEstadoFilter] = useState('todos')
+  const [busqueda, setBusqueda] = useState('')
+  const [marcaFiltro, setMarcaFiltro] = useState('todas')
 
-  // Formulario lateral de "Carga de Lote por Marca"
-  const [cargaForm, setCargaForm] = useState({
-    marca_id: '',
-    tejedor_id: '',
-    horario: 'dia',
-    duracion_horas: '12',
-    maquinas_seleccionadas: {} as Record<string, string> // maquina_id -> catalogo_media_id
-  })
+  // Turno que se registra
+  const [fecha, setFecha] = useState(hoyLocal())
+  const [horario, setHorario] = useState<'dia' | 'noche'>('dia')
+  const [encargadoId, setEncargadoId] = useState('')
+  const [turno, setTurno] = useState<TurnoRegistro | null>(null)
+  const [reportes, setReportes] = useState<Reporte[]>([])
+  const [planilla, setPlanilla] = useState<Record<string, { docenas: string; operario: string }>>({})
+  const [guardando, setGuardando] = useState(false)
 
-  // Modal para Registro de Producción
-  const [showReporteModal, setShowReporteModal] = useState(false)
-  const [turnoSeleccionado, setTurnoSeleccionado] = useState<Turno | null>(null)
-  const [reporte, setReporte] = useState<Record<string, string>>({})
+  // Modales
+  const [cambio, setCambio] = useState<{ maquina: Maquina; producto: string } | null>(null)
+  const [correccion, setCorreccion] = useState<{ reporte: Reporte; codigo: string; docenas: string; operario: string } | null>(null)
 
-  const supabase = createClient()
+  const supervisa = puedeSupervisarTejido(rol)
 
-  // ── CARGAR DATOS EN TIEMPO REAL / MOCK ────────────────────────────────────
-  const cargarDatos = useCallback(async () => {
-    setLoading(true)
-    const [mar, maq, cat, tur] = await Promise.all([
+  // Lecturas: devuelven los datos; el estado se fija fuera (efectos y recargas)
+  const leerBase = useCallback(async () => {
+    const hoy = hoyLocal()
+    const [mar, maq, pm, cat, tejedores, asig, usuario] = await Promise.all([
       supabase.from('marcas_maquinas').select('id, nombre').order('nombre'),
-      supabase.from('maquinas').select(`
-        id, codigo, marca_id, tipo, estado, caracteristicas,
-        marca:marcas_maquinas(id, nombre)
-      `).eq('tipo', 'tejedora').order('codigo'),
+      supabase.from('maquinas').select('id, codigo, marca_id, estado, marca:marcas_maquinas(nombre)').eq('tipo', 'tejedora').order('codigo'),
+      supabase.from('productos_maquina').select('id, maquina_id, catalogo_media_id, desde, hasta'),
       supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla').eq('estado', 'activo').order('codigo'),
-      supabase.from('turnos_produccion').select(`
-        id, fecha, horario, duracion_horas, estado, tejedor_id,
-        tejedor:usuarios(nombre),
-        turno_maquinas(maquina_id, catalogo_media_id)
-      `).eq('estado', 'activo').order('created_at', { ascending: false })
+      listarUsuarios({ rol: 'tejedor', campos: 'id,nombre' }),
+      supabase.from('asignaciones_turno').select('operador:usuarios(id, nombre)').eq('area', 'tejido').eq('fecha', hoy),
+      obtenerUsuarioActual(),
     ])
-
-    if (mar.error) {
-      toast.error(`Error cargando marcas: ${mar.error.message}`)
+    for (const [nombre, r] of [['marcas', mar], ['máquinas', maq], ['productos de las máquinas', pm], ['catálogo', cat]] as const) {
+      if (r.error) toast.error(`Error cargando ${nombre}: ${r.error.message}`)
     }
-    if (maq.error) {
-      toast.error(`Error cargando máquinas: ${maq.error.message}`)
+    // Operarios: tejedores y quienes están en el Calendario de Turnos de tejido hoy
+    const mapa = new Map<string, Persona>(tejedores.map(u => [u.id, { id: u.id, nombre: u.nombre }]))
+    for (const a of (asig.data ?? []) as unknown as { operador: Persona | null }[]) if (a.operador) mapa.set(a.operador.id, a.operador)
+    return {
+      marcas: (mar.data ?? []) as Marca[],
+      maquinas: (maq.data ?? []) as unknown as Maquina[],
+      productos: (pm.data ?? []) as (ProductoMaquina & { id: string })[],
+      catalogo: (cat.data ?? []) as CatalogoMedia[],
+      personas: [...mapa.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)),
+      rol: usuario?.rol ?? null,
     }
-    if (cat.error) {
-      toast.error(`Error cargando catálogo: ${cat.error.message}`)
-    }
-    if (tur.error) {
-      toast.error(`Error cargando turnos: ${tur.error.message}`)
-    }
-
-    const hoy = new Date().toISOString().split('T')[0]
-    const [tejedoresData, asigRes] = await Promise.all([
-      listarUsuarios({ rol: 'tejedor', campos: 'id,nombre,estado' }),
-      supabase.from('asignaciones_turno').select('operador_id, operador:usuarios(id, nombre, estado)').eq('area', 'tejido').eq('fecha', hoy)
-    ])
-    // Adapter: listarUsuarios retorna array directo (no { data, error })
-    const espRes = { data: tejedoresData, error: null }
-
-    const mapaTejedores = new Map<string, { id: string; nombre: string; estado?: string }>()
-    if (espRes.data) {
-      espRes.data.forEach((u: any) => mapaTejedores.set(u.id, u))
-    }
-    if (asigRes.data) {
-      asigRes.data.forEach((a: any) => {
-        if (a.operador) {
-          mapaTejedores.set(a.operador.id, a.operador)
-        }
-      })
-    }
-
-    const tejedoresList = Array.from(mapaTejedores.values())
-
-    setMarcas(mar.data ?? [])
-    setMaquinas((maq.data ?? []) as Maquina[])
-    setTejedores(tejedoresList)
-    setCatalogo(cat.data ?? [])
-    setTurnos((tur.data ?? []) as Turno[])
-    setLoading(false)
   }, [supabase])
 
+  const leerTurno = useCallback(async () => {
+    const t = await supabase.from('turnos_produccion').select('id, tejedor_id, tejedor:usuarios(nombre)')
+      .eq('registro_24_6', true).eq('fecha', fecha).eq('horario', horario).maybeSingle()
+    // Si falla, no se deja a la vista el turno de otra fecha u horario
+    if (t.error) { toast.error(`Error cargando el turno: ${t.error.message}`); return { turno: null, reportes: [] as Reporte[] } }
+    const tr = (t.data ?? null) as unknown as TurnoRegistro | null
+    if (!tr) return { turno: null, reportes: [] as Reporte[] }
+    const r = await supabase.from('reportes_produccion').select('id, maquina_id, docenas_producidas, operario_id, created_at').eq('turno_id', tr.id)
+    if (r.error) toast.error(`Error cargando lo registrado: ${r.error.message}`)
+    return { turno: tr, reportes: (r.data ?? []) as Reporte[] }
+  }, [supabase, fecha, horario])
 
-  useEffect(() => { cargarDatos() }, [cargarDatos])
+  const aplicarBase = useCallback((b: Awaited<ReturnType<typeof leerBase>>) => {
+    setMarcas(b.marcas); setMaquinas(b.maquinas); setProductos(b.productos); setCatalogo(b.catalogo); setPersonas(b.personas); setRol(b.rol)
+    setLoading(false)
+  }, [])
+  const aplicarTurno = useCallback((t: Awaited<ReturnType<typeof leerTurno>>) => {
+    setTurno(t.turno)
+    setReportes(t.reportes)
+    if (t.turno) setEncargadoId(t.turno.tejedor_id)
+  }, [])
 
-  // ── MAPA DE ESTADO DE MÁQUINAS CON SU TEJEDOR Y TURNO ──────────────────────
-  const maquinasEstadoMap = useMemo(() => {
-    const map = new Map<string, {
-      turnoId: string | null
-      tejedorNombre: string
-      catalogoMediaCodigo: string
-      catalogoMediaId: string
-      horario: string
-      duracion: number
-    }>()
+  useEffect(() => {
+    let vigente = true
+    ;(async () => { const b = await leerBase(); if (vigente) aplicarBase(b) })()
+    return () => { vigente = false }
+  }, [leerBase, aplicarBase])
+  useEffect(() => {
+    let vigente = true
+    ;(async () => { const t = await leerTurno(); if (vigente) aplicarTurno(t) })()
+    return () => { vigente = false }
+  }, [leerTurno, aplicarTurno])
 
-    turnos.forEach(t => {
-      t.turno_maquinas?.forEach(tm => {
-        const cat = catalogo.find(c => c.id === tm.catalogo_media_id)
-        map.set(tm.maquina_id, {
-          turnoId: t.id,
-          tejedorNombre: t.tejedor?.nombre || 'Tejedor',
-          catalogoMediaCodigo: cat?.codigo || 'Media estándar',
-          catalogoMediaId: tm.catalogo_media_id,
-          horario: t.horario,
-          duracion: t.duracion_horas,
-        })
-      })
+  const recargarBase = async () => aplicarBase(await leerBase())
+  const recargarTurno = async () => aplicarTurno(await leerTurno())
+
+  const codigoProducto = useCallback((id: string | undefined) => catalogo.find(c => c.id === id)?.codigo ?? '—', [catalogo])
+
+  const filas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase()
+    return maquinas
+      .filter(m => marcaFiltro === 'todas' || m.marca_id === marcaFiltro)
+      .map(m => ({ m, vigente: productoVigente(productos, m.id), reporte: reportes.find(r => r.maquina_id === m.id) ?? null }))
+      .filter(({ m, vigente }) => !q || m.codigo.toLowerCase().includes(q) || codigoProducto(vigente?.catalogo_media_id).toLowerCase().includes(q)
+        || (m.marca?.nombre ?? '').toLowerCase().includes(q))
+  }, [maquinas, productos, reportes, marcaFiltro, busqueda, codigoProducto])
+
+  const conProducto = maquinas.filter(m => productoVigente(productos, m.id)).length
+  const nombrePersona = (id: string | null) => personas.find(p => p.id === id)?.nombre ?? '—'
+
+  const editar = (maquinaId: string, campo: 'docenas' | 'operario', valor: string) =>
+    setPlanilla(prev => ({ ...prev, [maquinaId]: { docenas: '', operario: '', ...prev[maquinaId], [campo]: valor } }))
+
+  const guardarTurno = async () => {
+    if (!encargadoId) { toast.error('Elige el encargado del turno'); return }
+    const items = filas
+      .filter(({ m, vigente, reporte }) => vigente && !reporte && registraProduccion(m.estado) && (planilla[m.id]?.docenas ?? '') !== '')
+      .map(({ m }) => ({ m, docenas: planilla[m.id].docenas, operario: planilla[m.id].operario }))
+    if (items.length === 0) { toast.error('Anota las docenas de al menos una máquina'); return }
+    const mala = items.find(i => !docenasValidas(i.docenas))
+    if (mala) { toast.error(`Docenas inválidas en ${mala.m.codigo}`); return }
+    const sinOperario = items.find(i => !i.operario)
+    if (sinOperario) { toast.error(`Elige el operario de ${sinOperario.m.codigo}`); return }
+
+    setGuardando(true)
+    const { error } = await supabase.rpc('registrar_produccion_tejido', {
+      p_fecha: fecha, p_horario: horario, p_encargado_id: encargadoId,
+      p_items: items.map(i => ({ maquina_id: i.m.id, docenas: Number(i.docenas), operario_id: i.operario })),
     })
+    setGuardando(false)
+    if (error) { toast.error(error.message); return }
+    toast.success(`Turno ${horario === 'dia' ? 'día' : 'noche'} del ${formatearFecha(fecha)}: ${items.length} máquina(s) registradas`)
+    setPlanilla({})
+    recargarTurno()
+  }
 
-    return map
-  }, [turnos, catalogo])
+  const guardarCambioProducto = async () => {
+    if (!cambio?.producto) { toast.error('Elige el producto'); return }
+    const { error } = await supabase.rpc('asignar_producto_maquina', { p_maquina_id: cambio.maquina.id, p_catalogo_media_id: cambio.producto })
+    if (error) { toast.error(error.message); return }
+    toast.success(`Máquina ${cambio.maquina.codigo}: ahora teje ${codigoProducto(cambio.producto)}`)
+    setCambio(null)
+    recargarBase()
+  }
 
-  // Máquinas filtradas de la grilla principal
-  const maquinasFiltradas = useMemo(() => {
-    return maquinas.filter(m => {
-      // Filtro por marca
-      if (selectedMarcaFilter !== 'todas' && m.marca_id !== selectedMarcaFilter) {
-        return false
-      }
-      // Filtro por estado
-      if (selectedEstadoFilter === 'en_marcha' && m.estado !== 'ocupada') return false
-      if (selectedEstadoFilter === 'disponibles' && m.estado !== 'activa') return false
-      if (selectedEstadoFilter === 'mantenimiento' && m.estado !== 'mantenimiento') return false
-
-      // Búsqueda por texto (código de máquina o tejedor)
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        const info = maquinasEstadoMap.get(m.id)
-        const matchCodigo = m.codigo.toLowerCase().includes(q)
-        const matchTejedor = info?.tejedorNombre.toLowerCase().includes(q)
-        const matchMedia = info?.catalogoMediaCodigo.toLowerCase().includes(q)
-        const matchMarca = m.marca?.nombre?.toLowerCase().includes(q)
-        if (!matchCodigo && !matchTejedor && !matchMedia && !matchMarca) return false
-      }
-
-      return true
+  const guardarCorreccion = async () => {
+    if (!correccion) return
+    if (!docenasValidas(correccion.docenas)) { toast.error('Docenas inválidas'); return }
+    const { error } = await supabase.rpc('corregir_produccion_tejido', {
+      p_reporte_id: correccion.reporte.id, p_docenas: Number(correccion.docenas), p_operario_id: correccion.operario,
     })
-  }, [maquinas, selectedMarcaFilter, selectedEstadoFilter, searchQuery, maquinasEstadoMap])
-
-  // Máquinas disponibles de la marca seleccionada en la Carga de Lote
-  const maquinasDisponiblesPorMarca = useMemo(() => {
-    if (!cargaForm.marca_id) return []
-    return maquinas.filter(m => m.marca_id === cargaForm.marca_id && m.estado === 'activa')
-  }, [maquinas, cargaForm.marca_id])
-
-  // Conteos para los badges del KPI
-  const countActivas = maquinas.filter(m => m.estado === 'ocupada').length
-  const countDisponibles = maquinas.filter(m => m.estado === 'activa').length
-  const countMantenimiento = maquinas.filter(m => m.estado === 'mantenimiento').length
-  const countMalogradas = maquinas.filter(m => m.estado === 'malograda').length
-
-  // ── MANEJADOR DE CAMBIO DE MARCA EN LA CARGA DE LOTE ──────────────────────
-  const handleMarcaChange = (marcaId: string) => {
-    setCargaForm(prev => ({
-      ...prev,
-      marca_id: marcaId,
-      maquinas_seleccionadas: {} // reset selecciones previas
-    }))
+    if (error) { toast.error(error.message); return }
+    toast.success(`Corrección guardada en ${correccion.codigo}`)
+    setCorreccion(null)
+    recargarTurno()
   }
 
-  const toggleMaquinaSeleccionada = (maquinaId: string) => {
-    setCargaForm(prev => {
-      const next = { ...prev.maquinas_seleccionadas }
-      if (next[maquinaId] !== undefined) {
-        delete next[maquinaId]
-      } else {
-        // Pre-seleccionar el primer código del catálogo si existe
-        next[maquinaId] = catalogo[0]?.id || ''
-      }
-      return { ...prev, maquinas_seleccionadas: next }
-    })
-  }
-
-  const updateMediaParaMaquina = (maquinaId: string, mediaId: string) => {
-    setCargaForm(prev => ({
-      ...prev,
-      maquinas_seleccionadas: {
-        ...prev.maquinas_seleccionadas,
-        [maquinaId]: mediaId
-      }
-    }))
-  }
-
-  // ── COPIAR ASIGNACIÓN DEL DÍA ANTERIOR ────────────────────────────────────
-  // Solo rellena el formulario (máquinas con su producto y el tejedor encargado);
-  // el supervisor revisa y guarda con "Validar y Cargar Lote" como siempre.
-  const [copiandoAsignacion, setCopiandoAsignacion] = useState(false)
-  const copiarAsignacionAnterior = async () => {
-    setCopiandoAsignacion(true)
-    const hoy = new Date().toISOString().split('T')[0]
-    const { data, error } = await supabase.from('turnos_produccion').select(`
-      fecha, horario, duracion_horas, tejedor_id,
-      turno_maquinas(maquina_id, catalogo_media_id)
-    `).lt('fecha', hoy).eq('horario', cargaForm.horario).order('fecha', { ascending: false }).limit(50)
-    setCopiandoAsignacion(false)
-    if (error) { toast.error(`No se pudo leer el día anterior: ${error.message}`); return }
-
-    const r = construirCopiaAsignacion(
-      (data ?? []) as TurnoPrevio[],
-      maquinas,
-      new Set(catalogo.map(c => c.id)),
-      cargaForm.horario,
-      cargaForm.marca_id || null
-    )
-    const { copia, error: errorCopia } = r
-    if (!copia) { toast.error(errorCopia ?? 'No se pudo copiar la asignación'); return }
-    setCargaForm(prev => ({
-      ...prev,
-      marca_id: copia.marca_id,
-      tejedor_id: copia.tejedor_id,
-      duracion_horas: copia.duracion_horas,
-      maquinas_seleccionadas: copia.maquinas_seleccionadas
-    }))
-    const copiadas = Object.keys(copia.maquinas_seleccionadas).length
-    const tejedorDisponible = tejedores.some(t => t.id === copia.tejedor_id)
-    toast.success(`Asignación del ${copia.fecha} copiada: ${copiadas} máquina(s). Revisa y pulsa "Validar y Cargar Lote".`, { duration: 6000 })
-    if (copia.omitidas.length > 0) {
-      toast.warning(`No se copiaron: ${copia.omitidas.map(o => `${o.codigo} (${o.motivo})`).join(', ')}`, { duration: 8000 })
-    }
-    if (!tejedorDisponible) {
-      toast.warning('El tejedor de ese día no está asignado a Tejido hoy: elige el operador de turno.', { duration: 8000 })
-      setCargaForm(prev => ({ ...prev, tejedor_id: '' }))
-    }
-  }
-
-  // ── CREAR TURNO POR MARCA ─────────────────────────────────────────────────
-  const ejecutarCargaDeLote = async () => {
-    const { marca_id, tejedor_id, horario, duracion_horas, maquinas_seleccionadas } = cargaForm
-    const maquinaIds = Object.keys(maquinas_seleccionadas)
-
-    if (!marca_id) {
-      toast.error('Selecciona una Marca de Máquina')
-      return
-    }
-    if (!tejedor_id) {
-      toast.error('Selecciona un Operador de Turno (Tejedor Encargado)')
-      return
-    }
-    if (maquinaIds.length === 0) {
-      toast.error('Selecciona al menos una máquina disponible de la marca para cargar')
-      return
-    }
-
-    const algunaSinMedia = maquinaIds.some(id => !maquinas_seleccionadas[id])
-    if (algunaSinMedia) {
-      toast.error('Asigna el código de media a todas las máquinas seleccionadas')
-      return
-    }
-
-    // Validar transiciones de estado de las máquinas a 'ocupada' (aviso rápido; la BD vuelve a validar)
-    for (const mId of maquinaIds) {
-      const maq = maquinas.find(m => m.id === mId)
-      if (maq) {
-        const v = validarTransicionEstadoMaquina(maq.estado as any, 'ocupada')
-        if (!v.valido) {
-          toast.error(`Error en máquina ${maq.codigo}: ${v.error}`)
-          return
-        }
-      }
-    }
-
-    // Una sola operación atómica: valida hilo, crea turno + asignaciones, descuenta
-    // stock y marca máquinas/tejedor. Si algo falla no queda nada a medias.
-    const { error: loteErr } = await supabase.rpc('cargar_lote_produccion', {
-      p_tejedor_id: tejedor_id,
-      p_horario: horario,
-      p_duracion_horas: parseInt(duracion_horas),
-      p_asignaciones: maquinaIds.map(id => ({ maquina_id: id, catalogo_media_id: maquinas_seleccionadas[id] }))
-    })
-    if (loteErr) {
-      toast.error(`No se pudo cargar el lote: ${loteErr.message}`)
-      cargarDatos()
-      return
-    }
-
-    toast.success(`✅ Lote cargado. ${maquinaIds.length} máquinas en marcha para el turno.`)
-    setCargaForm({
-      marca_id: '',
-      tejedor_id: '',
-      horario: 'dia',
-      duracion_horas: '12',
-      maquinas_seleccionadas: {}
-    })
-    cargarDatos()
-  }
-
-  // ── REGISTRAR PRODUCCIÓN (DESDE TARJETA O MODAL) ──────────────────────────
-  const abrirReporteParaMaquina = (maquina: Maquina) => {
-    const info = maquinasEstadoMap.get(maquina.id)
-    if (!info) return
-    const turno = turnos.find(t => t.id === info.turnoId)
-    if (turno) {
-      setTurnoSeleccionado(turno)
-      const initialRep: Record<string, string> = {}
-      turno.turno_maquinas?.forEach(tm => { initialRep[tm.maquina_id] = '' })
-      setReporte(initialRep)
-      setShowReporteModal(true)
-    }
-  }
-
-  const enviarReporteProduccion = async () => {
-    if (!turnoSeleccionado) return
-
-    const docenasInvalidas = turnoSeleccionado.turno_maquinas.some(tm => parseFloat(reporte[tm.maquina_id] ?? '0') < 0)
-    if (docenasInvalidas) { toast.error('Las docenas producidas no pueden ser negativas'); return }
-
-    // Una sola operación atómica: reportes + cierre del turno + liberar máquinas y tejedor
-    const { error: cierreErr } = await supabase.rpc('cerrar_turno_produccion', {
-      p_turno_id: turnoSeleccionado.id,
-      p_reportes: turnoSeleccionado.turno_maquinas.map(tm => ({
-        maquina_id: tm.maquina_id,
-        docenas: parseFloat(reporte[tm.maquina_id] ?? '0') || 0
-      }))
-    })
-    if (cierreErr) {
-      toast.error(`No se pudo registrar la producción: ${cierreErr.message}`)
-      cargarDatos()
-      return
-    }
-
-    toast.success('🎉 Producción registrada correctamente.')
-    setShowReporteModal(false)
-    cargarDatos()
-  }
-
+  const corregibleHoy = (r: Reporte) => hoyLocal(new Date(r.created_at)) === hoyLocal()
 
   return (
-    <div className="space-y-6 animate-fadeInUp pb-12">
-      {/* ── BARRA SUPERIOR E INFORMACIÓN DEL ÁREA DE TEJIDO ─────────────────── */}
+    <div className="space-y-6 animate-fadeInUp">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 glass p-6 rounded-3xl border border-white/[0.08]">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400"><Cpu className="w-6 h-6" /></div>
+          <div>
+            <h1 className="text-2xl font-black text-white tracking-tight">Tejido 24/6</h1>
+            <p className="text-slate-400 text-xs font-medium">Cada máquina con su producto fijo; se registra la producción de cada turno</p>
+          </div>
+        </div>
+        <div className="flex gap-3 text-xs font-bold">
+          <span className="px-3.5 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">{conProducto} con producto</span>
+          <span className="px-3.5 py-2 rounded-2xl bg-slate-500/10 border border-white/10 text-slate-300">{maquinas.length - conProducto} sin producto</span>
+        </div>
+      </div>
+
+      {/* ── Turno que se registra ─────────────────────────────────────────── */}
+      <div className="glass rounded-3xl p-5 border border-blue-500/20 grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="p-2.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
-              <Cpu className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-white tracking-tight">Monitor de Producción</h1>
-              <p className="text-slate-400 text-xs font-medium">Control de máquinas tejedoras en tiempo real por marca y operador</p>
-            </div>
+          <label htmlFor="turno-fecha" className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Fecha</label>
+          <input id="turno-fecha" type="date" value={fecha} max={hoyLocal()} onChange={e => { setFecha(e.target.value); setPlanilla({}) }} className="input-dark text-xs w-full" />
+        </div>
+        <div>
+          <span className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Turno</span>
+          <div className="flex gap-1 p-1 rounded-2xl bg-slate-900/60 border border-white/[0.06]" role="group" aria-label="Turno">
+            {(['dia', 'noche'] as const).map(h => (
+              <button key={h} type="button" aria-pressed={horario === h} onClick={() => { setHorario(h); setPlanilla({}) }}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl font-bold ${horario === h ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                {h === 'dia' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}{h === 'dia' ? 'Día' : 'Noche'}
+              </button>
+            ))}
           </div>
         </div>
-
-        {/* Badges de conteo de estado */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>{countActivas} En Marcha</span>
-          </div>
-
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-            <span>{countMantenimiento} Mantenimiento</span>
-          </div>
-
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-400" />
-            <span>{countDisponibles} Libres</span>
-          </div>
+        <div>
+          <label htmlFor="turno-encargado" className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Encargado del turno</label>
+          <select id="turno-encargado" value={encargadoId} disabled={!!turno} onChange={e => setEncargadoId(e.target.value)} className="input-dark text-xs w-full">
+            <option value="">Elegir encargado…</option>
+            {personas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select>
+          {turno && <p className="text-[10px] text-slate-500 mt-1">Turno ya iniciado por {turno.tejedor?.nombre ?? nombrePersona(turno.tejedor_id)}</p>}
+        </div>
+        <div className="flex items-end">
+          <button type="button" onClick={guardarTurno} disabled={guardando} className="btn-primary w-full justify-center text-xs py-2.5">
+            {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Guardar turno
+          </button>
         </div>
       </div>
 
-      {/* ── BARRA DE FILTROS Y BÚSQUEDA ────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Buscador */}
+      <div className="flex flex-col md:flex-row gap-3">
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Buscar máquina o tejedor..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="input-dark pl-10 text-xs rounded-xl w-full"
-          />
+          <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-500" />
+          <input type="text" placeholder="Buscar máquina, producto o marca..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="input-dark pl-10 text-xs rounded-xl w-full" />
         </div>
-
-        {/* Filtros por Marca y Estado */}
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-2 bg-slate-900/60 p-1 rounded-2xl border border-white/[0.06] text-xs">
-            <span className="text-slate-400 font-semibold px-3 py-1">Marca:</span>
-            <CustomSelect
-              value={selectedMarcaFilter}
-              onChange={val => setSelectedMarcaFilter(val)}
-              options={[
-                { value: 'todas', label: `Todas las marcas (${marcas.length})` },
-                ...marcas.map(m => ({ value: m.id, label: m.nombre }))
-              ]}
-              triggerClassName="bg-transparent border-none text-xs py-1"
-            />
-          </div>
-
-          <div className="flex items-center gap-2 bg-slate-900/60 p-1 rounded-2xl border border-white/[0.06] text-xs">
-            <span className="text-slate-400 font-semibold px-3 py-1">Estado:</span>
-            <CustomSelect
-              value={selectedEstadoFilter}
-              onChange={val => setSelectedEstadoFilter(val)}
-              options={[
-                { value: 'todos', label: 'Todos los estados' },
-                { value: 'en_marcha', label: 'En Marcha' },
-                { value: 'disponibles', label: 'Libres' },
-                { value: 'mantenimiento', label: 'Mantenimiento' }
-              ]}
-              triggerClassName="bg-transparent border-none text-xs py-1"
-            />
-          </div>
-        </div>
+        <select aria-label="Marca" value={marcaFiltro} onChange={e => setMarcaFiltro(e.target.value)} className="input-dark text-xs md:w-64">
+          <option value="todas">Todas las marcas ({marcas.length})</option>
+          {marcas.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+        </select>
       </div>
 
-      {/* ── CONTENIDO PRINCIPAL EN 2 COLUMNAS (MONITOR GRID + CARGA DE LOTE) ─── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* ── COLUMNA IZQUIERDA (2 COLS): GRID DE MÁQUINAS (MONITOR) ─────────── */}
-        <div className="lg:col-span-2 space-y-4">
-
-          {loading ? (
-            <div className="flex justify-center items-center py-24 glass rounded-3xl">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
-            </div>
-          ) : maquinasFiltradas.length === 0 ? (
-            <div className="glass rounded-3xl flex flex-col items-center justify-center py-20 text-slate-500 border border-dashed border-white/10">
-              <Cpu className="w-12 h-12 mb-3 opacity-20" />
-              <p className="font-semibold text-sm">No se encontraron máquinas tejedoras</p>
-              <p className="text-xs text-slate-600 mt-1">Prueba cambiando los filtros de marca o búsqueda</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4">
-              {maquinasFiltradas.map(m => {
-                const info = maquinasEstadoMap.get(m.id)
-                const isEnMarcha = m.estado === 'ocupada'
-                const isMantenimiento = m.estado === 'mantenimiento'
-                const isMalograda = m.estado === 'malograda'
-                const isLibre = m.estado === 'activa'
-
+      {/* ── Planilla: una fila por máquina ────────────────────────────────── */}
+      <div className="glass rounded-3xl overflow-x-auto border border-white/[0.06]">
+        {loading ? (
+          <div className="flex justify-center py-16"><Loader2 className="w-7 h-7 animate-spin text-blue-400" /></div>
+        ) : filas.length === 0 ? (
+          <p className="text-center text-slate-500 py-14 text-sm">No se encontraron máquinas tejedoras</p>
+        ) : (
+          <table className="w-full text-left text-xs">
+            <thead className="bg-white/[0.03] text-slate-400 uppercase text-[10px]">
+              <tr><th className="p-3">Máquina</th><th className="p-3">Estado</th><th className="p-3">Producto</th>
+                <th className="p-3 w-28">Docenas</th><th className="p-3 w-56">Operario</th><th className="p-3 text-right">Acciones</th></tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04] text-slate-300">
+              {filas.map(({ m, vigente, reporte }) => {
+                const produce = registraProduccion(m.estado)
+                const fila = planilla[m.id] ?? { docenas: '', operario: '' }
                 return (
-                  <div
-                    key={m.id}
-                    className={`glass rounded-2xl p-4 border transition-all duration-300 relative flex flex-col justify-between overflow-hidden min-w-0 ${
-                      isEnMarcha
-                        ? 'border-emerald-500/30 bg-emerald-500/[0.02] shadow-lg shadow-emerald-500/5'
-                        : isMantenimiento
-                        ? 'border-amber-500/30 bg-amber-500/[0.02]'
-                        : isMalograda
-                        ? 'border-red-500/40 bg-red-500/[0.03]'
-                        : 'border-white/[0.08] hover:border-blue-400/40'
-                    }`}
-                  >
-                    {/* Header de la Tarjeta */}
-                    <div>
-                      {/* Fila 1: Marca y Badge de Estado */}
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 text-slate-300 font-semibold uppercase tracking-wider">
-                          {m.marca?.nombre || 'Marca'}
-                        </span>
-
-                        {isEnMarcha ? (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            EN MARCHA
-                          </span>
-                        ) : isMantenimiento ? (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
-                            <Wrench className="w-3 h-3" />
-                            ALERTA
-                          </span>
-                        ) : isMalograda ? (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 shrink-0">
-                            <AlertTriangle className="w-3 h-3" />
-                            FALLA
-                          </span>
-                        ) : isLibre ? (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
-                            LIBRE
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-700 text-slate-300 border border-white/10 shrink-0 uppercase">
-                            {m.estado}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Fila 2: Código de máquina y encargado */}
-                      <div className="min-w-0 mb-3">
-                        <h3 className="font-black text-base sm:text-lg text-white font-mono tracking-tight truncate" title={m.codigo}>
-                          {m.codigo}
-                        </h3>
-                        <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 truncate">
-                          <User className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                          <span className="truncate">{info ? info.tejedorNombre : 'Sin Encargado'}</span>
-                        </p>
-                      </div>
-
-                      {/* Código de media tejiéndose */}
-                      <div className="p-2.5 rounded-xl bg-slate-900/60 border border-white/[0.05]">
-                        <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">
-                          {isEnMarcha ? 'Tejiendo producto:' : 'Especificación:'}
-                        </p>
-                        <p className="text-xs font-mono font-medium text-slate-200 truncate" title={info ? info.catalogoMediaCodigo : (m.caracteristicas || 'Disponible para cargar')}>
-                          {info ? info.catalogoMediaCodigo : (m.caracteristicas || 'Disponible para cargar')}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Acciones de la Tarjeta */}
-                    <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
-                      {isEnMarcha ? (
-                        <>
-                          <button
-                            onClick={() => abrirReporteParaMaquina(m)}
-                            className="btn-primary flex-1 justify-center text-xs py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white border-none shadow-md shadow-emerald-600/20"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Registrar Producción
-                          </button>
-                        </>
-                      ) : !isLibre ? (
-                        <p className="flex-1 text-center text-[11px] text-slate-500 py-1.5">
-                          No disponible para cargar
-                        </p>
-                      ) : (
-                        <button
-                          onClick={() => setCargaForm(f => ({ ...f, marca_id: m.marca_id }))}
-                          className="btn-secondary flex-1 justify-center text-xs py-1.5 text-blue-300 hover:text-white border-blue-500/20 hover:border-blue-500/40"
-                        >
-                          <Play className="w-3.5 h-3.5 text-blue-400" />
-                          Iniciar Lote
+                  <tr key={m.id} data-testid={`fila-tejido-${m.codigo}`}>
+                    <td className="p-3"><span className="font-mono font-bold text-white">{m.codigo}</span><span className="block text-[10px] text-slate-500">{m.marca?.nombre ?? ''}</span></td>
+                    <td className="p-3"><span className={produce ? 'text-emerald-300' : 'text-amber-300'}>{ESTADO_TEXTO[m.estado] ?? m.estado}</span></td>
+                    <td className="p-3 font-mono">{vigente ? codigoProducto(vigente.catalogo_media_id) : <span className="text-slate-500 font-sans">Sin producto</span>}</td>
+                    {reporte ? (
+                      <>
+                        <td className="p-3 font-mono text-white">{reporte.docenas_producidas}</td>
+                        <td className="p-3">{nombrePersona(reporte.operario_id)}</td>
+                      </>
+                    ) : vigente && produce ? (
+                      <>
+                        <td className="p-3">
+                          <input type="number" min="0" step="0.5" inputMode="decimal" aria-label={`Docenas de ${m.codigo}`} value={fila.docenas}
+                            onChange={e => editar(m.id, 'docenas', e.target.value)} className="input-dark text-xs w-24 py-1.5" />
+                        </td>
+                        <td className="p-3">
+                          <select aria-label={`Operario de ${m.codigo}`} value={fila.operario} onChange={e => editar(m.id, 'operario', e.target.value)} className="input-dark text-xs w-full py-1.5">
+                            <option value="">Elegir operario…</option>
+                            {personas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                          </select>
+                        </td>
+                      </>
+                    ) : (
+                      <td className="p-3 text-slate-500" colSpan={2}>{vigente ? 'No registra producción en este estado' : 'Asigna un producto para registrar'}</td>
+                    )}
+                    <td className="p-3 text-right whitespace-nowrap">
+                      {reporte && supervisa && corregibleHoy(reporte) && (
+                        <button type="button" className="btn-secondary text-[11px] py-1 px-2 mr-2"
+                          onClick={() => setCorreccion({ reporte, codigo: m.codigo, docenas: String(reporte.docenas_producidas), operario: reporte.operario_id ?? '' })}>
+                          <Pencil className="w-3 h-3" /> Corregir
                         </button>
                       )}
-                    </div>
-                  </div>
+                      {supervisa && (
+                        <button type="button" className="btn-secondary text-[11px] py-1 px-2" onClick={() => setCambio({ maquina: m, producto: vigente?.catalogo_media_id ?? '' })}>
+                          <RefreshCw className="w-3 h-3" /> {vigente ? 'Cambiar producto' : 'Asignar producto'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
                 )
               })}
-            </div>
-          )}
-        </div>
-
-        {/* ── COLUMNA DERECHA (1 COL): PANEL CARGA DE LOTE POR MARCA Y OEE ─────── */}
-        <div className="space-y-6">
-
-          {/* Formulario Carga de Lote */}
-          <div className="glass rounded-3xl p-6 border border-blue-500/20 shadow-xl bg-blue-500/[0.02]">
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/[0.08]">
-              <Sparkles className="w-5 h-5 text-blue-400" />
-              <h2 className="text-base font-bold text-white">Carga de Lote por Marca</h2>
-            </div>
-
-            <button
-              type="button"
-              onClick={copiarAsignacionAnterior}
-              disabled={copiandoAsignacion}
-              className="btn-secondary w-full justify-center text-xs py-2 mb-4 border-blue-500/30 text-blue-200 hover:bg-blue-500/10"
-              title="Rellena el formulario con las máquinas, productos y tejedor del último día, para el horario elegido"
-            >
-              {copiandoAsignacion ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
-              Copiar asignación del día anterior
-            </button>
-
-            <div className="space-y-4 text-xs">
-              {/* 1. Selector de Marca de Máquina */}
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
-                  Marca de Máquina
-                </label>
-                <CustomSelect
-                  value={cargaForm.marca_id}
-                  onChange={val => handleMarcaChange(val)}
-                  options={[
-                    { value: '', label: 'Seleccionar marca de máquina...' },
-                    ...marcas.map(m => ({ value: m.id, label: m.nombre }))
-                  ]}
-                  triggerClassName="text-xs font-medium"
-                  placeholder="Seleccionar marca de máquina..."
-                />
-              </div>
-
-              {/* 2. Selector de Operador de Turno (Tejedor) */}
-              <div>
-                <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">
-                  Operador de Turno (Encargado)
-                </label>
-                <CustomSelect
-                  value={cargaForm.tejedor_id}
-                  onChange={val => setCargaForm({ ...cargaForm, tejedor_id: val })}
-                  options={
-                    tejedores.length === 0
-                      ? [{ value: '', label: '⚠️ No hay tejedores asignados a esta área hoy — pide al supervisor que complete el Calendario de Turnos', disabled: true }]
-                      : [
-                          { value: '', label: 'Seleccionar tejedor...' },
-                          ...tejedores.map(t => ({ value: t.id, label: t.nombre }))
-                        ]
-                  }
-                  triggerClassName="text-xs font-medium"
-                  placeholder="Seleccionar tejedor..."
-                />
-              </div>
-
-              {/* 3. Horario y Duración */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Horario</label>
-                  <CustomSelect
-                    value={cargaForm.horario}
-                    onChange={val => setCargaForm({ ...cargaForm, horario: val })}
-                    options={[
-                      { value: 'dia', label: '☀ Día' },
-                      { value: 'noche', label: '🌙 Noche' }
-                    ]}
-                    triggerClassName="text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-400 mb-1.5 uppercase tracking-wider">Duración</label>
-                  <CustomSelect
-                    value={cargaForm.duracion_horas}
-                    onChange={val => setCargaForm({ ...cargaForm, duracion_horas: val })}
-                    options={[
-                      { value: '8', label: '8 horas' },
-                      { value: '12', label: '12 horas' }
-                    ]}
-                    triggerClassName="text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* 4. Lista de Máquinas disponibles de la marca elegida */}
-              <div>
-                <label className="block font-semibold text-slate-400 mb-2 uppercase tracking-wider">
-                  Máquinas Disponibles de la Marca
-                  {cargaForm.marca_id && (
-                    <span className="text-blue-400 font-normal normal-case ml-1">
-                      ({maquinasDisponiblesPorMarca.length} libres)
-                    </span>
-                  )}
-                </label>
-
-                {!cargaForm.marca_id ? (
-                  <p className="text-slate-500 text-[11px] italic py-3 text-center border border-dashed border-white/10 rounded-xl">
-                    Selecciona una marca arriba para cargar sus máquinas disponibles
-                  </p>
-                ) : maquinasDisponiblesPorMarca.length === 0 ? (
-                  <p className="text-amber-400 text-[11px] font-medium py-3 text-center border border-amber-500/20 bg-amber-500/10 rounded-xl">
-                    ⚠ No hay máquinas libres actualmente en la marca seleccionada
-                  </p>
-                ) : (
-                  <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
-                    {maquinasDisponiblesPorMarca.map(m => {
-                      const isSelected = cargaForm.maquinas_seleccionadas[m.id] !== undefined
-                      const selectedMediaId = cargaForm.maquinas_seleccionadas[m.id] || ''
-
-                      return (
-                        <div
-                          key={m.id}
-                          className={`p-3 rounded-xl border transition-all ${
-                            isSelected
-                              ? 'bg-blue-500/10 border-blue-500/40'
-                              : 'bg-white/[0.02] border-white/[0.06]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="flex items-center gap-2 cursor-pointer font-bold text-white font-mono">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleMaquinaSeleccionada(m.id)}
-                                className="rounded border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4"
-                              />
-                              <span>{m.codigo}</span>
-                            </label>
-                            <span className="text-[10px] text-slate-400 font-sans">{m.caracteristicas || 'Estándar'}</span>
-                          </div>
-
-                          {isSelected && (
-                            <SelectorMedia
-                              items={catalogo}
-                              value={selectedMediaId}
-                              onChange={val => updateMediaParaMaquina(m.id, val)}
-                              emptyOption={{ value: '', label: 'Seleccionar código de media...' }}
-                              toOption={c => ({ value: c.id, label: c.codigo })}
-                              className="mt-1"
-                              triggerClassName="text-[11px] py-1.5 font-mono"
-                              placeholder="Seleccionar código de media..."
-                            />
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Botón de envío de Carga */}
-              <button
-                onClick={ejecutarCargaDeLote}
-                disabled={!cargaForm.marca_id || maquinasDisponiblesPorMarca.length === 0}
-                className="btn-primary w-full justify-center py-2.5 text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-600/20 disabled:opacity-50 mt-2"
-              >
-                Validar y Cargar Lote
-              </button>
-            </div>
-          </div>
-
-          {/* Widget 2: Uso real de la planta (tejedoras) */}
-          <div className="glass rounded-3xl p-5 border border-white/[0.08]">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Uso de la Planta</p>
-                <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl font-black text-white">
-                    {countActivas + countDisponibles > 0
-                      ? `${Math.round((countActivas / (countActivas + countDisponibles)) * 100)}%`
-                      : '—'}
-                  </span>
-                  <span className="text-xs text-slate-400 font-medium">
-                    {countActivas} de {countActivas + countDisponibles} operativas en marcha
-                  </span>
-                </div>
-              </div>
-              <Activity className="w-6 h-6 text-blue-400" />
-            </div>
-
-            {/* Barra por estado (datos reales de máquinas tejedoras) */}
-            {maquinas.length > 0 ? (
-              <div className="flex h-3 rounded-full overflow-hidden bg-slate-800">
-                {[
-                  { n: countActivas, cls: 'bg-emerald-400', label: 'En marcha' },
-                  { n: countDisponibles, cls: 'bg-blue-400', label: 'Libres' },
-                  { n: countMantenimiento, cls: 'bg-amber-400', label: 'Mantenimiento' },
-                  { n: countMalogradas, cls: 'bg-red-500', label: 'Malogradas' },
-                ].filter(x => x.n > 0).map(x => (
-                  <div key={x.label} title={`${x.label}: ${x.n}`} className={x.cls} style={{ width: `${(x.n / maquinas.length) * 100}%` }} />
-                ))}
-              </div>
-            ) : (
-              <p className="text-[11px] text-slate-500">Sin máquinas tejedoras registradas</p>
-            )}
-          </div>
-
-          {/* Widget 3: Máquinas fuera de servicio (datos reales) */}
-          <div className="p-4 rounded-3xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-amber-300">Fuera de servicio</p>
-              <p className="text-[11px] text-amber-200/70">
-                {countMalogradas + countMantenimiento === 0
-                  ? 'Todas las tejedoras están operativas'
-                  : `${countMalogradas} malograda(s) · ${countMantenimiento} en mantenimiento`}
-              </p>
-            </div>
-          </div>
-
-        </div>
-
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* ── MODAL: REGISTRAR PRODUCCIÓN FINAL ───────────────────────────────── */}
-      <Modal
-        open={Boolean(showReporteModal && turnoSeleccionado)}
-        onClose={() => setShowReporteModal(false)}
-        title="Registrar Producción del Turno"
-        subtitle={turnoSeleccionado ? `Tejedor: ${turnoSeleccionado.tejedor?.nombre} · Horario: ${turnoSeleccionado.horario}` : undefined}
-        maxWidth="lg"
-        footer={
-          <>
-            <button onClick={() => setShowReporteModal(false)} className="btn-secondary flex-1 justify-center py-2">
-              Cancelar
-            </button>
-            <button onClick={enviarReporteProduccion} className="btn-primary flex-1 justify-center py-2 bg-emerald-600 hover:bg-emerald-500 border-none">
-              <CheckCircle2 className="w-4 h-4" /> Confirmar Producción
-            </button>
-          </>
-        }
-      >
-        <p className="text-xs text-slate-400 mb-4">
-          Ingresa las docenas obtenidas por cada máquina. Al confirmar, los minidepósitos se actualizarán y las máquinas quedarán libres.
-        </p>
+      <Modal isOpen={!!cambio} onClose={() => setCambio(null)} title={`Producto de la máquina ${cambio?.maquina.codigo ?? ''}`}
+        subtitle="La máquina sigue con este producto todos los turnos, hasta que se cambie otra vez."
+        footer={<div className="flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setCambio(null)}>Cancelar</button>
+          <button type="button" className="btn-primary" onClick={guardarCambioProducto}>Guardar producto</button></div>}>
+        {cambio && (
+          <SelectorMedia items={catalogo} value={cambio.producto} onChange={v => setCambio({ ...cambio, producto: v })}
+            emptyOption={{ value: '', label: 'Elegir producto…' }} toOption={c => ({ value: c.id, label: c.codigo })} placeholder="Elegir producto…" />
+        )}
+      </Modal>
 
-        <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-          {turnoSeleccionado?.turno_maquinas?.map(tm => {
-            const maqObj = maquinas.find(m => m.id === tm.maquina_id)
-            const catObj = catalogo.find(c => c.id === tm.catalogo_media_id)
-
-            return (
-              <div key={tm.maquina_id} className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-white font-mono">{maqObj?.codigo || tm.maquina_id}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-300">{maqObj?.marca?.nombre}</span>
-                  </div>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">{catObj?.codigo || 'Media'}</p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    placeholder="0"
-                    value={reporte[tm.maquina_id] ?? ''}
-                    onChange={e => setReporte(r => ({ ...r, [tm.maquina_id]: e.target.value }))}
-                    className="input-dark w-24 text-center font-bold text-sm"
-                  />
-                  <span className="text-xs text-slate-500">docenas</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+      <Modal isOpen={!!correccion} onClose={() => setCorreccion(null)} title={`Corregir ${correccion?.codigo ?? ''}`}
+        subtitle="Solo el mismo día. El hilo se ajusta por la diferencia."
+        footer={<div className="flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setCorreccion(null)}>Cancelar</button>
+          <button type="button" className="btn-primary" onClick={guardarCorreccion}>Guardar corrección</button></div>}>
+        {correccion && (
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <label htmlFor="corr-docenas" className="block text-slate-400 mb-1">Docenas</label>
+              <input id="corr-docenas" type="number" min="0" step="0.5" value={correccion.docenas} onChange={e => setCorreccion({ ...correccion, docenas: e.target.value })} className="input-dark w-full" />
+            </div>
+            <div>
+              <label htmlFor="corr-operario" className="block text-slate-400 mb-1">Operario</label>
+              <select id="corr-operario" value={correccion.operario} onChange={e => setCorreccion({ ...correccion, operario: e.target.value })} className="input-dark w-full">
+                <option value="">Elegir operario…</option>
+                {personas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

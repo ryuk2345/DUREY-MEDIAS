@@ -37,6 +37,11 @@ export function formatearMoneda(monto: number): string {
   }).format(monto)
 }
 
+/** Escapa texto para insertarlo en HTML armado a mano (etiquetas e impresiones en ventana nueva). */
+export function escaparHtml(texto: unknown): string {
+  return String(texto ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
+}
+
 export function formatearFecha(fecha: string | Date): string {
   if (!fecha) return '—'
   // "AAAA-MM-DD" (columna DATE) es un día del calendario, no un instante: new Date() lo leería

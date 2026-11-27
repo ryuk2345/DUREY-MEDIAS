@@ -81,6 +81,15 @@ describe('filasProduccion (tejido)', () => {
     })
   })
 
+  it('registro 24/6 (032): el operario es el de esa máquina y turno, aunque sea el encargado, sin mirar el Calendario', () => {
+    const [fila] = filasProduccion([reporteTejido({ operario: { nombre: 'Rosa Encargada' } })], asignaciones)
+    expect(fila.Operarios).toBe('Rosa Encargada')
+    const [otra] = filasProduccion([reporteTejido({ operario: { nombre: '  Juan Máquina ' } })], asignaciones)
+    expect(otra.Operarios).toBe('Juan Máquina')
+    const [sin] = filasProduccion([reporteTejido({ operario: { nombre: '  ' } })], asignaciones)
+    expect(sin.Operarios).toBe('Ana Operaria, Luis Operario') // nombre vacío: se usa la regla anterior
+  })
+
   it('el turno noche toma solo los operarios de la noche', () => {
     const [fila] = filasProduccion(
       [reporteTejido({ turno: { fecha: '2026-11-20', horario: 'noche', tejedor: { nombre: 'Rosa Encargada' } } })],

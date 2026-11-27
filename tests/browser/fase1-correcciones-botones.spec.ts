@@ -125,16 +125,3 @@ test('Materia prima: compra a crédito → cuotas arriba, "en camino", pago regi
   await expect(page.getByText(/Entrega aprobada/)).toBeVisible()
   await expect(page.getByText(/en camino \(pendiente de control de calidad\)/)).toHaveCount(0)
 })
-
-test('Tejido: copiar la asignación del día anterior rellena el formulario sin guardar', async ({ page }) => {
-  await page.goto('/dashboard/produccion')
-  await expect(page.getByRole('heading', { name: 'ANGE02' })).toBeVisible() // datos cargados (y página activa)
-  await page.getByRole('button', { name: 'Copiar asignación del día anterior' }).click()
-  await expect(page.getByText(/Asignación del 2026-01-05 copiada: 1 máquina\(s\)/)).toBeVisible()
-  await expect(page.getByText(/No se copiaron: ANGE03 \(está mantenimiento\)/)).toBeVisible()
-  await expect(page.getByRole('combobox').filter({ hasText: 'ANGE' }).first()).toBeVisible()
-  await expect(page.getByRole('combobox').filter({ hasText: 'Tejedor Prueba' })).toBeVisible()
-  // No se guardó nada: no hay turnos activos nuevos
-  const db = await mockDb(page)
-  expect(db.turnos_produccion.filter((t: { estado: string }) => t.estado === 'activo')).toHaveLength(0)
-})
