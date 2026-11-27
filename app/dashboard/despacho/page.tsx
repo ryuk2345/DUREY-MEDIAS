@@ -5,12 +5,13 @@
 // despachó. Regla de falta/sobra: lib/domain/despacho.ts; la base lo vuelve a comprobar.
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Truck, CheckCircle2, AlertTriangle, Loader2, X, Check, FileText, Scan, Plus, ClipboardList, History, Calendar, User } from 'lucide-react'
+import { Truck, CheckCircle2, AlertTriangle, Loader2, X, Check, FileText, Scan, Plus, Printer, ClipboardList, History, Calendar, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearFecha, formatearMoneda } from '@/lib/utils'
 import { compararDespacho, sacosFueraDelPedido, puedeDespachar } from '@/lib/domain/despacho'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
+import { imprimirOrdenDespacho } from '@/lib/impresion/ordenDespacho'
 
 interface Venta {
   id: string
@@ -190,9 +191,13 @@ export default function DespachoPage() {
                     <h3 className="text-lg font-bold text-white mb-1">Pedido {ventaSeleccionada.codigo_venta}</h3>
                     <p className="text-slate-400 text-sm">{ventaSeleccionada.cliente?.nombre} · {ventaSeleccionada.cliente?.numero_documento}</p>
                   </div>
-                  <button onClick={() => setShowDespachoModal(true)} disabled={!listo} className={`btn-primary text-sm ${!listo ? 'opacity-40 cursor-not-allowed' : ''}`}>
-                    <FileText className="w-4 h-4" /> Despachar y Cerrar
-                  </button>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={async () => { const err = await imprimirOrdenDespacho(supabase, ventaSeleccionada); if (err) toast.error(err) }}
+                      className="btn-secondary text-sm"><Printer className="w-4 h-4" /> Orden de despacho</button>
+                    <button onClick={() => setShowDespachoModal(true)} disabled={!listo} className={`btn-primary text-sm ${!listo ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                      <FileText className="w-4 h-4" /> Despachar y Cerrar
+                    </button>
+                  </div>
                 </div>
 
                 <form onSubmit={escanear} className="flex gap-2">

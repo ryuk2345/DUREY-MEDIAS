@@ -16,6 +16,9 @@ import { generarCronogramaCuotas, calcularEfectivoEsperadoCaja } from '@/lib/dom
 import CustomSelect from '@/components/ui/CustomSelect'
 import SelectorMedia from '@/components/ui/SelectorMedia'
 import { Modal } from '@/components/ui/Modal'
+import { htmlCronogramaPagos, htmlCarteraCobranza, imprimirHtml, type ProductoVendido } from '@/lib/impresion/ventas'
+import { imprimirOrdenDespacho } from '@/lib/impresion/ordenDespacho'
+import { tipoDocumento } from '@/lib/domain/documento'
 
 interface Cliente {
   id: string
@@ -41,7 +44,8 @@ interface Deuda {
   estado: string
   metodo_pago?: string
   comprobante_url?: string
-  venta: { id: string; codigo_venta: string; total_soles: number; cliente: { id: string; nombre: string; numero_documento: string; telefono?: string; direccion?: string }; asesora: { id: string; nombre: string } }
+  venta: { id: string; codigo_venta: string; total_soles: number; cliente: { id: string; nombre: string; numero_documento: string; telefono?: string; direccion?: string }; asesora: { id: string; nombre: string }
+    items_venta?: { docenas: number; precio_docena: number; catalogo_media: { codigo: string; sku: string | null } | null }[] }
 }
 interface CajaDiaria {
   id: string; saldo_inicial: number; ventas_efectivo: number; cobros_efectivo: number; pagos_efectivo?: number; estado: string
@@ -141,7 +145,8 @@ export default function VentasPage() {
       `).order('created_at', { ascending: false }).limit(30),
       supabase.from('cuotas').select(`
         id, numero_cuota, monto, fecha_vencimiento, estado, metodo_pago, comprobante_url,
-        venta:ventas(id, codigo_venta, total_soles, cliente:clientes(id, nombre, numero_documento, telefono, direccion), asesora:usuarios(id, nombre))
+        venta:ventas(id, codigo_venta, total_soles, cliente:clientes(id, nombre, numero_documento, telefono, direccion), asesora:usuarios(id, nombre),
+          items_venta(docenas, precio_docena, catalogo_media:catalogo_medias(codigo, sku)))
       `).order('fecha_vencimiento'),
       supabase.from('cajas_diarias').select('*').eq('fecha', hoy).single(),
       supabase.from('vista_stock_medias').select('catalogo_media_id, stock_docenas')
@@ -415,6 +420,25 @@ export default function VentasPage() {
     } else {
       const tipo = doc.length === 11 ? 'ruc' : 'dni'
       const nombreSugerido = doc.length === 8 ? `Persona Natural DNI ${doc}` : `Empresa RUC ${doc}`
+      // 6B: si no está registrado, se busca en RENIEC/SUNAT (Decolecta, desde el servidor)
+      if (tipoDocumento(doc)) {
+        try {
+          const resp = await fetch(`/api/documento?numero=${encodeURIComponent(doc)}`)
+          const datos = await resp.json().catch(() => ({}))
+          if (resp.ok && datos.nombre) {
+            setClienteForm(prev => ({ ...prev, id: '', tipo_documento: datos.tipo_documento, numero_documento: datos.numero_documento,
+              nombre: datos.nombre, direccion: datos.direccion || prev.direccion }))
+            setClienteSeleccionadoId('')
+            toast.success(`Encontrado en ${datos.tipo_documento === 'ruc' ? 'SUNAT' : 'RENIEC'}: ${datos.nombre}. Revisa los datos y completa el teléfono.`)
+            setBuscandoCliente(false)
+            return
+          }
+          if (datos.configurado === false) toast.info('Búsqueda en RENIEC/SUNAT no configurada: escribe los datos a mano.')
+          else if (datos.error) toast.info(`${datos.error}. Escribe los datos a mano.`)
+        } catch {
+          toast.info('No se pudo consultar RENIEC/SUNAT: escribe los datos a mano.')
+        }
+      }
 
       setClienteForm(prev => ({
         ...prev,
@@ -423,7 +447,7 @@ export default function VentasPage() {
         nombre: prev.nombre || nombreSugerido
       }))
       setClienteSeleccionadoId('')
-      toast.info('Cliente no encontrado en base de datos. Completa los datos para registrarlo al vuelo.')
+      if (!tipoDocumento(doc)) toast.info('Cliente no encontrado en base de datos. Completa los datos para registrarlo al vuelo.')
     }
     setBuscandoCliente(false)
   }
@@ -433,75 +457,25 @@ export default function VentasPage() {
   }
 
   // ── IMPRIMIR CRONOGRAMA DE PAGOS FÍSICO (TICKET) ──────────────────────────
+  const productosDe = (items?: Deuda['venta']['items_venta']): ProductoVendido[] =>
+    (items ?? []).map(i => ({ codigo: i.catalogo_media?.codigo ?? '—', sku: i.catalogo_media?.sku, docenas: Number(i.docenas), precio_docena: Number(i.precio_docena) }))
+
   const imprimirCronogramaPagosTicket = (
     codigoVenta: string,
     nombreCliente: string,
     documentoCliente: string,
-    telefonoCliente: string,
+    telefonoCliente: string | undefined,
     vendedoraNombre: string,
     adelantoPagado: number,
     cuotasToPrint: CuotaCronogramaItem[],
-    totalSoles: number
+    totalSoles: number,
+    productos: ProductoVendido[]
   ) => {
-    const filasHtml = cuotasToPrint.map(c => `
-      <tr>
-        <td style="border:1px solid #cbd5e1;padding:8px;font-weight:bold;text-align:center;font-size:12px">Cuota N° ${c.numero_cuota}</td>
-        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-mono;font-size:12px;color:#0f172a;font-weight:bold">${c.fecha_vencimiento}</td>
-        <td style="border:1px solid #cbd5e1;padding:8px;text-align:right;font-weight:bold;font-size:12px;color:#059669">S/ ${c.monto.toFixed(2)}</td>
-      </tr>
-    `).join('')
-
-    const html = `
-      <html>
-        <head>
-          <title>Cronograma de Pagos — Venta ${codigoVenta}</title>
-          <style>
-            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #0f172a; max-width: 480px; margin: 0 auto; }
-            .ticket { border: 2px solid #0f172a; border-radius: 16px; padding: 20px; background: #ffffff; }
-            h2 { margin: 0; font-size: 18px; color: #db2777; text-align: center; }
-            p { margin: 4px 0; font-size: 12px; color: #475569; }
-            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-            th { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 8px; font-size: 11px; text-transform: uppercase; }
-            .sig-box { margin-top: 35px; display: flex; justify-content: space-between; font-size: 11px; color: #64748b; }
-            .sig-line { border-top: 1px solid #94a3b8; width: 45%; text-align: center; padding-top: 4px; }
-          </style>
-        </head>
-        <body>
-          <div class="ticket">
-            <h2>FÁBRICA DE MEDIAS DUREY</h2>
-            <div style="text-align:center;font-size:12px;font-weight:bold;color:#0f172a;margin-bottom:12px">COMPROMISO Y CRONOGRAMA DE PAGOS</div>
-            <p>Venta N°: <strong>${codigoVenta}</strong> · Vendedora: <strong>${vendedoraNombre}</strong></p>
-            <p>Cliente: <strong>${nombreCliente}</strong></p>
-            <p>DNI/RUC: <strong>${documentoCliente}</strong> · Teléfono: <strong>${telefonoCliente || '—'}</strong></p>
-            <p>Fecha Emisión: <strong>${new Date().toLocaleDateString('es-PE')}</strong></p>
-
-            <div style="margin-top:10px;background:#f0fdf4;border:1px solid #bbf7d0;padding:8px;border-radius:8px;font-size:12px;font-weight:bold;color:#15803d">
-              TOTAL VENTA: S/ ${totalSoles.toFixed(2)} | ADELANTO PAGADO: S/ ${adelantoPagado.toFixed(2)}
-            </div>
-
-            <table>
-              <thead>
-                <tr>
-                  <th>N° Cuota</th>
-                  <th>Fecha de Vencimiento</th>
-                  <th style="text-align:right">Monto a Pagar</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${filasHtml}
-              </tbody>
-            </table>
-
-            <div class="sig-box">
-              <div class="sig-line">Firma Cliente / DNI</div>
-              <div class="sig-line">Firma Vendedora (${vendedoraNombre})</div>
-            </div>
-          </div>
-        </body>
-      </html>`
-
-    const win = window.open('', '_blank')
-    if (win) { win.document.write(html); win.document.close(); win.print() }
+    const html = htmlCronogramaPagos({
+      codigoVenta, cliente: nombreCliente, documento: documentoCliente, telefono: telefonoCliente, vendedora: vendedoraNombre,
+      adelanto: adelantoPagado, total: totalSoles, cuotas: cuotasToPrint, productos, fechaEmision: new Date().toLocaleDateString('es-PE'),
+    })
+    if (!imprimirHtml(html)) toast.error('El navegador bloqueó la ventana de impresión')
   }
 
   // ── IMPRIMIR CARTERA DE COBRANZA COMPLETA DE UNA VENDEDORA ────────────────
@@ -509,53 +483,12 @@ export default function VentasPage() {
     if (!vendedoraActivaObj) return
 
     const cuotasList = Array.from(vendedoraActivaObj.clientesMap.values()).flatMap(c => c.cuotas)
-
-    const filasHtml = cuotasList.map(d => `
-      <tr>
-        <td style="border:1px solid #cbd5e1;padding:8px;font-family:monospace;font-size:11px">${d.venta?.codigo_venta}</td>
-        <td style="border:1px solid #cbd5e1;padding:8px;font-weight:bold;font-size:11px">${d.venta?.cliente?.nombre}</td>
-        <td style="border:1px solid #cbd5e1;padding:8px;font-size:11px;font-family:monospace">${d.venta?.cliente?.telefono || '—'}</td>
-        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-size:11px">Cuota ${d.numero_cuota}</td>
-        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-weight:bold;font-size:11px;color:#b91c1c">${d.fecha_vencimiento}</td>
-        <td style="border:1px solid #cbd5e1;padding:8px;text-align:right;font-weight:bold;font-size:11px;color:#047857">S/ ${d.monto.toFixed(2)}</td>
-      </tr>
-    `).join('')
-
-    const html = `
-      <html>
-        <head>
-          <title>Cartera de Cobranza — ${vendedoraActivaObj.vendedora.nombre}</title>
-          <style>
-            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #0f172a; }
-            h2 { margin: 0; font-size: 18px; color: #be185d; }
-            p { margin: 4px 0 15px 0; color: #64748b; font-size: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th { background: #fce7f3; color: #9d174d; border: 1px solid #fbcfe8; padding: 8px; font-size: 11px; text-transform: uppercase; }
-          </style>
-        </head>
-        <body>
-          <h2>FÁBRICA DE MEDIAS DUREY — CARTERA DE COBRANZA DE VENTAS</h2>
-          <p>Asesora / Vendedora: <strong>${vendedoraActivaObj.vendedora.nombre}</strong> · Total Pendiente de Cobro: <strong>S/ ${vendedoraActivaObj.totalCartera.toFixed(2)}</strong> (${cuotasList.length} cuotas)</p>
-          <table>
-            <thead>
-              <tr>
-                <th>Venta</th>
-                <th>Cliente / Razón Social</th>
-                <th>Teléfono Contacto</th>
-                <th>Cuota</th>
-                <th>Fecha Vencimiento</th>
-                <th style="text-align:right">Monto Pendiente</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filasHtml}
-            </tbody>
-          </table>
-        </body>
-      </html>`
-
-    const win = window.open('', '_blank')
-    if (win) { win.document.write(html); win.document.close(); win.print() }
+    const html = htmlCarteraCobranza({
+      vendedora: vendedoraActivaObj.vendedora.nombre, total: vendedoraActivaObj.totalCartera,
+      cuotas: cuotasList.map(d => ({ codigo_venta: d.venta?.codigo_venta, cliente: d.venta?.cliente?.nombre, telefono: d.venta?.cliente?.telefono,
+        numero_cuota: d.numero_cuota, fecha_vencimiento: d.fecha_vencimiento, monto: d.monto })),
+    })
+    if (!imprimirHtml(html)) toast.error('El navegador bloqueó la ventana de impresión')
   }
 
   // ── GUARDAR VENTA CON VENDEDORA Y CRONOGRAMA FINANCIADO ─────────────────
@@ -606,7 +539,8 @@ export default function VentasPage() {
           vendObj?.nombre || 'Vendedora',
           adelantoNum,
           cronogramaCuotas,
-          totalCarrito
+          totalCarrito,
+          carrito.map(c => ({ codigo: c.codigo, sku: catalogo.find(m => m.id === c.catalogo_media_id)?.sku, docenas: Number(c.docenas), precio_docena: Number(c.precio_docena) }))
         )
       }
     }
@@ -750,11 +684,12 @@ export default function VentasPage() {
                     <th>Tipo Pago</th>
                     <th>Fecha</th>
                     <th>Estado</th>
+                    <th>Orden</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ventas.length === 0 ? (
-                    <tr><td colSpan={8} className="text-center py-10 text-slate-500">No hay ventas registradas aún</td></tr>
+                    <tr><td colSpan={9} className="text-center py-10 text-slate-500">No hay ventas registradas aún</td></tr>
                   ) : ventas.map(v => (
                     <tr key={v.id}>
                       <td><code className="text-pink-300 font-mono text-xs bg-pink-500/10 px-2.5 py-1 rounded-lg border border-pink-500/20">{v.codigo_venta}</code></td>
@@ -776,6 +711,14 @@ export default function VentasPage() {
                       </td>
                       <td className="text-slate-400 text-xs">{formatearFecha(v.fecha)}</td>
                       <td><span className="badge badge-info capitalize">{v.estado}</span></td>
+                      <td>
+                        {v.estado === 'pendiente' && (
+                          <button type="button" onClick={async () => { const err = await imprimirOrdenDespacho(supabase, v); if (err) toast.error(err) }}
+                            aria-label={`Imprimir orden de despacho ${v.codigo_venta}`} title="Imprimir orden de despacho" className="btn-secondary py-1.5 px-2.5 text-xs">
+                            <Printer className="w-3.5 h-3.5 text-blue-300" />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1003,6 +946,24 @@ export default function VentasPage() {
                     </div>
                   </div>
 
+                  <div className="glass rounded-2xl p-4 border border-white/[0.08]" data-testid="productos-cronograma">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">Productos comprados</h3>
+                    {[...new Map(clienteActivoObj.cuotas.map(q => [q.venta?.id, q.venta])).values()].filter(Boolean).map(v => (
+                      <div key={v!.id} className="mb-2">
+                        <p className="text-[11px] text-pink-300 font-mono">{v!.codigo_venta}</p>
+                        <table className="w-full text-xs text-slate-300">
+                          <thead className="text-slate-500 text-[10px] uppercase"><tr><th className="text-left py-1">Producto</th><th className="text-right">Docenas</th><th className="text-right">Precio x doc.</th><th className="text-right">Subtotal</th></tr></thead>
+                          <tbody>
+                            {productosDe(v!.items_venta).map((p, k) => (
+                              <tr key={k}><td className="py-1 font-mono">{p.sku || p.codigo}</td><td className="text-right">{p.docenas}</td>
+                                <td className="text-right">{formatearMoneda(p.precio_docena)}</td><td className="text-right font-bold">{formatearMoneda(p.docenas * p.precio_docena)}</td></tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+
                   <div className="glass rounded-3xl overflow-hidden border border-white/[0.08]">
                     <table className="table-dark">
                       <thead>
@@ -1070,7 +1031,8 @@ export default function VentasPage() {
                                     vendedoraActivaObj?.vendedora.nombre || 'Sin vendedora asignada',
                                     0,
                                     [{ numero_cuota: q.numero_cuota, fecha_vencimiento: q.fecha_vencimiento, monto: q.monto }],
-                                    q.venta?.total_soles || q.monto
+                                    q.venta?.total_soles || q.monto,
+                                    productosDe(q.venta?.items_venta)
                                   )
                                 }}
                                 className="btn-secondary py-1.5 px-3 text-xs"

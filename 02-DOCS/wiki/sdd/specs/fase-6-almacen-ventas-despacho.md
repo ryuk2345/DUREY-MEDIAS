@@ -6,7 +6,7 @@ tags: [sdd, spec, fase-6]
 timestamp: 2026-11-27T15:00:00Z
 topic: sdd
 slug: fase-6-almacen-ventas-despacho
-branch: fase-6a/salones-kardex
+branch: fase-6b/orden-cronograma
 status: approved
 ---
 
@@ -76,6 +76,10 @@ Quién: usuarios con sesión cuyo rol tiene el módulo (`MODULOS_POR_ROL` y su t
 - Given un saco en el Salón A, When se traslada al Salón B, Then el kardex muestra la salida de A y la entrada a B con fecha, hora y usuario, y el stock de cada salón cambia.
 - Given un preparador con dos SKU, When embolsa, Then se crean dos sacos, uno por SKU.
 - Given un usuario sin el módulo almacén, When intenta trasladar un saco, Then la base lo rechaza.
+- (6B) Given una venta pendiente de 10 docenas de A, When la vendedora imprime la orden de despacho, Then sale el cliente, el código y, por cada SKU, lo pedido y los sacos disponibles con su salón y sus docenas.
+- (6B) Given una venta a cuotas, When se ve o imprime el cronograma, Then aparece el detalle de productos (SKU, docenas, precio por docena, subtotal) además de las cuotas.
+- (6B) Given que no hay token de Decolecta, When se busca un RUC o DNI, Then dice «búsqueda no configurada» y deja escribir el cliente a mano.
+- (6B) Given un usuario sin sesión o sin el módulo ventas, When llama a la búsqueda, Then se rechaza sin consultar a Decolecta.
 
 ## Points to clarify
 - **decidido (dueño, 2026-11-27)** — Q1-A: RUC/DNI con Decolecta (el token se pide en la 6B).
@@ -85,6 +89,8 @@ Quién: usuarios con sesión cuyo rol tiene el módulo (`MODULOS_POR_ROL` y su t
 - **decidido (dueño, 2026-11-27)** — Q5-A: hay traslados entre salones y quedan en el kardex.
 - **decidido (dueño, 2026-11-27)** — Un saco lleva un solo SKU («solo un sku»).
 - **decidido (dueño, 2026-11-27)** — C1-A: almacén elige los sacos; si falta no deja; si sobra avisa y queda en el kardex.
+- **decidido (dueño, 2026-11-27)** — 6B-1-B: la orden de despacho lista todos los sacos disponibles de cada SKU pedido, con su salón; almacén elige.
+- **decidido (dueño, 2026-11-27)** — 6B-2-A: la búsqueda por RUC/DNI se deja construida; sin token dice «búsqueda no configurada» y el cliente se escribe a mano. El token va en la variable de servidor `DECOLECTA_TOKEN`, nunca en el código.
 - **supuesto** — Quien despacha y quien traslada es el usuario de la sesión.
 - **supuesto** — Los sacos "pendiente de almacenar" (recién embolsados) no se despachan hasta entrar a un salón.
 
