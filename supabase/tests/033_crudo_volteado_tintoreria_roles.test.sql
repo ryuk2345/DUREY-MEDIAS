@@ -303,8 +303,19 @@ END $$;
 SELECT pg_temp.verificar(pg_temp.cambiar_crudo() = 'cambiado', 'sin stock ni lotes se puede cambiar');
 -- Un stock en 0 no bloquea
 INSERT INTO stock_listo_planchar (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033e1', 0);
-SELECT pg_temp.verificar(pg_temp.cambiar_crudo() = 'cambiado', 'un stock en 0 no bloquea');
+INSERT INTO stock_listo_voltear (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033e1', 0);
+INSERT INTO stock_listo_tenir (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033e1', 0);
+INSERT INTO stock_listo_preparar (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033e1', 0);
+SELECT pg_temp.verificar(pg_temp.cambiar_crudo() = 'cambiado', 'un stock en 0 (en cualquier etapa) no bloquea');
 DELETE FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033e1';
+DELETE FROM stock_listo_voltear WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033e1';
+DELETE FROM stock_listo_tenir WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033e1';
+DELETE FROM stock_listo_preparar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033e1';
+-- Un lote de tintorería ya recibido no bloquea
+INSERT INTO lotes_tintoreria (id, crudo_id, color_id, material, docenas_enviadas, estado, docenas_recibidas, docenas_merma)
+  VALUES ('00000000-0000-0000-0000-0000000033f5', '00000000-0000-0000-0000-0000000033e1', '00000000-0000-0000-0000-0000000033c1', 'algodon', 1, 'recibido', 1, 0);
+SELECT pg_temp.verificar(pg_temp.cambiar_crudo() = 'cambiado', 'un lote de tintorería ya recibido no bloquea');
+DELETE FROM lotes_tintoreria WHERE id = '00000000-0000-0000-0000-0000000033f5';
 
 -- Cada condición por separado bloquea
 CREATE FUNCTION pg_temp.bloquea(p_sql TEXT, p_deshacer TEXT, p_msg TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
@@ -332,11 +343,22 @@ SELECT pg_temp.bloquea($$INSERT INTO lotes_volteado (id, catalogo_media_id, doce
 SELECT pg_temp.bloquea($$INSERT INTO lotes_tintoreria (id, crudo_id, color_id, material, docenas_enviadas)
     VALUES ('00000000-0000-0000-0000-0000000033f3', '00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033e1', 'algodon', 1)$$,
   $$DELETE FROM lotes_tintoreria WHERE id = '00000000-0000-0000-0000-0000000033f3'$$, 'lote en tintorería');
+SELECT pg_temp.bloquea($$INSERT INTO lotes_tintoreria (id, crudo_id, color_id, material, docenas_enviadas)
+    VALUES ('00000000-0000-0000-0000-0000000033f6', '00000000-0000-0000-0000-0000000033e1', '00000000-0000-0000-0000-0000000033c1', 'algodon', 1)$$,
+  $$DELETE FROM lotes_tintoreria WHERE id = '00000000-0000-0000-0000-0000000033f6'$$, 'lote en tintorería como media cruda');
 SELECT pg_temp.bloquea($$INSERT INTO productos_maquina (id, maquina_id, catalogo_media_id) VALUES ('00000000-0000-0000-0000-0000000033f4', '00000000-0000-0000-0000-0000000033d1', '00000000-0000-0000-0000-0000000033e1')$$,
   $$DELETE FROM productos_maquina WHERE id = '00000000-0000-0000-0000-0000000033f4'$$, 'una máquina que la teje');
 -- Un producto que la máquina ya no teje (hasta con fecha) no bloquea
 INSERT INTO productos_maquina (maquina_id, catalogo_media_id, desde, hasta) VALUES ('00000000-0000-0000-0000-0000000033d1', '00000000-0000-0000-0000-0000000033e1', NOW() - interval '2 days', NOW() - interval '1 day');
 SELECT pg_temp.verificar(pg_temp.cambiar_crudo() = 'cambiado', 'una asignación cerrada no bloquea');
+INSERT INTO stock_listo_planchar (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033e1', 5);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a8');  -- diseñadora (Catálogo)
+UPDATE catalogo_medias SET es_crudo = es_crudo, diseno_color = 'Gris oscuro' WHERE id = '00000000-0000-0000-0000-0000000033e1';
+INSERT INTO catalogo_medias (codigo, modelo, publico, diseno_color, talla, es_crudo) VALUES ('ALTA-CRUDO-33', 'Alta33', 'adulto', 'CRUDO', 'S', true);
+RESET ROLE;
+SELECT pg_temp.verificar((SELECT diseno_color = 'Gris oscuro' FROM catalogo_medias WHERE id = '00000000-0000-0000-0000-0000000033e1'), 'guardar sin cambiar la marca no pasa por la regla, aunque haya stock');
+SELECT pg_temp.verificar((SELECT es_crudo FROM catalogo_medias WHERE codigo = 'ALTA-CRUDO-33'), 'quien tiene Catálogo da de alta una media cruda');
 
 -- Rol: usuario de Catálogo dado de baja no puede; un alta con color sin Catálogo sí (no pasa por la regla)
 SET LOCAL ROLE authenticated;
@@ -355,6 +377,8 @@ SELECT pg_temp.verificar(EXISTS (SELECT 1 FROM catalogo_medias WHERE codigo = 'N
 INSERT INTO stock_listo_tenir (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033c0', 2)
   ON CONFLICT (catalogo_media_id) DO UPDATE SET docenas = 2;
 CREATE TEMP TABLE t_pl ON COMMIT DROP AS SELECT docenas FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c1';
+INSERT INTO catalogo_medias (id, codigo, modelo, publico, diseno_color, talla) VALUES
+  ('00000000-0000-0000-0000-0000000033c6', 'T33-NEGRO-L', 'Modelo33', 'adulto', 'Negro', 'L');
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a4');
 CREATE TEMP TABLE t_lt3 ON COMMIT DROP AS
@@ -364,6 +388,13 @@ RESET ROLE;
 SELECT pg_temp.verificar((SELECT docenas_recibidas = 0 AND docenas_merma = 2 FROM lotes_tintoreria WHERE id = (SELECT id FROM t_lt3)), '0,004 se redondea a 0 y todo es merma');
 SELECT pg_temp.verificar((SELECT docenas FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c1') = (SELECT docenas FROM t_pl),
   'no entra nada a por planchar');
+INSERT INTO stock_listo_tenir (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033c0', 1)
+  ON CONFLICT (catalogo_media_id) DO UPDATE SET docenas = 1;
+SET LOCAL ROLE authenticated;
+SELECT recibir_lote_tintoreria(enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c6', 'algodon', 1, '00000000-0000-0000-0000-0000000033a2'), 0.004, 'perdido');
+RESET ROLE;
+SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c6'),
+  'recibir 0,004 de un color sin stock no crea una fila en 0');
 
 -- ── Sin sesión no se ve nada nuevo ─────────────────────────────────────────
 SET LOCAL ROLE anon;
