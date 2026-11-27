@@ -401,6 +401,11 @@ $function$;
 
 
 DROP FUNCTION IF EXISTS public.exigir_modulo(TEXT);
+DROP TRIGGER IF EXISTS catalogo_medias_proteger_es_crudo ON public.catalogo_medias;
+DROP FUNCTION IF EXISTS public.proteger_es_crudo();
+DROP FUNCTION IF EXISTS public.crear_crudos_faltantes();
+DROP INDEX IF EXISTS public.catalogo_medias_un_crudo_uq;
+GRANT INSERT ON TABLE public.paquetes TO authenticated;
 
 GRANT INSERT, UPDATE, DELETE ON TABLE public.turnos_produccion, public.turno_maquinas, public.reportes_produccion, public.lotes_remallado, public.reportes_remallado, public.stock_listo_voltear, public.lotes_volteado, public.reportes_volteado, public.stock_listo_planchar, public.reportes_planchado TO authenticated;
 GRANT EXECUTE ON FUNCTION public.cargar_lote_produccion(UUID, TEXT, INTEGER, JSONB) TO authenticated;

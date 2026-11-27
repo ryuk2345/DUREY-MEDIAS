@@ -124,17 +124,75 @@ $$;
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.catalogo_medias ADD COLUMN IF NOT EXISTS es_crudo BOOLEAN NOT NULL DEFAULT false;
 
--- Una media cruda por modelo, público y talla (toma peso e hilo de la primera de su grupo)
-INSERT INTO public.catalogo_medias (codigo, modelo, publico, diseno_color, talla, costo_produccion_docena, estado, peso_docena_g, materia_prima_id, es_crudo)
-SELECT DISTINCT ON (c.modelo, c.publico, c.talla)
-       'CRUDO-' || upper(regexp_replace(btrim(c.modelo), '\s+', '-', 'g')) || '-' || upper(regexp_replace(btrim(c.publico), '\s+', '-', 'g'))
-         || '-' || upper(regexp_replace(btrim(c.talla), '\s+', '-', 'g')),
-       c.modelo, c.publico, 'CRUDO', c.talla, 0, 'activo', c.peso_docena_g, c.materia_prima_id, true
-  FROM public.catalogo_medias c
- WHERE NOT c.es_crudo
-   AND NOT EXISTS (SELECT 1 FROM public.catalogo_medias x WHERE x.es_crudo AND x.modelo = c.modelo AND x.publico = c.publico AND x.talla = c.talla)
- ORDER BY c.modelo, c.publico, c.talla, c.codigo
-ON CONFLICT (codigo) DO NOTHING;
+-- Una sola media cruda por modelo, público y talla
+CREATE UNIQUE INDEX IF NOT EXISTS catalogo_medias_un_crudo_uq ON public.catalogo_medias (modelo, publico, talla) WHERE es_crudo;
+
+-- Crea la media cruda de cada grupo que no la tiene (toma peso e hilo del primero del grupo).
+-- El código es CRUDO-<MODELO>-<PÚBLICO>-<TALLA>; si dos grupos dan el mismo código
+-- (por ejemplo "Clasica" y "clasica") se numera, y si aun así un grupo queda sin
+-- crudo la migración falla en lugar de saltarlo en silencio. Devuelve cuántos creó.
+CREATE OR REPLACE FUNCTION public.crear_crudos_faltantes()
+RETURNS INTEGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_n     INTEGER;
+  v_falta RECORD;
+BEGIN
+  WITH grupos AS (
+    SELECT DISTINCT ON (c.modelo, c.publico, c.talla) c.modelo, c.publico, c.talla, c.peso_docena_g, c.materia_prima_id,
+           'CRUDO-' || upper(regexp_replace(btrim(c.modelo), '\s+', '-', 'g')) || '-' || upper(regexp_replace(btrim(c.publico), '\s+', '-', 'g'))
+             || '-' || upper(regexp_replace(btrim(c.talla), '\s+', '-', 'g')) AS base
+      FROM catalogo_medias c
+     WHERE NOT c.es_crudo
+       AND NOT EXISTS (SELECT 1 FROM catalogo_medias x WHERE x.es_crudo AND x.modelo = c.modelo AND x.publico = c.publico AND x.talla = c.talla)
+     ORDER BY c.modelo, c.publico, c.talla, c.codigo
+  ), numerados AS (
+    SELECT g.*, row_number() OVER (PARTITION BY g.base ORDER BY g.modelo, g.publico, g.talla) AS n FROM grupos g
+  )
+  INSERT INTO catalogo_medias (codigo, modelo, publico, diseno_color, talla, costo_produccion_docena, estado, peso_docena_g, materia_prima_id, es_crudo)
+  SELECT CASE WHEN n = 1 AND NOT EXISTS (SELECT 1 FROM catalogo_medias y WHERE y.codigo = base) THEN base ELSE base || '-' || n END,
+         modelo, publico, 'CRUDO', talla, 0, 'activo', peso_docena_g, materia_prima_id, true
+    FROM numerados;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+
+  SELECT c.modelo, c.publico, c.talla INTO v_falta FROM catalogo_medias c
+   WHERE NOT c.es_crudo AND NOT EXISTS (SELECT 1 FROM catalogo_medias x WHERE x.es_crudo AND x.modelo = c.modelo AND x.publico = c.publico AND x.talla = c.talla)
+   LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'No se pudo crear la media cruda de % / % / %', v_falta.modelo, v_falta.publico, v_falta.talla;
+  END IF;
+  RETURN v_n;
+END;
+$$;
+SELECT public.crear_crudos_faltantes();
+
+-- Marcar o desmarcar "cruda": con sesión exige el módulo Catálogo, y no se cambia si el
+-- producto tiene stock o lotes en proceso (si no, ese stock quedaría atascado en la etapa equivocada)
+CREATE OR REPLACE FUNCTION public.proteger_es_crudo()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' AND NEW.es_crudo IS NOT DISTINCT FROM OLD.es_crudo THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' AND NOT NEW.es_crudo THEN RETURN NEW; END IF;
+  IF current_user IN ('authenticated', 'anon') AND NOT EXISTS (
+    SELECT 1 FROM usuarios u JOIN modulos_por_rol mr ON mr.rol = u.rol
+     WHERE u.id = auth.uid() AND u.activo AND mr.modulo = 'catalogo'
+  ) THEN
+    RAISE EXCEPTION 'Tu rol no tiene acceso al módulo catalogo';
+  END IF;
+  IF TG_OP = 'UPDATE' AND (
+       EXISTS (SELECT 1 FROM stock_listo_voltear WHERE catalogo_media_id = OLD.id AND docenas > 0)
+    OR EXISTS (SELECT 1 FROM stock_listo_tenir WHERE catalogo_media_id = OLD.id AND docenas > 0)
+    OR EXISTS (SELECT 1 FROM stock_listo_planchar WHERE catalogo_media_id = OLD.id AND docenas > 0)
+    OR EXISTS (SELECT 1 FROM stock_listo_preparar WHERE catalogo_media_id = OLD.id AND docenas > 0)
+    OR EXISTS (SELECT 1 FROM lotes_remallado WHERE catalogo_media_id = OLD.id AND estado = 'en_proceso')
+    OR EXISTS (SELECT 1 FROM lotes_volteado WHERE catalogo_media_id = OLD.id AND estado = 'en_proceso')
+    OR EXISTS (SELECT 1 FROM lotes_tintoreria WHERE (crudo_id = OLD.id OR color_id = OLD.id) AND estado = 'en_tintoreria')
+    OR EXISTS (SELECT 1 FROM productos_maquina WHERE catalogo_media_id = OLD.id AND hasta IS NULL)
+  ) THEN
+    RAISE EXCEPTION 'No se puede cambiar si % es cruda: tiene stock, lotes en proceso o una máquina que la teje', OLD.codigo;
+  END IF;
+  RETURN NEW;
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS public.stock_listo_tenir (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -161,6 +219,10 @@ CREATE TABLE IF NOT EXISTS public.lotes_tintoreria (
   CHECK (estado = 'en_tintoreria' OR (docenas_recibidas IS NOT NULL AND docenas_recibidas + docenas_merma = docenas_enviadas))
 );
 CREATE INDEX IF NOT EXISTS lotes_tintoreria_estado_idx ON public.lotes_tintoreria (estado);
+
+DROP TRIGGER IF EXISTS catalogo_medias_proteger_es_crudo ON public.catalogo_medias;
+CREATE TRIGGER catalogo_medias_proteger_es_crudo BEFORE INSERT OR UPDATE OF es_crudo ON public.catalogo_medias
+  FOR EACH ROW EXECUTE FUNCTION public.proteger_es_crudo();
 
 -- Stock de fuera: también en Remallado (solo registro), Volteado y Tintorería
 ALTER TABLE public.ingresos_stock_fuera DROP CONSTRAINT IF EXISTS ingresos_stock_fuera_etapa_check;
@@ -638,7 +700,7 @@ BEGIN
      SET estado = 'recibido', docenas_recibidas = round(p_docenas_recibidas, 2), docenas_merma = v_merma,
          motivo_merma = CASE WHEN v_merma > 0 THEN btrim(p_motivo_merma) END, recibido_por = v_uid, fecha_recepcion = NOW()
    WHERE id = v_lote.id;
-  IF p_docenas_recibidas > 0 THEN
+  IF round(p_docenas_recibidas, 2) > 0 THEN
     INSERT INTO stock_listo_planchar (catalogo_media_id, docenas) VALUES (v_lote.color_id, round(p_docenas_recibidas, 2))
     ON CONFLICT (catalogo_media_id) DO UPDATE SET docenas = stock_listo_planchar.docenas + EXCLUDED.docenas, updated_at = NOW();
   END IF;
@@ -711,8 +773,14 @@ GRANT ALL ON TABLE public.modulos_por_rol, public.stock_listo_tenir, public.lote
 -- Tablas de proceso: con sesión solo se leen; se escriben por sus funciones (así el bloqueo por rol no se salta)
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.turnos_produccion, public.turno_maquinas, public.reportes_produccion, public.lotes_remallado, public.reportes_remallado, public.stock_listo_voltear, public.lotes_volteado, public.reportes_volteado, public.stock_listo_planchar, public.reportes_planchado FROM authenticated;
 
+-- Sacos: se crean con registrar_produccion_preparado o almacenar_paquete (así no se salta el bloqueo de Preparado)
+REVOKE INSERT ON TABLE public.paquetes FROM authenticated;
+
 REVOKE ALL ON FUNCTION public.exigir_modulo(TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.exigir_modulo(TEXT) TO service_role;
+REVOKE ALL ON FUNCTION public.crear_crudos_faltantes() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.crear_crudos_faltantes() TO service_role;
+REVOKE ALL ON FUNCTION public.proteger_es_crudo() FROM PUBLIC, anon;
 -- Tejido anterior a la 5A: ya no se usa desde la pantalla
 REVOKE EXECUTE ON FUNCTION public.cargar_lote_produccion(UUID, TEXT, INTEGER, JSONB) FROM authenticated;
 REVOKE EXECUTE ON FUNCTION public.cerrar_turno_produccion(UUID, JSONB) FROM authenticated;

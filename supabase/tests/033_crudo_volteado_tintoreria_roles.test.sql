@@ -65,6 +65,8 @@ SELECT pg_temp.verificar(NOT has_function_privilege('anon', f, 'EXECUTE'), 'anon
     'public.ingresar_stock_fuera(text, uuid, numeric, text)'
   ]) AS f;
 SELECT pg_temp.verificar(NOT has_function_privilege(r, 'public.exigir_modulo(text)', 'EXECUTE'), r || ' no llama a exigir_modulo'),
+       pg_temp.verificar(NOT has_function_privilege(r, 'public.crear_crudos_faltantes()', 'EXECUTE'), r || ' no crea crudos'),
+       pg_temp.verificar(NOT has_table_privilege(r, 'public.paquetes', 'INSERT'), r || ' no inserta sacos directo'),
        pg_temp.verificar(NOT has_function_privilege(r, 'public.cargar_lote_produccion(uuid, text, integer, jsonb)', 'EXECUTE'), r || ': el tejido anterior ya no se llama'),
        pg_temp.verificar(NOT has_function_privilege(r, 'public.cerrar_turno_produccion(uuid, jsonb)', 'EXECUTE'), r || ': el cierre anterior ya no se llama')
   FROM unnest(ARRAY['anon', 'authenticated']) AS r;
@@ -80,6 +82,21 @@ SELECT pg_temp.verificar(EXISTS (SELECT 1 FROM modulos_por_rol WHERE rol = 'oper
 SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM catalogo_medias WHERE es_crudo GROUP BY modelo, publico, talla HAVING count(*) > 1), 'un solo crudo por grupo');
 SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM catalogo_medias WHERE es_crudo AND (diseno_color <> 'CRUDO' OR sku IS NOT NULL)), 'crudos con color CRUDO y sin SKU');
 
+-- Crear crudos sobre datos: un crudo por grupo, código único aunque choquen mayúsculas, color CRUDO, activo
+INSERT INTO catalogo_medias (codigo, modelo, publico, diseno_color, talla, peso_docena_g, estado) VALUES
+  ('G33-ROJO', 'Grupo 33', 'niño', 'Rojo', 'S', 300, 'inactivo'),
+  ('G33-AZUL', 'Grupo 33', 'niño', 'Azul', 'S', 310, 'activo'),
+  ('G33-MIN', 'grupo 33', 'niño', 'Rojo', 'S', 300, 'activo');
+SELECT pg_temp.verificar(crear_crudos_faltantes() = 2, 'dos grupos (Grupo 33 y grupo 33) → dos crudos');
+SELECT pg_temp.verificar(crear_crudos_faltantes() = 0, 'la segunda vez no crea nada');
+SELECT pg_temp.verificar((SELECT count(*) = 2 AND count(DISTINCT codigo) = 2 AND bool_and(diseno_color = 'CRUDO' AND estado = 'activo' AND sku IS NULL)
+    -- (upper() de la ñ depende del idioma de la base: se compara sin ella)
+    AND bool_or(codigo LIKE 'CRUDO-GRUPO-33-NI_O-S') AND bool_or(codigo LIKE 'CRUDO-GRUPO-33-NI_O-S-2')
+  FROM catalogo_medias WHERE es_crudo AND lower(modelo) = 'grupo 33'), 'crudos con código único, color CRUDO, activos y sin SKU');
+SELECT pg_temp.verificar((SELECT peso_docena_g = 310 FROM catalogo_medias WHERE es_crudo AND modelo = 'Grupo 33'), 'toma el peso del primero del grupo por código');
+SELECT pg_temp.debe_fallar($$INSERT INTO catalogo_medias (codigo, modelo, publico, diseno_color, talla, es_crudo) VALUES ('OTRO-CRUDO', 'Grupo 33', 'niño', 'CRUDO', 'S', true)$$,
+  'catalogo_medias_un_crudo_uq');
+
 -- ── Datos ──────────────────────────────────────────────────────────────────
 INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
   ('00000000-0000-0000-0000-0000000033a1', 'Admin 033', 'a033@test', 'admin', true, 'disponible'),
@@ -91,7 +108,11 @@ INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
 INSERT INTO catalogo_medias (id, codigo, sku, modelo, publico, diseno_color, talla, es_crudo) VALUES
   ('00000000-0000-0000-0000-0000000033c0', 'T33-CRUDO', NULL, 'Modelo33', 'adulto', 'CRUDO', 'L', true),
   ('00000000-0000-0000-0000-0000000033c1', 'T33-AZUL-L', 'SKU-T33A', 'Modelo33', 'adulto', 'Azul', 'L', false),
-  ('00000000-0000-0000-0000-0000000033c2', 'T33-AZUL-M', NULL, 'Modelo33', 'adulto', 'Azul', 'M', false);
+  ('00000000-0000-0000-0000-0000000033c2', 'T33-AZUL-M', NULL, 'Modelo33', 'adulto', 'Azul', 'M', false),
+  ('00000000-0000-0000-0000-0000000033c3', 'T33-AZUL-NINO', NULL, 'Modelo33', 'niño', 'Azul', 'L', false),
+  ('00000000-0000-0000-0000-0000000033c4', 'T33-OTRO-MOD', NULL, 'Otro33', 'adulto', 'Azul', 'L', false),
+  ('00000000-0000-0000-0000-0000000033c5', 'T33-VERDE-L', NULL, 'Modelo33', 'adulto', 'Verde', 'L', false);
+UPDATE catalogo_medias SET estado = 'inactivo' WHERE id = '00000000-0000-0000-0000-0000000033c5';
 INSERT INTO maquinas (id, codigo, tipo, estado) VALUES
   ('00000000-0000-0000-0000-0000000033d1', 'R3301', 'remalladora', 'activa'),
   ('00000000-0000-0000-0000-0000000033d2', 'R3302', 'remalladora', 'activa');
@@ -107,6 +128,12 @@ SELECT pg_temp.debe_fallar($$SELECT iniciar_lote_remallado('00000000-0000-0000-0
 SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido(NULL, 'dia', '00000000-0000-0000-0000-0000000033a5', '[]')$$, 'módulo produccion');
 SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_preparado('00000000-0000-0000-0000-0000000033a5', 'X', NULL, '[]', 'qr')$$, 'módulo preparado');
 SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('tintoreria', '00000000-0000-0000-0000-0000000033c0', 5, 'x')$$, 'módulo tintoreria');
+SELECT pg_temp.debe_fallar($$SELECT traspasar_lote_remallado('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-0000000033a2', '00000000-0000-0000-0000-0000000033d2', 1)$$, 'módulo remallado');
+SELECT pg_temp.debe_fallar($$SELECT finalizar_lote_remallado('00000000-0000-0000-0000-000000000000', 1, 0, NULL, NULL, NULL)$$, 'módulo remallado');
+SELECT pg_temp.debe_fallar($$SELECT iniciar_lote_volteado('00000000-0000-0000-0000-0000000033a3', '00000000-0000-0000-0000-0000000033c0', 1)$$, 'módulo volteado');
+SELECT pg_temp.debe_fallar($$SELECT reportar_lote_volteado('00000000-0000-0000-0000-000000000000', 1, 0, NULL)$$, 'módulo volteado');
+SELECT pg_temp.debe_fallar($$SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c1', 'algodon', 1, '00000000-0000-0000-0000-0000000033a2')$$, 'módulo tintoreria');
+SELECT pg_temp.debe_fallar($$SELECT recibir_lote_tintoreria('00000000-0000-0000-0000-000000000000', 1, NULL)$$, 'módulo tintoreria');
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a6');  -- tintorero dado de baja
 SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('tintoreria', '00000000-0000-0000-0000-0000000033c0', 5, 'x')$$, 'módulo tintoreria');
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a3');  -- volteador: no planchado
@@ -139,13 +166,14 @@ SELECT pg_temp.debe_fallar($$SELECT finalizar_lote_remallado((SELECT id FROM t_l
 SELECT pg_temp.debe_fallar($$SELECT finalizar_lote_remallado((SELECT id FROM t_lr), -1, 0, NULL, NULL, NULL)$$, 'negativas');
 -- El producto sale del lote, no del parámetro (aquí se manda otro a propósito)
 SELECT finalizar_lote_remallado((SELECT id FROM t_lr), 10, 2, '00000000-0000-0000-0000-0000000033c1', '00000000-0000-0000-0000-0000000033a2', '00000000-0000-0000-0000-0000000033d1');
-SELECT finalizar_lote_remallado((SELECT id FROM t_lc), 4, 0, NULL, '00000000-0000-0000-0000-0000000033a2', '00000000-0000-0000-0000-0000000033d2');
+SELECT finalizar_lote_remallado((SELECT id FROM t_lc), 4, 0, '00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033a2', '00000000-0000-0000-0000-0000000033d2');
 SELECT pg_temp.debe_fallar($$SELECT finalizar_lote_remallado((SELECT id FROM t_lr), 1, 0, NULL, NULL, NULL)$$, 'ya no está en proceso');
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT docenas = 10 FROM stock_listo_voltear WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c0'), 'remallado crudo: 10 por voltear');
 SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c0'), 'lo crudo no va a planchado');
 SELECT pg_temp.verificar((SELECT docenas = 4 FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c1'), 'un lote con color sigue a por planchar');
 SELECT pg_temp.verificar((SELECT estado = 'activa' FROM maquinas WHERE id = '00000000-0000-0000-0000-0000000033d1'), 'la máquina se libera');
+SELECT pg_temp.verificar((SELECT estado = 'disponible' FROM usuarios WHERE id = '00000000-0000-0000-0000-0000000033a2'), 'la remalladora queda disponible');
 
 -- ── Volteado ───────────────────────────────────────────────────────────────
 SET LOCAL ROLE authenticated;
@@ -165,8 +193,16 @@ RESET ROLE;
 SELECT pg_temp.verificar((SELECT docenas = 2 FROM stock_listo_voltear WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c0'), 'voltear 8 de 10 deja 2');
 SELECT pg_temp.verificar((SELECT docenas = 8 FROM stock_listo_tenir WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c0'), 'lo volteado crudo queda por teñir');
 SELECT pg_temp.verificar((SELECT estado = 'completado' AND docenas_pendientes = 0 FROM lotes_volteado WHERE id = (SELECT id FROM t_lv)), 'lote de volteado completado');
-SELECT pg_temp.verificar((SELECT count(*) = 2 AND sum(docenas_volteadas) = 8 AND bool_or(comentarios = 'bien') FROM reportes_volteado WHERE lote_volteado_id = (SELECT id FROM t_lv)),
-  'dos reportes de volteado');
+SELECT pg_temp.verificar((SELECT count(*) = 2 AND sum(docenas_volteadas) = 8 AND bool_or(comentarios = 'bien') AND sum(pares_defectuosos) = 2
+  FROM reportes_volteado WHERE lote_volteado_id = (SELECT id FROM t_lv)), 'dos reportes de volteado, con sus pares defectuosos');
+INSERT INTO stock_listo_voltear (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033c2', 3);
+SET LOCAL ROLE authenticated;
+CREATE TEMP TABLE t_lvc ON COMMIT DROP AS
+  SELECT iniciar_lote_volteado('00000000-0000-0000-0000-0000000033a3', '00000000-0000-0000-0000-0000000033c2', 3) AS id;
+SELECT reportar_lote_volteado((SELECT id FROM t_lvc), 3, 0, NULL);
+RESET ROLE;
+SELECT pg_temp.verificar((SELECT docenas = 3 FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c2')
+  AND NOT EXISTS (SELECT 1 FROM stock_listo_tenir WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c2'), 'volteado de una media con color va a por planchar');
 
 -- ── Tintorería ─────────────────────────────────────────────────────────────
 SET LOCAL ROLE authenticated;
@@ -175,6 +211,9 @@ SELECT pg_temp.debe_fallar($$SELECT enviar_lote_tintoreria('00000000-0000-0000-0
 SELECT pg_temp.debe_fallar($$SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c0', 'algodon', 1, '00000000-0000-0000-0000-0000000033a2')$$, 'SKU de color');
 SELECT pg_temp.debe_fallar($$SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c2', 'algodon', 1, '00000000-0000-0000-0000-0000000033a2')$$,
   'El SKU T33-AZUL-M no es de la misma media');
+SELECT pg_temp.debe_fallar($$SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c3', 'algodon', 1, '00000000-0000-0000-0000-0000000033a2')$$, 'no es de la misma media');
+SELECT pg_temp.debe_fallar($$SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c4', 'algodon', 1, '00000000-0000-0000-0000-0000000033a2')$$, 'no es de la misma media');
+SELECT pg_temp.debe_fallar($$SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c5', 'algodon', 1, '00000000-0000-0000-0000-0000000033a2')$$, 'T33-VERDE-L está inactivo');
 SELECT pg_temp.debe_fallar($$SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c1', 'lana', 1, '00000000-0000-0000-0000-0000000033a2')$$, 'algodón o poliéster');
 SELECT pg_temp.debe_fallar($$SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c1', 'algodon', 1, NULL)$$, 'que remalló');
 SELECT pg_temp.debe_fallar($$SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c1', 'algodon', 9, '00000000-0000-0000-0000-0000000033a2')$$,
@@ -200,7 +239,7 @@ INSERT INTO stock_listo_tenir (catalogo_media_id, docenas) VALUES ('00000000-000
 SET LOCAL ROLE authenticated;
 CREATE TEMP TABLE t_lt2 ON COMMIT DROP AS
   SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c1', 'algodon', 3, '00000000-0000-0000-0000-0000000033a2') AS id;
-SELECT recibir_lote_tintoreria((SELECT id FROM t_lt2), 3, NULL);
+SELECT recibir_lote_tintoreria((SELECT id FROM t_lt2), 3, 'no hacía falta');
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT docenas_merma = 0 AND motivo_merma IS NULL FROM lotes_tintoreria WHERE id = (SELECT id FROM t_lt2)), 'sin merma, sin motivo');
 
@@ -209,6 +248,10 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a1');  -- administrador
 SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('volteado', '00000000-0000-0000-0000-0000000033c1', 5, 'x')$$, 'elige la media cruda');
 SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('planchado', '00000000-0000-0000-0000-0000000033c0', 5, 'x')$$, 'elige su SKU de color');
+SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('preparado', '00000000-0000-0000-0000-0000000033c0', 5, 'x')$$, 'elige su SKU de color');
+SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('remallado', '00000000-0000-0000-0000-0000000033c1', 5, 'x')$$, 'elige la media cruda');
+SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('tintoreria', '00000000-0000-0000-0000-0000000033c1', 5, 'x')$$, 'elige la media cruda');
+SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('volteado', '00000000-0000-0000-0000-0000000033c0', 100000.01, 'x')$$, 'mayores a 0');
 SELECT ingresar_stock_fuera('volteado', '00000000-0000-0000-0000-0000000033c0', 5, 'Taller');
 SELECT ingresar_stock_fuera('tintoreria', '00000000-0000-0000-0000-0000000033c0', 6, 'Otro taller');
 SELECT ingresar_stock_fuera('remallado', '00000000-0000-0000-0000-0000000033c0', 7, 'Tejido fuera');
@@ -217,6 +260,22 @@ SELECT pg_temp.verificar((SELECT docenas = 7 FROM stock_listo_voltear WHERE cata
 SELECT pg_temp.verificar((SELECT docenas = 6 FROM stock_listo_tenir WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c0'), 'de fuera en tintorería: 6 por teñir');
 SELECT pg_temp.verificar((SELECT count(*) = 3 AND bool_and(registrado_por = '00000000-0000-0000-0000-0000000033a1') FROM ingresos_stock_fuera
   WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c0'), 'los tres ingresos quedan registrados, remallado incluido');
+
+-- ── Marcar o desmarcar "cruda" ─────────────────────────────────────────────
+GRANT UPDATE ON catalogo_medias TO authenticated;  -- como en la base real (la pantalla de Catálogo escribe directo)
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a5');  -- planchador: sin módulo Catálogo
+SELECT pg_temp.debe_fallar($$UPDATE catalogo_medias SET es_crudo = true WHERE id = '00000000-0000-0000-0000-0000000033c4'$$, 'módulo catalogo');
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a1');  -- administrador
+-- Con stock por voltear (7) no se desmarca
+SELECT pg_temp.debe_fallar($$UPDATE catalogo_medias SET es_crudo = false WHERE id = '00000000-0000-0000-0000-0000000033c0'$$, 'tiene stock, lotes en proceso');
+-- Con stock por planchar (11) no se marca
+SELECT pg_temp.debe_fallar($$UPDATE catalogo_medias SET es_crudo = true WHERE id = '00000000-0000-0000-0000-0000000033c1'$$, 'tiene stock, lotes en proceso');
+-- Sin stock ni lotes sí se puede, y otros cambios no pasan por la regla
+UPDATE catalogo_medias SET es_crudo = true WHERE id = '00000000-0000-0000-0000-0000000033c4';
+UPDATE catalogo_medias SET costo_produccion_docena = 5 WHERE id = '00000000-0000-0000-0000-0000000033c1';
+RESET ROLE;
+SELECT pg_temp.verificar((SELECT es_crudo FROM catalogo_medias WHERE id = '00000000-0000-0000-0000-0000000033c4'), 'con el módulo y sin stock se marca cruda');
 
 -- ── Sin sesión no se ve nada nuevo ─────────────────────────────────────────
 SET LOCAL ROLE anon;

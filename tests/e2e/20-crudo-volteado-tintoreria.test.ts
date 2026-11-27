@@ -160,3 +160,31 @@ describe('mock: remallado crudo → volteado → tintorería → por planchar', 
     expect(db.ingresos_stock_fuera.every(i => i.registrado_por === ADMIN)).toBe(true)
   })
 })
+
+describe('mock y dominio: casos que el panel pidió fijar', () => {
+  it('el color debe coincidir también en modelo y público', () => {
+    const crudo = { id: 'k', modelo: 'M', publico: 'adulto', talla: 'L', es_crudo: true }
+    expect(esColorDe({ ...crudo, id: 'x', es_crudo: false, publico: 'niño' }, crudo)).toBe(false)
+    expect(esColorDe({ ...crudo, id: 'y', es_crudo: false, modelo: 'Otro' }, crudo)).toBe(false)
+  })
+  it('volteado: rol equivocado rechazado; una media con color va a por planchar, no a por teñir', () => {
+    const db = base()
+    db.stock_listo_voltear.push({ id: 's', catalogo_media_id: 'a', docenas: 3 })
+    expect(rpc(db, 'iniciar_lote_volteado', { __uid: PLANCHA, p_volteador_id: VOLT, p_catalogo_media_id: 'a', p_docenas: 3 }).error?.message).toBe('Tu rol no tiene acceso al módulo volteado')
+    const lote = rpc(db, 'iniciar_lote_volteado', { __uid: VOLT, p_volteador_id: VOLT, p_catalogo_media_id: 'a', p_docenas: 3 }).data
+    expect(rpc(db, 'reportar_lote_volteado', { __uid: TINTO, p_lote_id: lote, p_docenas: 3 }).error?.message).toBe('Tu rol no tiene acceso al módulo volteado')
+    expect(rpc(db, 'reportar_lote_volteado', { __uid: VOLT, p_lote_id: lote, p_docenas: 3, p_pares_defectuosos: 4 }).error).toBeNull()
+    expect(stock(db, 'stock_listo_planchar', 'a')).toBe(3)
+    expect(stock(db, 'stock_listo_tenir', 'a')).toBeUndefined()
+    expect(db.reportes_volteado[0].pares_defectuosos).toBe(4)
+  })
+  it('tintorería: sin merma el motivo no se guarda; SKU inactivo rechazado', () => {
+    const db = base()
+    db.stock_listo_tenir.push({ id: 't', catalogo_media_id: 'k', docenas: 5 })
+    db.catalogo_medias.push({ id: 'z', codigo: 'K-VERDE', modelo: 'M', publico: 'adulto', talla: 'L', es_crudo: false, estado: 'inactivo' })
+    expect(rpc(db, 'enviar_lote_tintoreria', { __uid: TINTO, p_crudo_id: 'k', p_color_id: 'z', p_material: 'algodon', p_docenas: 1, p_remalladora_id: REMA }).error?.message).toBe('El SKU K-VERDE está inactivo')
+    const lt = rpc(db, 'enviar_lote_tintoreria', { __uid: TINTO, p_crudo_id: 'k', p_color_id: 'a', p_material: 'algodon', p_docenas: 5, p_remalladora_id: REMA }).data
+    expect(rpc(db, 'recibir_lote_tintoreria', { __uid: TINTO, p_lote_id: lt, p_docenas_recibidas: 5, p_motivo_merma: 'no hacía falta' }).error).toBeNull()
+    expect(db.lotes_tintoreria[0]).toMatchObject({ docenas_merma: 0, motivo_merma: null })
+  })
+})
