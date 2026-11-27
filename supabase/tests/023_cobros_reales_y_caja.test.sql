@@ -30,6 +30,8 @@ INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
   ('00000000-0000-0000-0000-0000000003a1', 'Vendedora 23', 'v@test23', 'vendedora', true, 'disponible');
 INSERT INTO catalogo_medias (id, codigo, modelo, publico, diseno_color, talla) VALUES
   ('00000000-0000-0000-0000-0000000003c1', 'T23-A', 'M', 'adulto', 'Liso', 'M');
+-- 035: Ventas no vende sin stock
+INSERT INTO paquetes (codigo_paquete, catalogo_media_id, docenas, estado) VALUES ('T23-STOCK', '00000000-0000-0000-0000-0000000003c1', 6, 'pendiente_almacenar');
 -- Caja abierta de hoy de esta vendedora
 INSERT INTO cajas_diarias (id, asesora_id, fecha, saldo_inicial, estado) VALUES
   ('00000000-0000-0000-0000-0000000003b1', '00000000-0000-0000-0000-0000000003a1', CURRENT_DATE, 100, 'abierta');

@@ -2,6 +2,7 @@
 // Emula el cliente de Supabase (.from().select().insert().update().eq().single())
 // Guardando el estado en durey-app/mock_db.json (Servidor) y localStorage (Cliente)
 
+import { stockVendible } from '@/lib/domain/stockVenta'
 import { ejecutarRpcProduccion, RPC_PRODUCCION } from './mockRpcProduccion'
 import { ejecutarRpcProcesos, RPC_PROCESOS } from './mockRpcProcesos'
 import { ejecutarRpcMateriaPrima, RPC_MATERIA_PRIMA } from './mockRpcMateriaPrima'
@@ -341,6 +342,7 @@ class MockQueryBuilder {
       }));
     }
     if (this.tableName === 'vista_historia_maquina') return construirHistoriaMock(db);
+    if (this.tableName === 'vista_stock_vendible') return stockVendible(db);
     return db[this.tableName] || [];
   }
 

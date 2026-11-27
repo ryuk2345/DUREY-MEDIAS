@@ -91,3 +91,47 @@ test('Orden de despacho: se imprime desde Ventas y desde Despacho con lo pedido 
   expect(html2).toContain('ORDEN DE DESPACHO')
   expect(html2).toContain(venta.codigo_venta)
 })
+
+test('Ventas no ofrece crudos y marca sin stock lo que no se puede vender (035)', async ({ page }) => {
+  await page.goto('/dashboard/ventas')
+  await page.getByRole('button', { name: /Nueva Venta/ }).click()
+  await page.waitForTimeout(500)
+  await page.getByRole('combobox').filter({ hasText: /Tipo de media|TST-/ }).first().click()
+  const opciones = await page.getByRole('option').allInnerTexts()
+  expect(opciones.some(o => o.includes('CRU-1'))).toBe(false)
+  expect(opciones.some(o => o.includes('TST-2'))).toBe(true)
+  await expect(page.getByRole('option', { name: /^TST-2/ })).toHaveAttribute('aria-disabled', 'true')
+})
+
+test('Ventas avisa antes de enviar si se pide más de lo que hay para vender (no lo físico)', async ({ page }) => {
+  // En este archivo: entraron 3 docenas de TST-1 y quedó una venta pendiente de 2 → hay 1 para vender
+  const db = await (await page.request.get('/api/mock-db')).json()
+  const tst = db.catalogo_medias.find((m: { codigo: string }) => m.codigo === 'TST-1').id
+  const fisico = db.paquetes.filter((p: { estado: string; catalogo_media_id: string }) => ['almacenado', 'pendiente_almacenar'].includes(p.estado) && p.catalogo_media_id === tst)
+    .reduce((t: number, p: { docenas: number }) => t + Number(p.docenas), 0)
+  const pendientes = new Set(db.ventas.filter((v: { estado: string }) => v.estado === 'pendiente').map((v: { id: string }) => v.id))
+  const comprometidas = db.items_venta.filter((i: { venta_id: string; catalogo_media_id: string }) => pendientes.has(i.venta_id) && i.catalogo_media_id === tst)
+    .reduce((t: number, i: { docenas: number }) => t + Number(i.docenas), 0)
+  const hay = Math.round((fisico - comprometidas) * 100) / 100
+  // Si una prueba anterior del archivo no dejó stock, esto falla a la vista (no se salta)
+  expect(hay).toBeGreaterThan(0)
+  expect(comprometidas).toBeGreaterThan(0)
+
+  await page.goto('/dashboard/ventas')
+  await page.getByRole('button', { name: /Nueva Venta/ }).click()
+  await elegirSiFalta(page, 'Seleccionar Vendedora...', /Vendedora Prueba/)
+  await page.getByPlaceholder('Ej. 45678912 o 20601234567').fill('42424242')
+  await page.getByPlaceholder(/Juan Carlos Pérez/).fill('Cliente Sin Stock')
+  await page.waitForTimeout(500)
+  await page.getByRole('combobox').filter({ hasText: /Tipo de media|TST-/ }).first().click()
+  await expect(page.getByRole('option', { name: /^TST-1/ })).not.toHaveAttribute('aria-disabled', 'true')
+  await page.getByRole('option', { name: /^TST-1/ }).click()
+  await page.getByPlaceholder('Docenas').first().fill(String(hay + 1))
+  await page.getByPlaceholder('S/ Docena').first().fill('40')
+  const ventasAntes = db.ventas.length
+  await page.getByRole('button', { name: /Confirmar y Generar Venta/ }).click()
+  // El aviso sale de la pantalla (no del servidor) y con lo que hay para vender, no lo físico
+  await expect(page.getByText(`No hay stock suficiente de TST-1: pides ${hay + 1} docenas y hay ${hay} para vender`, { exact: true })).toBeVisible()
+  const despues = await (await page.request.get('/api/mock-db')).json()
+  expect(despues.ventas.length).toBe(ventasAntes)
+})
