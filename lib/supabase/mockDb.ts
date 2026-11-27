@@ -9,6 +9,7 @@ import { ejecutarRpcLogistica, RPC_LOGISTICA } from './mockRpcLogistica'
 import { ejecutarRpcMantenimiento, RPC_MANTENIMIENTO } from './mockRpcMantenimiento'
 import { ejecutarRpcTejido, RPC_TEJIDO } from './mockRpcTejido'
 import { ejecutarRpcTintoreria, RPC_TINTORERIA } from './mockRpcTintoreria'
+import { ejecutarRpcAlmacen, RPC_ALMACEN } from './mockRpcAlmacen'
 import { construirHistoriaMock } from './mockHistoria'
 
 const SEMILLAS = {
@@ -176,6 +177,8 @@ const SEMILLAS = {
   // Fase 5B (migración 033)
   stock_listo_tenir: [],
   lotes_tintoreria: [],
+  // Fase 6A (migración 034)
+  despacho_detalle: [],
   guias_remision: [],
   movimientos_stock: [],
   disenos: [],
@@ -352,7 +355,8 @@ class MockQueryBuilder {
     let filters: ((item: any) => boolean)[] = [];
     let limitCount: number | null = null;
     let rangeDesde: number | null = null;
-    let orderConfig: { column: string; ascending: boolean } | null = null;
+    // Varias llamadas a order() ordenan por varias columnas, como en supabase-js
+    const ordenes: { column: string; ascending: boolean }[] = [];
 
     const queryObj = {
       eq(column: string, value: any) {
@@ -385,23 +389,23 @@ class MockQueryBuilder {
         return queryObj;
       },
       gt(column: string, value: any) {
-        filters.push(item => item[column] > value);
+        filters.push(item => comparar(item[column], value) > 0);
         return queryObj;
       },
       lt(column: string, value: any) {
-        filters.push(item => item[column] < value);
+        filters.push(item => comparar(item[column], value) < 0);
         return queryObj;
       },
       gte(column: string, value: any) {
-        filters.push(item => item[column] >= value);
+        filters.push(item => comparar(item[column], value) >= 0);
         return queryObj;
       },
       lte(column: string, value: any) {
-        filters.push(item => item[column] <= value);
+        filters.push(item => comparar(item[column], value) <= 0);
         return queryObj;
       },
       order(column: string, config?: { ascending: boolean }) {
-        orderConfig = { column, ascending: config?.ascending !== false };
+        ordenes.push({ column, ascending: config?.ascending !== false });
         return queryObj;
       },
       limit(count: number) {
@@ -447,14 +451,16 @@ class MockQueryBuilder {
         }
 
         // Aplicar orden
-        if (orderConfig) {
-          const { column, ascending } = orderConfig;
+        if (ordenes.length) {
           result.sort((a, b) => {
-            if (a[column] === b[column]) return 0;
-            if (a[column] == null) return 1;
-            if (b[column] == null) return -1;
-            const factor = ascending ? 1 : -1;
-            return a[column] > b[column] ? factor : -factor;
+            for (const { column, ascending } of ordenes) {
+              if (a[column] === b[column]) continue;
+              if (a[column] == null) return 1;
+              if (b[column] == null) return -1;
+              const factor = ascending ? 1 : -1;
+              return a[column] > b[column] ? factor : -factor;
+            }
+            return 0;
           });
         }
 
@@ -632,6 +638,34 @@ class MockQueryBuilder {
           result = result.map(s => ({
             ...s,
             catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || null
+          }));
+        } else if (self.tableName === 'guias_remision') {
+          type Fila = { id: string; [k: string]: unknown }
+          const media = (id: unknown) => db.catalogo_medias.find((c: Fila) => c.id === id) || null
+          result = result.map(g => {
+            const v = (db.ventas || []).find((x: Fila) => x.id === g.venta_id)
+            return {
+              ...g,
+              despachado: db.usuarios.find((u: Fila) => u.id === g.despachado_por) || null,
+              despacho_detalle: (db.despacho_detalle || []).filter((d: Fila) => d.guia_id === g.id).map((d: Fila) => ({ ...d, catalogo_media: media(d.catalogo_media_id) })),
+              venta: v ? {
+                ...v,
+                cliente: (db.clientes || []).find((c: Fila) => c.id === v.cliente_id) || null,
+                items_venta: (db.items_venta || []).filter((i: Fila) => i.venta_id === v.id).map((i: Fila) => ({ ...i, catalogo_media: media(i.catalogo_media_id) }))
+              } : null
+            };
+          });
+        } else if (self.tableName === 'movimientos_stock') {
+          result = result.map(m => ({
+            ...m,
+            paquete: (db.paquetes || []).find((p: { id: string }) => p.id === m.paquete_id) || null,
+            usuario: db.usuarios.find((u: { id: string }) => u.id === m.usuario_id) || null,
+            catalogo_media: db.catalogo_medias.find((c: { id: string }) => c.id === m.catalogo_media_id) || null
+          }));
+        } else if (self.tableName === 'despacho_detalle') {
+          result = result.map(d => ({
+            ...d,
+            catalogo_media: db.catalogo_medias.find((c: { id: string }) => c.id === d.catalogo_media_id) || null
           }));
         } else if (self.tableName === 'lotes_tintoreria') {
           result = result.map(l => ({
@@ -831,22 +865,30 @@ function idSesionMock(): string | null {
   try { return JSON.parse(decodeURIComponent(valor)).id ?? null } catch { return null }
 }
 
+// Fechas con hora (y zona) se comparan como instantes, igual que Postgres; el resto, tal cual
+const ES_FECHA_HORA = /^\d{4}-\d{2}-\d{2}T/
+function comparar(a: unknown, b: unknown): number {
+  if (a == null || b == null) return NaN // como SQL: con NULL ninguna comparación es verdadera
+  if (typeof a === 'string' && typeof b === 'string' && ES_FECHA_HORA.test(a) && ES_FECHA_HORA.test(b)) return Date.parse(a) - Date.parse(b)
+  return (a as number) < (b as number) ? -1 : (a as number) > (b as number) ? 1 : (a as number) == (b as number) ? 0 : NaN
+}
+
 export function createMockClient() {
   return {
     from(tableName: string) {
       return new MockQueryBuilder(tableName);
     },
     async rpc(fnName: string, params: any) {
-      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO, ...RPC_TEJIDO, ...RPC_TINTORERIA, 'registrar_produccion_planchado'].includes(fnName as never)) {
+      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO, ...RPC_TEJIDO, ...RPC_TINTORERIA, ...RPC_ALMACEN].includes(fnName as never)) {
         const db = await getMockDb();
         const conSesion = { ...params, __uid: idSesionMock() };
         const resultado = (ejecutarRpcTejido(db, fnName, conSesion)
           ?? ejecutarRpcTintoreria(db, fnName, conSesion)
-          ?? (fnName === 'registrar_produccion_planchado' ? ejecutarRpcProcesos(db, fnName, conSesion) : null)
+          ?? ejecutarRpcAlmacen(db, fnName, conSesion)
           ?? ejecutarRpcProduccion(db, fnName, params)
-          ?? ejecutarRpcProcesos(db, fnName, params)
+          ?? ejecutarRpcProcesos(db, fnName, conSesion)
           ?? ejecutarRpcMateriaPrima(db, fnName, params)
-          ?? ejecutarRpcLogistica(db, fnName, params)
+          ?? ejecutarRpcLogistica(db, fnName, conSesion)
           ?? ejecutarRpcMantenimiento(db, fnName, params))!;
         if (!resultado.error) await saveMockDb(db);
         return resultado;

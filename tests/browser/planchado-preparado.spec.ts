@@ -77,7 +77,7 @@ test('Planchado → por preparar → Preparado crea el saco y descuenta', async 
   await expect(fila.getByText('7 doc.')).toBeVisible()
   await fila.getByLabel('Preparadas de TST-1 por Preparador Prueba').fill('6')
   await fila.getByLabel('Defectuosas de TST-1 por Preparador Prueba').fill('1')
-  await fila.getByRole('button', { name: 'Embolsar y crear saco' }).click()
+  await fila.getByRole('button', { name: 'Embolsar TST-1 de Preparador Prueba' }).click()
   await expect(page.getByText('Saco Maestro de Empaque')).toBeVisible()
   await page.getByRole('button', { name: 'Confirmar y Bajar a Almacén' }).click()
   await expect(page.getByText(/Saco .* registrado con 72 pares\. Listo para bajar a Salón A\./)).toBeVisible()

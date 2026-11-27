@@ -176,6 +176,7 @@ function registrarPreparado(db: Db, p: any) {
   }
   const total = items.reduce((s, i) => s + num(i.docenas), 0)
   if (total <= 0) throw new ErrorNegocio('El saco debe llevar al menos una docena preparada')
+  if (new Set(items.map(i => i.catalogo_media_id)).size > 1) throw new ErrorNegocio('Un saco lleva un solo SKU: crea un saco por cada SKU')
 
   const porMedia = new Map<string, { buenas: number; malas: number }>()
   for (const i of items) {

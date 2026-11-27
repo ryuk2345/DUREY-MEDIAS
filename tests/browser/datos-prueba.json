@@ -169,6 +169,12 @@
       "nombre": "Salón A",
       "tipo": "salon",
       "activo": true
+    },
+    {
+      "id": "sal2",
+      "nombre": "Salón B",
+      "tipo": "salon",
+      "activo": true
     }
   ],
   "proveedores": [

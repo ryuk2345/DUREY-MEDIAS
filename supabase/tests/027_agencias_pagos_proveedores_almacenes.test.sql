@@ -4,6 +4,10 @@
 
 BEGIN;
 
+-- 034: ventas, almacén y despacho exigen una sesión cuyo rol tenga el módulo; estas pruebas corren como administrador
+INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES ('00000000-0000-0000-0000-00000000aa27', 'Admin pruebas', 'admin-aa27@test', 'admin', true, 'disponible');
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000aa27', true);
+
 CREATE FUNCTION pg_temp.debe_fallar(p_sql TEXT, p_fragmento TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
   BEGIN
@@ -39,6 +43,7 @@ CREATE TEMP TABLE t_ag AS SELECT registrar_agencia('Agencia 27') AS id;
 SELECT pg_temp.verificar((SELECT nombre = 'Agencia 27' FROM agencias WHERE id = (SELECT id FROM t_ag)), 'agencia nueva');
 UPDATE agencias SET activo = false WHERE id = (SELECT id FROM t_ag);
 SELECT pg_temp.verificar((SELECT registrar_agencia('agencia 27') = (SELECT id FROM t_ag)), 'una agencia dada de baja se reactiva, no se duplica');
+SELECT set_config('request.jwt.claim.sub', '', true);  -- pagos a proveedores: sin sesión (paga el usuario indicado)
 
 -- ── Pagos a proveedores ────────────────────────────────────────────────────
 INSERT INTO proveedores (id, nombre) VALUES ('00000000-0000-0000-0000-0000000027a1', 'Proveedor 27');
@@ -95,6 +100,7 @@ SELECT pg_temp.verificar((SELECT fecha_vencimiento = CURRENT_DATE + 90 FROM cuot
 INSERT INTO ubicaciones (id, nombre, tipo, activo) VALUES
   ('00000000-0000-0000-0000-0000000027d1', 'Salón 27-A', 'salon', true),
   ('00000000-0000-0000-0000-0000000027d2', 'Salón 27-B', 'salon', true);
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000aa27', true);  -- almacenes: con sesión de administrador
 SELECT pg_temp.debe_fallar($$SELECT renombrar_ubicacion('00000000-0000-0000-0000-0000000027d1', 'salón 27-b')$$, 'Ya existe un almacén');
 SELECT renombrar_ubicacion('00000000-0000-0000-0000-0000000027d1', '  Salón 27-Z ');
 SELECT pg_temp.verificar((SELECT nombre = 'Salón 27-Z' FROM ubicaciones WHERE id = '00000000-0000-0000-0000-0000000027d1'), 'renombrado sin espacios');

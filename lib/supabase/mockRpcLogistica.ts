@@ -5,6 +5,7 @@
  * mensajes que el SQL; mockDb.ts guarda la base solo si no hubo error.
  */
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
+import { exigirModulo } from './mockRpcTintoreria'
 
 export const RPC_LOGISTICA = [
   'registrar_agencia',
@@ -16,6 +17,7 @@ export const RPC_LOGISTICA = [
 const normalizar = (s: unknown) => String(s ?? '').trim().toLowerCase()
 
 function registrarAgencia(db: Db, p: any) {
+  exigirModulo(db, p.__uid, 'despacho')
   const nombre = String(p.p_nombre ?? '').trim()
   if (!nombre) throw new ErrorNegocio('Ingresa el nombre de la agencia')
   const existente = tabla(db, 'agencias').find(a => normalizar(a.nombre) === nombre.toLowerCase())
@@ -30,6 +32,7 @@ function registrarAgencia(db: Db, p: any) {
 }
 
 function crearUbicacion(db: Db, p: any) {
+  exigirModulo(db, p.__uid, 'almacen')
   const nombre = String(p.p_nombre ?? '').trim()
   const tipo = p.p_tipo ?? 'salon'
   if (!nombre) throw new ErrorNegocio('Ingresa el nombre del almacén')
@@ -46,6 +49,7 @@ function crearUbicacion(db: Db, p: any) {
 }
 
 function renombrarUbicacion(db: Db, p: any) {
+  exigirModulo(db, p.__uid, 'almacen')
   const nombre = String(p.p_nombre ?? '').trim()
   if (!nombre) throw new ErrorNegocio('Ingresa el nombre del almacén')
   const ub = tabla(db, 'ubicaciones').find(u => u.id === p.p_id)
@@ -60,6 +64,7 @@ function renombrarUbicacion(db: Db, p: any) {
 }
 
 function desactivarUbicacion(db: Db, p: any) {
+  exigirModulo(db, p.__uid, 'almacen')
   const ub = tabla(db, 'ubicaciones').find(u => u.id === p.p_id)
   if (!ub) throw new ErrorNegocio('Almacén no encontrado')
   const dentro = tabla(db, 'paquetes').filter(pq => pq.ubicacion_id === p.p_id && pq.estado !== 'entregado').length

@@ -6,7 +6,6 @@
  * cambios a medias. mockDb.ts guarda la base solo si no hubo error.
  */
 import { generarCodigoVenta, generarCodigoGuia } from '@/lib/utils'
-import { validarTransicionEstadoPaquete, type EstadoPaquete } from '@/lib/domain/packaging'
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
 import { sumarStockEtapa } from './mockRpcTejido'
 import { exigirModulo } from './mockRpcTintoreria'
@@ -15,7 +14,6 @@ export const RPC_PROCESOS = [
   'registrar_venta',
   'registrar_cobro_cuotas',
   'despachar_venta',
-  'almacenar_paquete',
   'iniciar_lote_remallado',
   'traspasar_lote_remallado',
   'registrar_produccion_planchado',
@@ -46,6 +44,7 @@ function siguienteSecuencia(codigos: string[], base: number) {
 }
 
 function registrarVenta(db: Db, p: any) {
+  exigirModulo(db, p.__uid, 'ventas')
   const cliente = p.p_cliente ?? {}
   const items: { catalogo_media_id: string; docenas: number; precio_docena: number }[] = p.p_items ?? []
   const cuotas: { numero_cuota: number; monto: number; fecha_vencimiento: string }[] = p.p_cuotas ?? []
@@ -113,6 +112,7 @@ function registrarVenta(db: Db, p: any) {
 }
 
 function registrarCobroCuotas(db: Db, p: any) {
+  exigirModulo(db, p.__uid, 'ventas')
   const ids: string[] = Array.isArray(p.p_cuota_ids) ? p.p_cuota_ids : []
   if (ids.length === 0) throw new ErrorNegocio('Selecciona al menos una cuota')
   if (!METODOS_PAGO.includes(p.p_metodo_pago)) throw new ErrorNegocio('Método de pago inválido')
@@ -179,35 +179,6 @@ function despacharVenta(db: Db, p: any) {
     })
   }
   return codigo
-}
-
-function almacenarPaquete(db: Db, p: any) {
-  if (!p.p_ubicacion_id || !tabla(db, 'ubicaciones').some(u => u.id === p.p_ubicacion_id)) {
-    throw new ErrorNegocio('Selecciona un salón de destino válido')
-  }
-  let paquete: any
-  if (p.p_paquete_id) {
-    paquete = tabla(db, 'paquetes').find(x => x.id === p.p_paquete_id)
-    if (!paquete) throw new ErrorNegocio('Paquete no encontrado')
-    const v = validarTransicionEstadoPaquete(paquete.estado as EstadoPaquete, 'almacenado')
-    if (!v.valido) throw new ErrorNegocio(`El paquete ${paquete.codigo_paquete} no se puede almacenar (estado: ${paquete.estado})`)
-    Object.assign(paquete, { estado: 'almacenado', ubicacion_id: p.p_ubicacion_id, updated_at: new Date().toISOString() })
-  } else {
-    if (!String(p.p_codigo_paquete ?? '').trim() || num(p.p_docenas) <= 0) {
-      throw new ErrorNegocio('Indica el código del paquete y una cantidad de docenas mayor a 0')
-    }
-    paquete = {
-      id: nuevoId(), codigo_paquete: String(p.p_codigo_paquete).trim(), catalogo_media_id: p.p_catalogo_media_id ?? null,
-      docenas: num(p.p_docenas), total_pares: p.p_total_pares ?? null, ubicacion_id: p.p_ubicacion_id,
-      detalles_contenido: p.p_detalles ?? null, estado: 'almacenado', fecha: hoy(), created_at: new Date().toISOString(),
-    }
-    tabla(db, 'paquetes').push(paquete)
-  }
-  tabla(db, 'movimientos_stock').push({
-    id: nuevoId(), tipo: p.p_tipo_movimiento || 'ingreso_salon', referencia: p.p_referencia ?? null, paquete_id: paquete.id,
-    ubicacion_id: p.p_ubicacion_id, docenas: p.p_docenas ?? paquete.docenas, created_at: new Date().toISOString(),
-  })
-  return paquete.id
 }
 
 function maquinaLibre(db: Db, id: string, mensajeSinMaquina: string, prefijo = 'La máquina') {
@@ -308,7 +279,6 @@ export function ejecutarRpcProcesos(db: Db, fnName: string, params: any): Result
     registrar_venta: registrarVenta,
     registrar_cobro_cuotas: registrarCobroCuotas,
     despachar_venta: despacharVenta,
-    almacenar_paquete: almacenarPaquete,
     iniciar_lote_remallado: iniciarLoteRemallado,
     traspasar_lote_remallado: traspasarLoteRemallado,
     registrar_produccion_planchado: registrarProduccionPlanchado,

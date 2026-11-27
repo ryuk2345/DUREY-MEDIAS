@@ -69,7 +69,7 @@ test('Almacenes: editar nombre, eliminar uno vacío y BLOQUEAR uno con paquetes'
   await page.getByPlaceholder(/Busca por SKU, código o nombre/).fill('TST')
   await page.getByRole('button', { name: /TST-1/ }).first().click()
   await page.getByPlaceholder('Ej: 20').fill('1')
-  await page.getByRole('combobox').filter({ hasText: /Salón A|Seleccionar salón/ }).click()
+  await page.getByRole('dialog').getByRole('combobox').filter({ hasText: /Salón A|Seleccionar salón/ }).click()
   await page.getByRole('option', { name: /Salón Lleno/ }).click()
   await page.getByRole('button', { name: /Confirmar Ingreso al Stock/ }).click()
   await expect(page.getByText(/1 docenas \(12 pares\)/)).toBeVisible()
