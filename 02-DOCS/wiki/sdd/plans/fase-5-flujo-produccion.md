@@ -73,3 +73,21 @@ spec: ../specs/fase-5-flujo-produccion.md
 ## Preguntas del plan
 - **P1.** ¿Quién puede cambiar el producto de una máquina? Recomendado: administrador y supervisor.
 - **P2.** ¿Se puede corregir un turno ya registrado (por ejemplo, docenas mal escritas)? Recomendado: sí, el mismo día, por administrador o supervisor; la corrección ajusta el hilo.
+
+## Decisiones del plan (dueño, 2026-11-26)
+- P1-A: cambian el producto de una máquina el administrador y el supervisor.
+- P2-A: un turno se corrige el mismo día, por administrador o supervisor; el hilo se ajusta por la diferencia.
+
+## Evidencia (2026-11-26)
+| # | Estado | Prueba observada |
+|---|---|---|
+| T1 | hecha (458e515) | `probar_migraciones.sh`: PASA 032 y "PASA reversión 032" |
+| T2 | hecha (6c074db) | `tests/e2e/19-tejido-24-6-preparado.test.ts` 15/15 |
+| T3 | hecha (0872974) | Playwright "Tejido 24/6: … asignar producto y registrar el turno con operario; corregir" |
+| T4 | hecha (363c74e) | Playwright "Planchado: stock de fuera…" y "asignar dos SKU de una vez" |
+| T5 | hecha (363c74e) | Playwright "Planchado → por preparar → Preparado crea el saco y descuenta" |
+| T6 | hecha (0872974) | `tests/e2e/16` operario por máquina (17/17) |
+| T7 | en curso | panel de 3 revisores; luego PR, fusión, 032 en la base real |
+
+Batería en la rama: `npm test` 257/257 · Playwright 50/50 · build y `tsc` en verde · ESLint sin errores nuevos.
+Se quitó "Copiar asignación del día anterior" (con producto fijo ya no hace falta) y su prueba de navegador; su función de dominio y su test unitario quedan.
