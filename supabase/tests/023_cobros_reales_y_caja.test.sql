@@ -4,6 +4,10 @@
 
 BEGIN;
 
+-- 034: ventas, almacén y despacho exigen una sesión cuyo rol tenga el módulo; estas pruebas corren como administrador
+INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES ('00000000-0000-0000-0000-00000000aa23', 'Admin pruebas', 'admin-aa23@test', 'admin', true, 'disponible');
+SELECT set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000aa23', true);
+
 CREATE FUNCTION pg_temp.debe_fallar(p_sql TEXT, p_fragmento TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
   BEGIN

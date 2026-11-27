@@ -270,19 +270,26 @@ SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_preparado('00000000-000
   '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000032c1","docenas":1}]', 'qr')$$, 'código del saco');
 SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_preparado('00000000-0000-0000-0000-0000000032a5', 'S-032', NULL,
   '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000032c1","docenas":1}]', 'qr')$$, 'salón');
+-- 034: un saco lleva un solo SKU
+SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_preparado('00000000-0000-0000-0000-0000000032a5', 'S-032', '00000000-0000-0000-0000-0000000032e1',
+  '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000032c1","docenas":6},{"catalogo_media_id":"00000000-0000-0000-0000-0000000032c2","docenas":2}]', 'qr')$$, 'un solo SKU');
 CREATE TEMP TABLE t_saco ON COMMIT DROP AS SELECT registrar_produccion_preparado('00000000-0000-0000-0000-0000000032a5', 'S-032', '00000000-0000-0000-0000-0000000032e1',
-  '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000032c1","docenas":6,"defectuosas":1},{"catalogo_media_id":"00000000-0000-0000-0000-0000000032c2","docenas":2}]', 'qr-032') AS id;
+  '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000032c1","docenas":6,"defectuosas":1}]', 'qr-032') AS id;
+CREATE TEMP TABLE t_saco2 ON COMMIT DROP AS SELECT registrar_produccion_preparado('00000000-0000-0000-0000-0000000032a5', 'S-032B', '00000000-0000-0000-0000-0000000032e1',
+  '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000032c2","docenas":2}]', 'qr-032b') AS id;
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT docenas = 0 FROM stock_listo_preparar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000032c1'), '6 + 1 defectuosa de 7: quedan 0');
 SELECT pg_temp.verificar((SELECT docenas = 1 FROM stock_listo_preparar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000032c2'), '2 de 3: queda 1');
-SELECT pg_temp.verificar((SELECT codigo_paquete = 'S-032' AND docenas = 8 AND total_pares = 96 AND estado = 'pendiente_almacenar' AND qr_data = 'qr-032'
+SELECT pg_temp.verificar((SELECT codigo_paquete = 'S-032' AND docenas = 6 AND total_pares = 72 AND estado = 'pendiente_almacenar' AND qr_data = 'qr-032'
     AND catalogo_media_id = '00000000-0000-0000-0000-0000000032c1' AND ubicacion_id = '00000000-0000-0000-0000-0000000032e1'
-    AND jsonb_array_length(detalles_contenido) = 2
-    AND detalles_contenido @> '[{"codigo":"T32-A","sku":"SKU-T32A","docenas":6,"pares":72},{"codigo":"T32-B","sku":"SKU-T32-B","docenas":2,"pares":24}]'
-  FROM paquetes WHERE id = (SELECT id FROM t_saco)), 'el saco lleva lo preparado (sin defectuosas), con su contenido por SKU');
-SELECT pg_temp.verificar((SELECT count(*) = 2 AND sum(docenas_preparadas) = 8 AND sum(docenas_defectuosas) = 1
+    AND jsonb_array_length(detalles_contenido) = 1
+    AND detalles_contenido @> '[{"codigo":"T32-A","sku":"SKU-T32A","docenas":6,"pares":72}]'
+  FROM paquetes WHERE id = (SELECT id FROM t_saco)), 'el saco lleva lo preparado (sin defectuosas), con su SKU');
+SELECT pg_temp.verificar((SELECT codigo_paquete = 'S-032B' AND docenas = 2 AND detalles_contenido @> '[{"codigo":"T32-B","sku":"SKU-T32-B","docenas":2,"pares":24}]'
+  FROM paquetes WHERE id = (SELECT id FROM t_saco2)), 'otro saco para el otro SKU');
+SELECT pg_temp.verificar((SELECT count(*) = 1 AND sum(docenas_preparadas) = 6 AND sum(docenas_defectuosas) = 1
     AND bool_and(preparador_id = '00000000-0000-0000-0000-0000000032a5' AND registrado_por = '00000000-0000-0000-0000-0000000032a5')
-  FROM reportes_preparado WHERE paquete_id = (SELECT id FROM t_saco)), 'el reporte de preparado por SKU con su preparador');
+  FROM reportes_preparado WHERE paquete_id = (SELECT id FROM t_saco)), 'el reporte de preparado con su preparador');
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_preparado('00000000-0000-0000-0000-0000000032a5', 'S-032', '00000000-0000-0000-0000-0000000032e1',
   '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000032c2","docenas":1}]', 'qr')$$, 'duplicate key');
