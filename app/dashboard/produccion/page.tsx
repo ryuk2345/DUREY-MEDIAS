@@ -86,7 +86,8 @@ export default function ProduccionTejidoPage() {
   const leerTurno = useCallback(async () => {
     const t = await supabase.from('turnos_produccion').select('id, tejedor_id, tejedor:usuarios(nombre)')
       .eq('registro_24_6', true).eq('fecha', fecha).eq('horario', horario).maybeSingle()
-    if (t.error) { toast.error(`Error cargando el turno: ${t.error.message}`); return null }
+    // Si falla, no se deja a la vista el turno de otra fecha u horario
+    if (t.error) { toast.error(`Error cargando el turno: ${t.error.message}`); return { turno: null, reportes: [] as Reporte[] } }
     const tr = (t.data ?? null) as unknown as TurnoRegistro | null
     if (!tr) return { turno: null, reportes: [] as Reporte[] }
     const r = await supabase.from('reportes_produccion').select('id, maquina_id, docenas_producidas, operario_id, created_at').eq('turno_id', tr.id)
@@ -99,7 +100,6 @@ export default function ProduccionTejidoPage() {
     setLoading(false)
   }, [])
   const aplicarTurno = useCallback((t: Awaited<ReturnType<typeof leerTurno>>) => {
-    if (!t) return
     setTurno(t.turno)
     setReportes(t.reportes)
     if (t.turno) setEncargadoId(t.turno.tejedor_id)

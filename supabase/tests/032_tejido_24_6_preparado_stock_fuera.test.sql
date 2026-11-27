@@ -63,8 +63,9 @@ SELECT pg_temp.verificar(NOT has_function_privilege('anon', f, 'EXECUTE'), 'anon
     'public.registrar_produccion_preparado(uuid, text, uuid, jsonb, text)',
     'public.ingresar_stock_fuera(text, uuid, numeric, text)'
   ]) AS f;
-SELECT pg_temp.verificar(NOT has_function_privilege('authenticated', 'public.exigir_admin_o_supervisor(text)', 'EXECUTE'),
-  'la comprobación de rol no se llama desde fuera');
+SELECT pg_temp.verificar(NOT has_function_privilege('authenticated', 'public.exigir_admin_o_supervisor(text)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'public.exigir_admin_o_supervisor(text)', 'EXECUTE'),
+  'la comprobación de rol no se llama desde fuera (ni con sesión ni sin ella)');
 
 -- ── Datos ──────────────────────────────────────────────────────────────────
 INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
@@ -73,18 +74,23 @@ INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
   ('00000000-0000-0000-0000-0000000032a3', 'Juan Operario', 'j032@test', 'tejedor', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000032a4', 'Ana Encargada', 'e032@test', 'tejedor', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000032a5', 'Prep 032', 'p032@test', 'preparador', true, 'disponible'),
-  ('00000000-0000-0000-0000-0000000032a6', 'Baja 032', 'b032@test', 'tejedor', false, 'disponible');
+  ('00000000-0000-0000-0000-0000000032a6', 'Baja 032', 'b032@test', 'tejedor', false, 'disponible'),
+  ('00000000-0000-0000-0000-0000000032a7', 'Admin Baja 032', 'ab032@test', 'admin', false, 'disponible');
 INSERT INTO materia_prima (id, material, color, stock_kg) VALUES
   ('00000000-0000-0000-0000-0000000032b1', 'Algodón-032', 'Crudo-032', 10);
 INSERT INTO catalogo_medias (id, codigo, sku, modelo, publico, diseno_color, talla, peso_docena_g, materia_prima_id) VALUES
   ('00000000-0000-0000-0000-0000000032c1', 'T32-A', 'SKU-T32A', 'Deportiva', 'adulto', 'Azul', 'L', 400, '00000000-0000-0000-0000-0000000032b1'),
-  ('00000000-0000-0000-0000-0000000032c2', 'T32-B', NULL, 'Deportiva', 'adulto', 'Rojo', 'M', 500, '00000000-0000-0000-0000-0000000032b1');
+  ('00000000-0000-0000-0000-0000000032c2', 'T32-B', NULL, 'Deportiva', 'adulto', 'Rojo', 'M', 500, '00000000-0000-0000-0000-0000000032b1'),
+  ('00000000-0000-0000-0000-0000000032c3', 'T32-C', NULL, 'Deportiva', 'adulto', 'Verde', 'S', 300, NULL);  -- sin hilo vinculado
 INSERT INTO maquinas (id, codigo, tipo, estado) VALUES
   ('00000000-0000-0000-0000-0000000032d1', 'T3201', 'tejedora', 'activa'),
   ('00000000-0000-0000-0000-0000000032d2', 'T3202', 'tejedora', 'activa'),
   ('00000000-0000-0000-0000-0000000032d3', 'T3203', 'tejedora', 'malograda'),
   ('00000000-0000-0000-0000-0000000032d4', 'R3201', 'remalladora', 'activa'),
-  ('00000000-0000-0000-0000-0000000032d5', 'T3205', 'tejedora', 'activa');
+  ('00000000-0000-0000-0000-0000000032d5', 'T3205', 'tejedora', 'activa'),
+  ('00000000-0000-0000-0000-0000000032d6', 'T3206', 'tejedora', 'mantenimiento'),
+  ('00000000-0000-0000-0000-0000000032d7', 'T3207', 'tejedora', 'inactiva'),
+  ('00000000-0000-0000-0000-0000000032d8', 'T3208', 'tejedora', 'activa');
 INSERT INTO ubicaciones (id, nombre, tipo, activo) VALUES
   ('00000000-0000-0000-0000-0000000032e1', 'Salón 032', 'salon', true);
 
@@ -93,12 +99,18 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000032a3');  -- un tejedor no cambia el producto
 SELECT pg_temp.debe_fallar($$SELECT asignar_producto_maquina('00000000-0000-0000-0000-0000000032d1', '00000000-0000-0000-0000-0000000032c1')$$,
   'Solo el administrador o el supervisor');
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000032a7');  -- un administrador dado de baja tampoco
+SELECT pg_temp.debe_fallar($$SELECT asignar_producto_maquina('00000000-0000-0000-0000-0000000032d1', '00000000-0000-0000-0000-0000000032c1')$$,
+  'Solo el administrador o el supervisor');
 SELECT pg_temp.sesion(NULL);  -- sin usuario tampoco
 SELECT pg_temp.debe_fallar($$SELECT asignar_producto_maquina('00000000-0000-0000-0000-0000000032d1', '00000000-0000-0000-0000-0000000032c1')$$,
   'Solo el administrador o el supervisor');
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000032a2');  -- supervisor
 SELECT asignar_producto_maquina('00000000-0000-0000-0000-0000000032d1', '00000000-0000-0000-0000-0000000032c1');
 SELECT asignar_producto_maquina('00000000-0000-0000-0000-0000000032d3', '00000000-0000-0000-0000-0000000032c1');
+SELECT asignar_producto_maquina('00000000-0000-0000-0000-0000000032d6', '00000000-0000-0000-0000-0000000032c1');
+SELECT asignar_producto_maquina('00000000-0000-0000-0000-0000000032d7', '00000000-0000-0000-0000-0000000032c1');
+SELECT asignar_producto_maquina('00000000-0000-0000-0000-0000000032d8', '00000000-0000-0000-0000-0000000032c3');
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000032a1');  -- administrador
 SELECT asignar_producto_maquina('00000000-0000-0000-0000-0000000032d2', '00000000-0000-0000-0000-0000000032c1');
 SELECT asignar_producto_maquina('00000000-0000-0000-0000-0000000032d2', '00000000-0000-0000-0000-0000000032c2');  -- cambio
@@ -124,6 +136,10 @@ SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000032a4');
 SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido(NULL, 'tarde', '00000000-0000-0000-0000-0000000032a4', '[{"maquina_id":"00000000-0000-0000-0000-0000000032d1","docenas":1,"operario_id":"00000000-0000-0000-0000-0000000032a3"}]')$$, 'día o noche');
 SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido((NOW() AT TIME ZONE 'America/Lima')::date + 1, 'dia', '00000000-0000-0000-0000-0000000032a4', '[{"maquina_id":"00000000-0000-0000-0000-0000000032d1","docenas":1,"operario_id":"00000000-0000-0000-0000-0000000032a3"}]')$$, 'futura');
 SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido(NULL, 'dia', NULL, '[{"maquina_id":"00000000-0000-0000-0000-0000000032d1","docenas":1,"operario_id":"00000000-0000-0000-0000-0000000032a3"}]')$$, 'encargado');
+SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido(NULL, 'dia', '00000000-0000-0000-0000-0000000032a6', '[{"maquina_id":"00000000-0000-0000-0000-0000000032d1","docenas":1,"operario_id":"00000000-0000-0000-0000-0000000032a3"}]')$$, 'encargado');
+SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido(NULL, 'dia', '00000000-0000-0000-0000-0000000032a4', '[{"maquina_id":"00000000-0000-0000-0000-0000000032d6","docenas":2,"operario_id":"00000000-0000-0000-0000-0000000032a3"}]')$$, 'T3206 está mantenimiento');
+SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido(NULL, 'dia', '00000000-0000-0000-0000-0000000032a4', '[{"maquina_id":"00000000-0000-0000-0000-0000000032d7","docenas":2,"operario_id":"00000000-0000-0000-0000-0000000032a3"}]')$$, 'T3207 está inactiva');
+SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido(NULL, 'dia', '00000000-0000-0000-0000-0000000032a4', '[{"maquina_id":"00000000-0000-0000-0000-0000000032d8","docenas":10000.01,"operario_id":"00000000-0000-0000-0000-0000000032a3"}]')$$, 'entre 0 y 10 000');
 SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido(NULL, 'dia', '00000000-0000-0000-0000-0000000032a4', '[]')$$, 'al menos una máquina');
 SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido(NULL, 'dia', '00000000-0000-0000-0000-0000000032a4', '[{"maquina_id":"00000000-0000-0000-0000-0000000032d1","docenas":1},{"maquina_id":"00000000-0000-0000-0000-0000000032d1","docenas":1}]')$$, 'más de una vez');
 SELECT pg_temp.debe_fallar($$SELECT registrar_produccion_tejido(NULL, 'dia', '00000000-0000-0000-0000-0000000032a4', '[{"maquina_id":"00000000-0000-0000-0000-0000000032d1","docenas":-1,"operario_id":"00000000-0000-0000-0000-0000000032a3"}]')$$, 'entre 0 y 10 000');
@@ -157,6 +173,9 @@ SELECT pg_temp.verificar((SELECT catalogo_media_id = '00000000-0000-0000-0000-00
   FROM reportes_produccion WHERE turno_id = (SELECT id FROM t_turno) AND maquina_id = '00000000-0000-0000-0000-0000000032d2'),
   'T3202 registra el producto nuevo, no el anterior');
 SELECT pg_temp.verificar((SELECT estado = 'activa' FROM maquinas WHERE id = '00000000-0000-0000-0000-0000000032d1'), 'la máquina no se ocupa');
+SELECT pg_temp.verificar((SELECT persona = 'Juan Operario' FROM vista_historia_maquina
+  WHERE evento_id = 'tejido:' || (SELECT id FROM reportes_produccion WHERE turno_id = (SELECT id FROM t_turno) AND maquina_id = '00000000-0000-0000-0000-0000000032d1')),
+  'la historia clínica muestra al operario de la máquina, no a la encargada');
 SELECT pg_temp.verificar((SELECT tejedor_id = '00000000-0000-0000-0000-0000000032a4' AND horario = 'noche' AND registro_24_6
   FROM turnos_produccion WHERE id = (SELECT id FROM t_turno)), 'turno noche con su encargada');
 
@@ -169,6 +188,12 @@ SELECT registrar_produccion_tejido(NULL, 'dia', '00000000-0000-0000-0000-0000000
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT count(*) = 2 FROM turnos_produccion WHERE registro_24_6), 'día y noche son dos turnos');
 SELECT pg_temp.verificar((SELECT stock_kg = 3.2 FROM materia_prima WHERE id = '00000000-0000-0000-0000-0000000032b1'), '0 docenas no descuentan hilo');
+-- Tope: exactamente 10 000 docenas se aceptan (producto sin hilo vinculado, turno de ayer)
+SET LOCAL ROLE authenticated;
+SELECT registrar_produccion_tejido((NOW() AT TIME ZONE 'America/Lima')::date - 1, 'dia', '00000000-0000-0000-0000-0000000032a4',
+  '[{"maquina_id":"00000000-0000-0000-0000-0000000032d8","docenas":10000,"operario_id":"00000000-0000-0000-0000-0000000032a3"}]');
+RESET ROLE;
+SELECT pg_temp.verificar((SELECT docenas_producidas = 10000 FROM reportes_produccion WHERE maquina_id = '00000000-0000-0000-0000-0000000032d8'), '10 000 exacto se acepta');
 
 -- ── Corrección del mismo día ───────────────────────────────────────────────
 CREATE TEMP TABLE t_rep ON COMMIT DROP AS SELECT id FROM reportes_produccion
@@ -191,6 +216,14 @@ SET LOCAL ROLE authenticated;
 SELECT corregir_produccion_tejido((SELECT id FROM t_rep), 11, '00000000-0000-0000-0000-0000000032a4');  -- 10 → 11: descuenta 0,4 kg
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT stock_kg = 3.6 FROM materia_prima WHERE id = '00000000-0000-0000-0000-0000000032b1'), 'corregir 10 → 11 descuenta 0,4 kg');
+-- Un registro del flujo anterior (turno sin registro 24/6) no se corrige aquí, aunque sea de hoy
+INSERT INTO turnos_produccion (id, tejedor_id, fecha, horario, duracion_horas, estado)
+  VALUES ('00000000-0000-0000-0000-0000000032f1', '00000000-0000-0000-0000-0000000032a3', (NOW() AT TIME ZONE 'America/Lima')::date, 'dia', 12, 'cerrado');
+INSERT INTO reportes_produccion (id, turno_id, maquina_id, catalogo_media_id, docenas_producidas)
+  VALUES ('00000000-0000-0000-0000-0000000032f2', '00000000-0000-0000-0000-0000000032f1', '00000000-0000-0000-0000-0000000032d5', '00000000-0000-0000-0000-0000000032c1', 5);
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.debe_fallar($$SELECT corregir_produccion_tejido('00000000-0000-0000-0000-0000000032f2', 1, '00000000-0000-0000-0000-0000000032a3')$$, 'Solo se corrigen registros del turno 24/6');
+RESET ROLE;
 -- Un registro de ayer ya no se corrige
 UPDATE reportes_produccion SET created_at = NOW() - interval '2 days' WHERE id = (SELECT id FROM t_rep);
 SET LOCAL ROLE authenticated;

@@ -25,6 +25,7 @@ function base(): Db {
       { id: ANA, nombre: 'Ana', rol: 'tejedor', activo: true },
       { id: PREP, nombre: 'Prep', rol: 'preparador', activo: true },
       { id: BAJA, nombre: 'Baja', rol: 'tejedor', activo: false },
+      { id: 'u-admin-baja', nombre: 'Admin baja', rol: 'admin', activo: false },
     ],
     materia_prima: [{ id: 'mp1', material: 'Algodón', color: 'Crudo', stock_kg: 10 }],
     catalogo_medias: [
@@ -88,6 +89,7 @@ describe('mock: producto fijo por máquina', () => {
     const db = base()
     expect(rpc(db, 'asignar_producto_maquina', { __uid: JUAN, p_maquina_id: 'm1', p_catalogo_media_id: 'cA' }).error?.message).toContain('Solo el administrador o el supervisor')
     expect(rpc(db, 'asignar_producto_maquina', { __uid: null, p_maquina_id: 'm1', p_catalogo_media_id: 'cA' }).error?.message).toContain('Solo el administrador o el supervisor')
+    expect(rpc(db, 'asignar_producto_maquina', { __uid: 'u-admin-baja', p_maquina_id: 'm1', p_catalogo_media_id: 'cA' }).error?.message).toContain('Solo el administrador o el supervisor')
     expect(db.productos_maquina).toHaveLength(0)
   })
   it('el cambio guarda historial; el mismo producto otra vez o una remalladora se rechazan', () => {
@@ -110,6 +112,8 @@ describe('mock: registro de producción por turno', () => {
       ['tarde', ANA, [item('m1', 1)], 'día o noche', null],
       ['dia', ANA, [item('m1', 1)], 'futura', '2999-01-01'],
       ['dia', '', [item('m1', 1)], 'encargado', null],
+      ['dia', BAJA, [item('m1', 1)], 'encargado', null],
+      ['dia', ANA, [item('m1', 10000.01)], 'entre 0 y 10 000', null],
       ['dia', ANA, [], 'al menos una máquina', null],
       ['dia', ANA, [item('m1', 1), item('m1', 1)], 'más de una vez', null],
       ['dia', ANA, [item('m1', -1)], 'entre 0 y 10 000', null],
@@ -241,5 +245,14 @@ describe('mock: planchado → por preparar → saco; stock de fuera', () => {
     // Código repetido: no descuenta nada
     expect(saco([{ catalogo_media_id: 'cB', docenas: 1 }]).error?.message).toContain('duplicate key')
     expect(db.stock_listo_preparar.find(s => s.catalogo_media_id === 'cB')?.docenas).toBe(1)
+  })
+})
+
+describe('etiqueta del saco: escaparHtml', () => {
+  it('un nombre o código con HTML no se ejecuta al imprimir', async () => {
+    const { escaparHtml } = await import('@/lib/utils')
+    expect(escaparHtml('<img src=x onerror="alert(1)">')).toBe('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;')
+    expect(escaparHtml("O'Brien & Hijos")).toBe('O&#39;Brien &amp; Hijos')
+    expect(escaparHtml(null)).toBe('')
   })
 })

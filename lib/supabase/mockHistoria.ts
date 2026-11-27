@@ -24,7 +24,7 @@ export function construirHistoriaMock(db: Db): EventoHistoria[] {
     const turno = t(db, 'turnos_produccion').find(x => x.id === r.turno_id)
     filas.push({ ...base, evento_id: `tejido:${r.id}`, maquina_id: r.maquina_id, fecha: r.fecha, momento: r.created_at ?? r.fecha, tipo: 'produccion',
       turno: turno?.horario ?? null, detalle: t(db, 'catalogo_medias').find(c => c.id === r.catalogo_media_id)?.codigo ?? null,
-      cantidad: Number(r.docenas_producidas ?? 0), persona: nombre(db, turno?.tejedor_id) })
+      cantidad: Number(r.docenas_producidas ?? 0), persona: nombre(db, r.operario_id) ?? nombre(db, turno?.tejedor_id) })
   }
   for (const r of t(db, 'reportes_remallado')) {
     const lote = t(db, 'lotes_remallado').find(x => x.id === r.lote_id)

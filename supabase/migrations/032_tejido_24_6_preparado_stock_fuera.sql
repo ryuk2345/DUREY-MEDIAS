@@ -421,6 +421,58 @@ BEGIN
 END;
 $$;
 
+-- Historia clínica (031): en el turno 24/6 la persona de la producción es el operario
+-- de la máquina; en los turnos anteriores, el encargado. Mismas columnas y permisos.
+CREATE OR REPLACE VIEW public.vista_historia_maquina WITH (security_invoker = true) AS
+  -- evento_id: identificador único de cada fila (desempate estable al leer la historia por páginas)
+  SELECT 'tejido:' || r.id AS evento_id, r.maquina_id, r.fecha, r.created_at AS momento, 'produccion'::text AS tipo, t.horario AS turno,
+         c.codigo AS detalle, r.docenas_producidas AS cantidad, NULL::numeric AS costo, COALESCE(op.nombre, u.nombre) AS persona, NULL::text AS mecanico
+    FROM reportes_produccion r
+    LEFT JOIN turnos_produccion t ON t.id = r.turno_id
+    LEFT JOIN usuarios u ON u.id = t.tejedor_id
+    LEFT JOIN usuarios op ON op.id = r.operario_id  -- 032: operario de la máquina en el turno 24/6
+    LEFT JOIN catalogo_medias c ON c.id = r.catalogo_media_id
+  UNION ALL
+  SELECT 'remallado:' || r.id, r.maquina_id, r.fecha, r.created_at, 'produccion', NULL, c.codigo, r.docenas_remalladas, NULL, u.nombre, NULL
+    FROM reportes_remallado r
+    LEFT JOIN lotes_remallado l ON l.id = r.lote_id
+    LEFT JOIN catalogo_medias c ON c.id = l.catalogo_media_id
+    LEFT JOIN usuarios u ON u.id = r.remalladora_id
+  UNION ALL
+  SELECT 'falla:' || a.id, a.maquina_id, (a.fecha_reporte AT TIME ZONE 'America/Lima')::date, a.fecha_reporte, 'falla', NULL, a.descripcion_operador, NULL, NULL,
+         u.nombre, COALESCE(btrim(m.nombre) || ' ' || btrim(m.apellido), a.asignado_a)
+    FROM averias_maquinas a
+    LEFT JOIN usuarios u ON u.id = a.reportado_por_id
+    LEFT JOIN mecanicos m ON m.id = a.mecanico_id
+  UNION ALL
+  SELECT 'reparacion:' || rp.id, a.maquina_id, (rp.fecha_reparacion AT TIME ZONE 'America/Lima')::date, rp.fecha_reparacion, 'reparacion', NULL, rp.descripcion_tecnico, NULL,
+         rp.costo_repuestos + rp.costo_mano_obra, NULL, COALESCE(btrim(m.nombre) || ' ' || btrim(m.apellido), a.asignado_a)
+    FROM reparaciones rp
+    JOIN averias_maquinas a ON a.id = rp.averia_id
+    LEFT JOIN mecanicos m ON m.id = rp.mecanico_id
+  UNION ALL
+  SELECT 'repuesto_falla:' || ar.id, a.maquina_id, (ar.created_at AT TIME ZONE 'America/Lima')::date, ar.created_at, 'repuesto', NULL, re.nombre, ar.cantidad,
+         ar.cantidad * ar.costo_unitario, NULL, COALESCE(btrim(m.nombre) || ' ' || btrim(m.apellido), a.asignado_a)
+    FROM averia_repuestos ar
+    JOIN averias_maquinas a ON a.id = ar.averia_id
+    JOIN repuestos re ON re.id = ar.repuesto_id
+    LEFT JOIN mecanicos m ON m.id = ar.mecanico_id
+  UNION ALL
+  SELECT 'repuesto_preventivo:' || mr.id, mp.maquina_id, (mr.created_at AT TIME ZONE 'America/Lima')::date, mr.created_at, 'repuesto', NULL, re.nombre, mr.cantidad,
+         mr.cantidad * mr.costo_unitario, NULL, btrim(m.nombre) || ' ' || btrim(m.apellido)
+    FROM mantenimiento_repuestos mr
+    JOIN mantenimientos_preventivos mp ON mp.id = mr.mantenimiento_id
+    JOIN repuestos re ON re.id = mr.repuesto_id
+    LEFT JOIN mecanicos m ON m.id = mp.mecanico_id
+  UNION ALL
+  SELECT 'preventivo:' || mp.id, mp.maquina_id, (COALESCE(mp.fecha_fin, mp.fecha_inicio) AT TIME ZONE 'America/Lima')::date, COALESCE(mp.fecha_fin, mp.fecha_inicio),
+         'preventivo', NULL,
+         pl.tarea || CASE WHEN mp.estado = 'en_curso' THEN ' (en curso)' ELSE COALESCE(' — ' || mp.nota, '') END,
+         NULL, mp.costo_mano_obra, NULL, btrim(m.nombre) || ' ' || btrim(m.apellido)
+    FROM mantenimientos_preventivos mp
+    JOIN planes_mantenimiento pl ON pl.id = mp.plan_id
+    LEFT JOIN mecanicos m ON m.id = mp.mecanico_id;
+
 -- ------------------------------------------------------------------------------
 -- 3. PERMISOS (exactos para authenticated; nada para anon)
 -- ------------------------------------------------------------------------------

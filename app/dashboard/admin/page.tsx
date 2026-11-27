@@ -151,14 +151,15 @@ export default function AdminPage() {
     // Top tejedores del mes
     const { data: prodTejedores, error: tejErr } = await supabase
       .from('reportes_produccion')
-      .select('docenas_producidas, turno:turnos_produccion(tejedor:usuarios(nombre))')
+      .select('docenas_producidas, operario:usuarios!reportes_produccion_operario_id_fkey(nombre), turno:turnos_produccion(tejedor:usuarios(nombre))')
       .gte('fecha', inicioMes)
 
     if (tejErr) toast.error(`Error al cargar producción de tejedores: ${tejErr.message}`)
 
     const tejedorMap: Record<string, number> = {}
     ;(prodTejedores ?? []).forEach(r => {
-      const nombre = ((r.turno as {tejedor: {nombre: string}})?.tejedor)?.nombre ?? 'Desconocido'
+      // Turno 24/6 (032): el operario de la máquina; turnos anteriores: el tejedor del turno
+      const nombre = (r.operario as { nombre?: string } | null)?.nombre ?? ((r.turno as {tejedor: {nombre: string}})?.tejedor)?.nombre ?? 'Desconocido'
       tejedorMap[nombre] = (tejedorMap[nombre] ?? 0) + r.docenas_producidas
     })
     setTopTejedores(

@@ -12,7 +12,7 @@ import {
   User, Layers, Scan, Barcode, Plus, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { getSemanaAnio, getDiaSemana, formatearRangoSemana } from '@/lib/utils'
+import { getSemanaAnio, getDiaSemana, formatearRangoSemana, escaparHtml as h } from '@/lib/utils'
 import { convertirDocenasAPares, construirQrSacoMaestro, siguienteCodigoSaco } from '@/lib/domain/packaging'
 import QRCode from 'qrcode'
 import SelectorMedia from '@/components/ui/SelectorMedia'
@@ -238,17 +238,18 @@ export default function PreparadoPage() {
   const imprimirEtiqueta = () => {
     if (!saco) return
     const salon = ubicaciones.find(u => u.id === saco.salon_id)?.nombre ?? ''
-    const filas = saco.items.map(i => `<tr><td style="border:1px solid #cbd5e1;padding:6px;font-family:monospace;font-weight:bold;font-size:11px">${i.sku}</td>
-      <td style="border:1px solid #cbd5e1;padding:6px;font-size:11px">${i.codigo}</td>
+    // Todo texto de la base se escapa: un nombre o código con HTML no se ejecuta en la ventana de impresión
+    const filas = saco.items.map(i => `<tr><td style="border:1px solid #cbd5e1;padding:6px;font-family:monospace;font-weight:bold;font-size:11px">${h(i.sku)}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:11px">${h(i.codigo)}</td>
       <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;font-weight:bold;font-size:11px">${i.docenas} doc (${i.pares} pares)</td></tr>`).join('')
-    const html = `<html><head><title>Etiqueta de Saco Maestro — ${saco.codigo_saco}</title></head>
+    const html = `<html><head><title>Etiqueta de Saco Maestro — ${h(saco.codigo_saco)}</title></head>
       <body style="font-family:Arial,sans-serif;padding:20px;max-width:450px;margin:0 auto">
         <div style="border:3px solid #0f172a;border-radius:16px;padding:18px;text-align:center">
           <h2 style="margin:0;color:#059669">SACO MAESTRO DE EMPAQUE</h2>
-          <div style="font-family:monospace;font-size:18px;font-weight:bold">${saco.codigo_saco}</div>
-          <div style="background:#10b981;color:white;font-weight:bold;padding:6px 14px;border-radius:9999px;display:inline-block;margin:10px 0">DESTINO: ${salon.toUpperCase()}</div>
+          <div style="font-family:monospace;font-size:18px;font-weight:bold">${h(saco.codigo_saco)}</div>
+          <div style="background:#10b981;color:white;font-weight:bold;padding:6px 14px;border-radius:9999px;display:inline-block;margin:10px 0">DESTINO: ${h(salon.toUpperCase())}</div>
           <div><img src="${qrSaco}" style="width:180px;height:180px" /></div>
-          <p style="font-size:12px">Preparador: <strong>${saco.preparador.nombre}</strong> · Fecha: <strong>${new Date().toLocaleDateString('es-PE')}</strong></p>
+          <p style="font-size:12px">Preparador: <strong>${h(saco.preparador.nombre)}</strong> · Fecha: <strong>${new Date().toLocaleDateString('es-PE')}</strong></p>
           <p style="font-weight:bold">TOTAL: ${saco.totalDocenas} DOCENAS (${saco.totalPares} PARES)</p>
           <table style="width:100%;border-collapse:collapse"><thead><tr><th>SKU</th><th>Media</th><th>Cantidad</th></tr></thead><tbody>${filas}</tbody></table>
         </div></body></html>`
