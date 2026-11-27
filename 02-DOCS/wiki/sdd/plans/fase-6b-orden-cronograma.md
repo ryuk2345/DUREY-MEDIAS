@@ -36,9 +36,9 @@ spec: ../specs/fase-6-almacen-ventas-despacho.md
 | T2 | hecha | `tests/e2e/22`: cronograma con productos y subtotales; Playwright «Venta a cuotas: el cronograma impreso lleva el detalle de productos» y «Cartera: el cliente muestra qué compró» |
 | T3 | hecha | `tests/e2e/22` sobre `GET /api/documento`: sin sesión 401, sin módulo 403, documento inválido 400, sin token 503 `configurado: false` (sin llamar a Decolecta), con token URL y Bearer correctos y respuesta reducida, errores 502/404 |
 | T4 | hecha | `tests/e2e/22`: cronograma y cartera escapan `<img onerror>` |
-| T5 | en curso | panel |
+| T5 | en curso | panel ronda 1 (L106-L112): 6 corregidos (pruebas del filtro de sacos y del escapado, prefijos RUC, desempate, 429/5xx como «no responde», orden desde Despacho con dirección y vendedora); L112 aparcado: límite de consultas a Decolecta, se pregunta al dueño |
 
-Batería: `npm test` 294/294 · Playwright 58/58 · build y `tsc` en verde · ESLint sin errores nuevos.
+Batería: `npm test` 297/297 · Playwright 58/58 · build y `tsc` en verde · ESLint sin errores nuevos.
 
 ## Anotado
 - La fila nueva de una venta toma el primer producto del catálogo (hoy un crudo, `CRU-1`) y la venta se registra aunque no haya stock. Ya pasaba antes; se pregunta al dueño.

@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server'
 import { tipoDocumento, urlDecolecta, normalizarDecolecta } from '@/lib/domain/documento'
 import { armarOrdenDespacho } from '@/lib/domain/despacho'
 import { htmlOrdenDespacho, htmlCronogramaPagos, htmlCarteraCobranza, tablaProductos } from '@/lib/impresion/ventas'
+import { htmlDeOrdenDespacho } from '@/lib/impresion/ordenDespacho'
 
 vi.mock('@/lib/auth/jwt', () => ({ verifySupabaseJWT: vi.fn() }))
 import { verifySupabaseJWT } from '@/lib/auth/jwt'
@@ -16,8 +17,9 @@ const MALO = '<img src=x onerror=alert(1)>'
 
 describe('DNI y RUC', () => {
   it('reconoce DNI de 8 dígitos y RUC de 11 que empiezan como RUC', () => {
-    expect(['46027897', ' 46027897 ', '20601030013', '10460278975', '4602789', '460278971', '30601030013', '2060103001A', ''].map(tipoDocumento))
-      .toEqual(['dni', 'dni', 'ruc', 'ruc', null, null, null, null, null])
+    expect(['46027897', ' 46027897 ', '20601030013', '10460278975', '15123456789', '16123456789', '17123456789',
+      '4602789', '460278971', '4602789712', '201234567890', '30601030013', '2060103001A', ''].map(tipoDocumento))
+      .toEqual(['dni', 'dni', 'ruc', 'ruc', 'ruc', 'ruc', 'ruc', null, null, null, null, null, null, null])
   })
   it('arma la ruta de Decolecta de cada tipo', () => {
     expect(urlDecolecta('dni', '46027897')).toBe('https://api.decolecta.com/v1/reniec/dni?numero=46027897')
@@ -45,6 +47,10 @@ describe('orden de despacho', () => {
     { codigo_paquete: 'S-1', catalogo_media_id: 'A', docenas: 6, salon: 'Salón A' },
     { codigo_paquete: 'S-3', catalogo_media_id: 'C', docenas: 6, salon: 'Salón A' },
   ]
+  it('ordena por salón y, dentro del salón, por código de saco', () => {
+    const dos = [{ codigo_paquete: 'S-9', catalogo_media_id: 'A', docenas: 1, salon: 'Salón A' }, { codigo_paquete: 'S-1', catalogo_media_id: 'A', docenas: 1, salon: 'Salón A' }]
+    expect(armarOrdenDespacho([{ catalogo_media_id: 'A', docenas: 1 }], dos)[0].sacos.map(s => s.codigo_paquete)).toEqual(['S-1', 'S-9'])
+  })
   it('por SKU pedido lista todos sus sacos con salón, lo disponible y lo que falta', () => {
     const orden = armarOrdenDespacho([{ catalogo_media_id: 'A', docenas: 4 }, { catalogo_media_id: 'A', docenas: 6 }, { catalogo_media_id: 'B', docenas: 3 }], sacos)
     expect(orden).toEqual([
@@ -56,6 +62,10 @@ describe('orden de despacho', () => {
     const lineas = armarOrdenDespacho([{ catalogo_media_id: 'A', docenas: 10 }, { catalogo_media_id: 'B', docenas: 3 }], sacos)
       .map(l => ({ ...l, codigo: l.catalogo_media_id === 'A' ? 'T-A' : MALO, sku: null }))
     const html = htmlOrdenDespacho({ codigoVenta: 'V-1001', cliente: MALO, documento: '20601030013', direccion: MALO, vendedora: MALO, fecha: '2026-11-27', lineas })
+    const lineasMalas = [{ ...lineas[0], sacos: [{ codigo_paquete: MALO, catalogo_media_id: 'A', docenas: 1, salon: MALO }] }]
+    const todoMalo = htmlOrdenDespacho({ codigoVenta: MALO, cliente: 'x', documento: MALO, fecha: MALO, lineas: lineasMalas })
+    expect(todoMalo).not.toContain('<img')
+    expect(todoMalo.match(/&lt;img/g)?.length).toBe(6) // código (título y cuerpo), documento, fecha, salón, saco
     expect(html).toContain('ORDEN DE DESPACHO')
     expect(html).toMatch(/Salón A<\/td><td[^>]*>S-1<\/td><td[^>]*>6<\/td>/)
     expect(html).toContain('Faltan 3 docenas')
@@ -78,7 +88,10 @@ describe('cronograma y cartera', () => {
   })
   it('cronograma y cartera protegen nombres de cliente y vendedora', () => {
     const c = htmlCronogramaPagos({ codigoVenta: MALO, cliente: MALO, documento: MALO, telefono: MALO, vendedora: MALO, adelanto: 0, total: 1, cuotas: [], productos: [{ codigo: MALO, docenas: 1, precio_docena: 1 }], fechaEmision: 'x' })
-    const k = htmlCarteraCobranza({ vendedora: MALO, total: 1, cuotas: [{ codigo_venta: MALO, cliente: MALO, telefono: MALO, numero_cuota: 1, fecha_vencimiento: '2026-12-01', monto: 1 }] })
+    const k = htmlCarteraCobranza({ vendedora: MALO, total: 1, cuotas: [{ codigo_venta: MALO, cliente: MALO, telefono: MALO, numero_cuota: 1, fecha_vencimiento: MALO, monto: 1 }] })
+    const c2 = htmlCronogramaPagos({ codigoVenta: 'V', cliente: 'c', documento: 'd', vendedora: 'v', adelanto: 0, total: 1, cuotas: [{ numero_cuota: 1, fecha_vencimiento: MALO, monto: 1 }], productos: [], fechaEmision: MALO })
+    expect(c2).not.toContain('<img')
+    expect(c2.match(/&lt;img/g)?.length).toBe(2)
     for (const html of [c, k]) { expect(html).not.toContain('<img'); expect(html).toContain('&lt;img') }
   })
 })
@@ -127,13 +140,61 @@ describe('GET /api/documento', () => {
   })
   it('errores de Decolecta: token rechazado 502, no encontrado 404, caída 502', async () => {
     sesion('vendedora')
-    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 401 }))
-    expect((await pedir('46027897')).status).toBe(502)
+    for (const status of [401, 403, 429, 500, 503]) {
+      fetchMock.mockResolvedValueOnce(new Response('{}', { status }))
+      const r = await pedir('46027897')
+      expect(r.status).toBe(502)
+      expect((await r.json()).error).toMatch(status < 429 ? /token de Decolecta/ : /no responde ahora/)
+    }
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message: 'ruc no valido' }), { status: 422 }))
     expect((await pedir('20601030013')).status).toBe(404)
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'x' }), { status: 200 }))
     expect((await pedir('46027897')).status).toBe(404)
     fetchMock.mockRejectedValueOnce(new Error('red'))
     expect((await pedir('46027897')).status).toBe(502)
+  })
+})
+
+describe('carga de la orden de despacho', () => {
+  /** Supabase falso que guarda los filtros de cada consulta y aplica eq/in/range como la API. */
+  function falso(tablas: Record<string, Record<string, unknown>[]>) {
+    const llamadas: { tabla: string; filtros: string[] }[] = []
+    const from = (tabla: string) => {
+      const filtros: string[] = []
+      let filas = [...(tablas[tabla] ?? [])]
+      const q = {
+        select: () => q,
+        eq: (c: string, v: unknown) => { filtros.push(`eq:${c}=${v}`); filas = filas.filter(f => f[c] === v); return q },
+        in: (c: string, v: unknown[]) => { filtros.push(`in:${c}`); filas = filas.filter(f => v.includes(f[c])); return q },
+        order: () => q,
+        range: (d: number, h: number) => Promise.resolve({ data: filas.slice(d, h + 1), error: null }),
+        then: (ok: (r: unknown) => unknown) => Promise.resolve({ data: filas, error: null }).then(ok),
+      }
+      llamadas.push({ tabla, filtros })
+      return q
+    }
+    return { from, llamadas }
+  }
+  it('solo cuenta sacos almacenados en un salón y de los SKU pedidos', async () => {
+    const sb = falso({
+      items_venta: [{ venta_id: 'v1', catalogo_media_id: 'A', docenas: 5, catalogo_media: { codigo: 'T-A', sku: 'SKU-A' } }],
+      paquetes: [
+        { codigo_paquete: 'OK', catalogo_media_id: 'A', docenas: 6, estado: 'almacenado', ubicacion: { nombre: 'Salón A' } },
+        { codigo_paquete: 'SIN-SALON', catalogo_media_id: 'A', docenas: 6, estado: 'almacenado', ubicacion: null },
+        { codigo_paquete: 'EN-PROCESO', catalogo_media_id: 'A', docenas: 6, estado: 'pendiente_almacenar', ubicacion: { nombre: 'Salón A' } },
+        { codigo_paquete: 'OTRO-SKU', catalogo_media_id: 'B', docenas: 6, estado: 'almacenado', ubicacion: { nombre: 'Salón A' } },
+      ],
+    })
+    const r = await htmlDeOrdenDespacho(sb, { id: 'v1', codigo_venta: 'V-1', cliente: { nombre: 'Ana', numero_documento: '46027897', direccion: 'Jr. Uno' }, asesora: { nombre: 'Vende' } })
+    expect(r.error).toBeUndefined()
+    expect(r.html).toContain('>OK<')
+    for (const fuera of ['SIN-SALON', 'EN-PROCESO', 'OTRO-SKU']) expect(r.html).not.toContain(fuera)
+    expect(r.html).toContain('disponible: 6 doc.')
+    expect(r.html).toContain('Dirección: Jr. Uno')
+    expect(r.html).toContain('Vendedora: <strong>Vende</strong>')
+    expect(sb.llamadas.find(l => l.tabla === 'paquetes')!.filtros).toEqual(['eq:estado=almacenado', 'in:catalogo_media_id'])
+  })
+  it('una venta sin productos no imprime', async () => {
+    expect((await htmlDeOrdenDespacho(falso({ items_venta: [] }), { id: 'v1', codigo_venta: 'V-1' })).error).toBe('La venta no tiene productos')
   })
 })

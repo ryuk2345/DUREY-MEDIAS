@@ -19,7 +19,8 @@ interface Venta {
   estado: string
   fecha: string
   total_soles: number
-  cliente: { nombre: string; numero_documento: string }
+  cliente: { nombre: string; numero_documento: string; direccion?: string | null }
+  asesora?: { nombre: string } | null
   items_venta: { id: string; catalogo_media_id: string; docenas: number; catalogo_media: { id: string; codigo: string; sku: string } }[]
 }
 interface Saco { id: string; codigo_paquete: string; docenas: number; catalogo_media_id: string | null; ubicacion: { nombre: string } | null }
@@ -58,7 +59,7 @@ export default function DespachoPage() {
 
   const leer = useCallback(async () => {
     const [venRes, guiRes, sacRes, agRes] = await Promise.all([
-      supabase.from('ventas').select(`id, codigo_venta, estado, fecha, total_soles, cliente:clientes(nombre, numero_documento),
+      supabase.from('ventas').select(`id, codigo_venta, estado, fecha, total_soles, cliente:clientes(nombre, numero_documento, direccion), asesora:usuarios(nombre),
         items_venta(id, catalogo_media_id, docenas, catalogo_media:catalogo_medias(id, codigo, sku))`).eq('estado', 'pendiente').order('created_at', { ascending: false }),
       supabase.from('guias_remision').select(`id, codigo_guia, agencia, fecha_despacho, despachado:usuarios(nombre),
         despacho_detalle(docenas_pedidas, docenas_entregadas, catalogo_media:catalogo_medias(codigo, sku)),

@@ -36,6 +36,10 @@ export async function GET(req: NextRequest) {
   if (resp.status === 401 || resp.status === 403) {
     return NextResponse.json({ error: 'El token de Decolecta no es válido o se acabó el saldo' }, { status: 502 })
   }
+  // 429 o caída del servicio: no es «no encontrado», es «intenta luego»
+  if (resp.status === 429 || resp.status >= 500) {
+    return NextResponse.json({ error: 'RENIEC/SUNAT no responde ahora. Intenta en unos minutos o escribe los datos a mano' }, { status: 502 })
+  }
   if (!resp.ok) return NextResponse.json({ error: `No se encontró el ${tipo.toUpperCase()} ${numero}` }, { status: 404 })
 
   const datos = normalizarDecolecta(tipo, numero, await resp.json().catch(() => null))
