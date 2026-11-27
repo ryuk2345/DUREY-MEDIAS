@@ -256,3 +256,26 @@ describe('etiqueta del saco: escaparHtml', () => {
     expect(escaparHtml(null)).toBe('')
   })
 })
+
+describe('mock: historia clínica con el operario del turno 24/6', () => {
+  it('la persona de la producción es el operario; sin operario (turno anterior), el encargado', async () => {
+    const { construirHistoriaMock } = await import('@/lib/supabase/mockHistoria')
+    const db = conProductos()
+    rpc(db, 'registrar_produccion_tejido', { __uid: ANA, p_horario: 'noche', p_encargado_id: ANA, p_items: [item('m1', 12, JUAN)] })
+    db.turnos_produccion.push({ id: 't-viejo', tejedor_id: ANA, fecha: '2026-01-01', horario: 'dia' })
+    db.reportes_produccion.push({ id: 'r-viejo', turno_id: 't-viejo', maquina_id: 'm2', catalogo_media_id: 'cA', docenas_producidas: 3, fecha: '2026-01-01' })
+    const filas = construirHistoriaMock(db).filter(f => f.tipo === 'produccion')
+    expect(filas.find(f => f.maquina_id === 'm1')?.persona).toBe('Juan')
+    expect(filas.find(f => f.maquina_id === 'm2')?.persona).toBe('Ana')
+  })
+})
+
+describe('mock: corrección con operario dado de baja', () => {
+  it('se rechaza', () => {
+    const db = conProductos()
+    rpc(db, 'registrar_produccion_tejido', { __uid: ANA, p_horario: 'noche', p_encargado_id: ANA, p_items: [item('m1', 2)] })
+    const rep = db.reportes_produccion[0]
+    expect(rpc(db, 'corregir_produccion_tejido', { __uid: SUPER, p_reporte_id: rep.id, p_docenas: 1, p_operario_id: BAJA }).error?.message).toContain('Elige el operario de la máquina')
+    expect(rep.docenas_producidas).toBe(2)
+  })
+})

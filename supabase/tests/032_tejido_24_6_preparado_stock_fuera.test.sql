@@ -205,6 +205,8 @@ SELECT pg_temp.debe_fallar($$SELECT corregir_produccion_tejido((SELECT id FROM t
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000032a2');
 SELECT pg_temp.debe_fallar($$SELECT corregir_produccion_tejido((SELECT id FROM t_rep), 21, '00000000-0000-0000-0000-0000000032a3')$$, 'Falta de materia prima');
 SELECT pg_temp.debe_fallar($$SELECT corregir_produccion_tejido((SELECT id FROM t_rep), 'NaN', '00000000-0000-0000-0000-0000000032a3')$$, 'entre 0 y 10 000');
+SELECT pg_temp.debe_fallar($$SELECT corregir_produccion_tejido((SELECT id FROM t_rep), 10, '00000000-0000-0000-0000-0000000032a6')$$, 'Elige el operario de la máquina');
+SELECT pg_temp.debe_fallar($$SELECT corregir_produccion_tejido((SELECT id FROM t_rep), 10, NULL)$$, 'Elige el operario de la máquina');
 SELECT corregir_produccion_tejido((SELECT id FROM t_rep), 10, '00000000-0000-0000-0000-0000000032a4');  -- 12 → 10: devuelve 0,8 kg
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT stock_kg = 4.0 FROM materia_prima WHERE id = '00000000-0000-0000-0000-0000000032b1'), 'corregir 12 → 10 devuelve 0,8 kg');
