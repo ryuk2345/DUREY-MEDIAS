@@ -18,6 +18,18 @@ BEGIN;
 -- ------------------------------------------------------------------------------
 -- 1. UN SKU POR SACO, KARDEX Y DETALLE DEL DESPACHO
 -- ------------------------------------------------------------------------------
+-- Antes de la regla: si quedara un saco con varios SKU, se detiene con un mensaje claro
+-- (no se reparte solo: separarlo es decisión del dueño). En la base real hay 0 (2026-11-27).
+DO $$
+DECLARE v_codigos TEXT;
+BEGIN
+  SELECT string_agg(codigo_paquete, ', ') INTO v_codigos FROM public.paquetes
+   WHERE jsonb_typeof(detalles_contenido) = 'array' AND jsonb_array_length(detalles_contenido) > 1;
+  IF v_codigos IS NOT NULL THEN
+    RAISE EXCEPTION 'Sacos con varios SKU, sepáralos antes de aplicar la 034: %', v_codigos;
+  END IF;
+END $$;
+
 ALTER TABLE public.paquetes ADD CONSTRAINT paquetes_un_solo_sku
   CHECK (detalles_contenido IS NULL OR jsonb_typeof(detalles_contenido) <> 'array' OR jsonb_array_length(detalles_contenido) <= 1);
 

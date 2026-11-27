@@ -388,19 +388,19 @@ class MockQueryBuilder {
         return queryObj;
       },
       gt(column: string, value: any) {
-        filters.push(item => item[column] > value);
+        filters.push(item => comparar(item[column], value) > 0);
         return queryObj;
       },
       lt(column: string, value: any) {
-        filters.push(item => item[column] < value);
+        filters.push(item => comparar(item[column], value) < 0);
         return queryObj;
       },
       gte(column: string, value: any) {
-        filters.push(item => item[column] >= value);
+        filters.push(item => comparar(item[column], value) >= 0);
         return queryObj;
       },
       lte(column: string, value: any) {
-        filters.push(item => item[column] <= value);
+        filters.push(item => comparar(item[column], value) <= 0);
         return queryObj;
       },
       order(column: string, config?: { ascending: boolean }) {
@@ -860,6 +860,14 @@ function idSesionMock(): string | null {
   const valor = document.cookie.split('; ').find(c => c.startsWith('durey_mock_session='))?.split('=').slice(1).join('=')
   if (!valor) return null
   try { return JSON.parse(decodeURIComponent(valor)).id ?? null } catch { return null }
+}
+
+// Fechas con hora (y zona) se comparan como instantes, igual que Postgres; el resto, tal cual
+const ES_FECHA_HORA = /^\d{4}-\d{2}-\d{2}T/
+function comparar(a: unknown, b: unknown): number {
+  if (a == null || b == null) return NaN // como SQL: con NULL ninguna comparación es verdadera
+  if (typeof a === 'string' && typeof b === 'string' && ES_FECHA_HORA.test(a) && ES_FECHA_HORA.test(b)) return Date.parse(a) - Date.parse(b)
+  return (a as number) < (b as number) ? -1 : (a as number) > (b as number) ? 1 : (a as number) == (b as number) ? 0 : NaN
 }
 
 export function createMockClient() {

@@ -97,6 +97,8 @@ SET LOCAL ROLE authenticated;
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000034a2');  -- vendedora: sin almacén
 SELECT pg_temp.debe_fallar($$SELECT trasladar_saco('00000000-0000-0000-0000-0000000034f1', '00000000-0000-0000-0000-0000000034e2')$$, 'módulo almacen');
 SELECT pg_temp.debe_fallar($$SELECT crear_ubicacion('Salón X', 'salon')$$, 'módulo almacen');
+SELECT pg_temp.debe_fallar($$SELECT renombrar_ubicacion('00000000-0000-0000-0000-0000000034e1', 'Salón Y')$$, 'módulo almacen');
+SELECT pg_temp.debe_fallar($$SELECT desactivar_ubicacion('00000000-0000-0000-0000-0000000034e2')$$, 'módulo almacen');
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000034a3');  -- planchador: sin despacho ni ventas
 SELECT pg_temp.debe_fallar($$SELECT despachar_venta_sacos('00000000-0000-0000-0000-000000340001', 'Shalom', ARRAY['00000000-0000-0000-0000-0000000034f1']::uuid[])$$, 'módulo despacho');
 SELECT pg_temp.debe_fallar($$SELECT registrar_agencia('Agencia 34')$$, 'módulo despacho');
@@ -151,7 +153,7 @@ SELECT pg_temp.verificar((SELECT ubicacion_id = '00000000-0000-0000-0000-0000000
 SELECT pg_temp.verificar((SELECT count(*) = 4
     AND count(*) FILTER (WHERE tipo = 'traslado_salida' AND ubicacion_id = '00000000-0000-0000-0000-0000000034e1' AND ubicacion_destino_id = '00000000-0000-0000-0000-0000000034e2') = 1
     AND count(*) FILTER (WHERE tipo = 'traslado_entrada' AND ubicacion_id = '00000000-0000-0000-0000-0000000034e2' AND ubicacion_origen_id = '00000000-0000-0000-0000-0000000034e1') = 1
-    AND bool_and(usuario_id = '00000000-0000-0000-0000-0000000034a1' AND docenas = 6 AND catalogo_media_id = '00000000-0000-0000-0000-0000000034c3')
+    AND count(*) FILTER (WHERE usuario_id = '00000000-0000-0000-0000-0000000034a1' AND docenas = 6 AND catalogo_media_id = '00000000-0000-0000-0000-0000000034c3') = 4
   FROM movimientos_stock WHERE paquete_id = '00000000-0000-0000-0000-0000000034f5'), 'cada traslado: salida del origen y entrada al destino, con usuario');
 -- Un saco que no está en un salón no se traslada
 SET LOCAL ROLE authenticated;
@@ -187,7 +189,8 @@ SELECT pg_temp.verificar((SELECT count(*) = 2
     AND bool_or(catalogo_media_id = '00000000-0000-0000-0000-0000000034c2' AND docenas_pedidas = 3 AND docenas_entregadas = 4)
   FROM despacho_detalle WHERE venta_id = '00000000-0000-0000-0000-000000340001'), 'el detalle guarda lo pedido y lo entregado (sobrante registrado)');
 SELECT pg_temp.verificar((SELECT count(*) = 3
-    AND bool_and(tipo = 'salida_venta' AND usuario_id = '00000000-0000-0000-0000-0000000034a1' AND venta_id = '00000000-0000-0000-0000-000000340001' AND guia_id IS NOT NULL)
+    AND count(*) FILTER (WHERE usuario_id = '00000000-0000-0000-0000-0000000034a1' AND guia_id IS NOT NULL
+      AND catalogo_media_id = (SELECT p.catalogo_media_id FROM paquetes p WHERE p.id = paquete_id)) = 3
     AND bool_or(paquete_id = '00000000-0000-0000-0000-0000000034f2' AND ubicacion_id = '00000000-0000-0000-0000-0000000034e2' AND docenas = 6)
   FROM movimientos_stock WHERE tipo = 'salida_venta' AND venta_id = '00000000-0000-0000-0000-000000340001'), 'una salida por saco, desde su salón');
 SELECT pg_temp.verificar((SELECT bool_and(estado = 'entregado' AND ubicacion_id IS NULL AND venta_id = '00000000-0000-0000-0000-000000340001')
@@ -203,6 +206,25 @@ INSERT INTO items_venta (venta_id, catalogo_media_id, docenas, precio_docena) VA
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.debe_fallar($$SELECT despachar_venta_sacos('00000000-0000-0000-0000-000000340002', 'Shalom', ARRAY['00000000-0000-0000-0000-0000000034f1']::uuid[])$$, 'S34-A1 no está disponible');
 RESET ROLE;
+
+-- Pedido con el mismo SKU en dos líneas (se suman) y entrega exacta
+INSERT INTO ventas (id, codigo_venta, cliente_id, tipo_pago, total_soles, estado) VALUES
+  ('00000000-0000-0000-0000-000000340003', 'V-34-3', '00000000-0000-0000-0000-0000000034b1', 'directo', 30, 'pendiente');
+INSERT INTO items_venta (venta_id, catalogo_media_id, docenas, precio_docena) VALUES
+  ('00000000-0000-0000-0000-000000340003', '00000000-0000-0000-0000-0000000034c1', 3, 5),
+  ('00000000-0000-0000-0000-000000340003', '00000000-0000-0000-0000-0000000034c1', 3, 5);
+INSERT INTO paquetes (id, codigo_paquete, catalogo_media_id, docenas, total_pares, estado, ubicacion_id) VALUES
+  ('00000000-0000-0000-0000-0000000034f7', 'S34-A6', '00000000-0000-0000-0000-0000000034c1', 6, 72, 'almacenado', '00000000-0000-0000-0000-0000000034e1'),
+  ('00000000-0000-0000-0000-0000000034f8', 'S34-A7', '00000000-0000-0000-0000-0000000034c1', 4, 48, 'almacenado', '00000000-0000-0000-0000-0000000034e1');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.debe_fallar($$SELECT despachar_venta_sacos('00000000-0000-0000-0000-000000340003', 'Shalom',
+  ARRAY['00000000-0000-0000-0000-0000000034f7', '00000000-0000-0000-0000-0000000034ff']::uuid[])$$, 'Uno de los sacos no existe');
+SELECT pg_temp.debe_fallar($$SELECT despachar_venta_sacos('00000000-0000-0000-0000-000000340003', 'Shalom',
+  ARRAY['00000000-0000-0000-0000-0000000034f8']::uuid[])$$, 'Faltan 2.00 docenas de T34-A');
+SELECT despachar_venta_sacos('00000000-0000-0000-0000-000000340003', 'Shalom', ARRAY['00000000-0000-0000-0000-0000000034f7']::uuid[]);
+RESET ROLE;
+SELECT pg_temp.verificar((SELECT count(*) = 1 AND bool_and(docenas_pedidas = 6 AND docenas_entregadas = 6)
+  FROM despacho_detalle WHERE venta_id = '00000000-0000-0000-0000-000000340003'), 'entrega exacta: dos líneas del mismo SKU se suman y no sobra nada');
 
 -- ── Sin sesión no se ve nada nuevo ─────────────────────────────────────────
 SET LOCAL ROLE anon;

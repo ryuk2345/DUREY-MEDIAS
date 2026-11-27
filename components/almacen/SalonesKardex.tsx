@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Printer, ArrowRightLeft, BookOpen, Loader2 } from 'lucide-react'
 import { escaparHtml as h } from '@/lib/utils'
-import { kardexConSaldo, ETIQUETA_MOVIMIENTO, signoMovimiento, type TipoMovimiento } from '@/lib/domain/despacho'
+import { kardexConSaldo, saldoDeSalon, ETIQUETA_MOVIMIENTO, signoMovimiento, type TipoMovimiento } from '@/lib/domain/despacho'
 import { hoyLocal, sumarDias } from '@/lib/domain/mantenimiento'
 import Modal from '@/components/ui/Modal'
 
@@ -35,16 +35,21 @@ export default function SalonesKardex({ version = '' }: { version?: string }) {
   const [cargando, setCargando] = useState(true)
   const [traslado, setTraslado] = useState<{ saco: Saco; destino: string } | null>(null)
   const [recarga, setRecarga] = useState(0)
+  const [previos, setPrevios] = useState<Mov[]>([])
 
   const leer = useCallback(async () => {
-    const [ub, pq, mv] = await Promise.all([
+    // Fechas en hora de Lima (UTC-5, sin horario de verano), no en UTC
+    const inicio = `${desde}T00:00:00-05:00`
+    const [ub, pq, mv, ant] = await Promise.all([
       supabase.from('ubicaciones').select('id, nombre').eq('activo', true).order('nombre'),
       supabase.from('paquetes').select('id, codigo_paquete, docenas, ubicacion_id, catalogo_media_id, catalogo_media:catalogo_medias(codigo, sku)').eq('estado', 'almacenado'),
       supabase.from('movimientos_stock').select('id, tipo, docenas, ubicacion_id, created_at, referencia, catalogo_media_id, paquete:paquetes(codigo_paquete), usuario:usuarios(nombre), catalogo_media:catalogo_medias(codigo)')
-        .gte('created_at', `${desde}T00:00:00`).lte('created_at', `${hasta}T23:59:59`).order('created_at', { ascending: true }),
+        .gte('created_at', inicio).lte('created_at', `${hasta}T23:59:59.999-05:00`).order('created_at', { ascending: true }),
+      // Lo anterior a la ventana da el saldo con que empieza el kardex
+      supabase.from('movimientos_stock').select('tipo, docenas, ubicacion_id, catalogo_media_id').lt('created_at', inicio),
     ])
-    for (const [n, r] of [['salones', ub], ['sacos', pq], ['kardex', mv]] as const) if (r.error) toast.error(`Error cargando ${n}: ${r.error.message}`)
-    return { salones: (ub.data ?? []) as Salon[], sacos: (pq.data ?? []) as unknown as Saco[], movs: (mv.data ?? []) as unknown as Mov[] }
+    for (const [n, r] of [['salones', ub], ['sacos', pq], ['kardex', mv], ['saldo anterior', ant]] as const) if (r.error) toast.error(`Error cargando ${n}: ${r.error.message}`)
+    return { salones: (ub.data ?? []) as Salon[], sacos: (pq.data ?? []) as unknown as Saco[], movs: (mv.data ?? []) as unknown as Mov[], previos: (ant.data ?? []) as unknown as Mov[] }
   }, [supabase, desde, hasta])
 
   useEffect(() => {
@@ -52,7 +57,7 @@ export default function SalonesKardex({ version = '' }: { version?: string }) {
     ;(async () => {
       const d = await leer()
       if (!vigente) return
-      setSalones(d.salones); setSacos(d.sacos); setMovs(d.movs); setCargando(false)
+      setSalones(d.salones); setSacos(d.sacos); setMovs(d.movs); setPrevios(d.previos); setCargando(false)
       setSalon(s => s || d.salones[0]?.id || '')
     })()
     return () => { vigente = false }
@@ -72,10 +77,11 @@ export default function SalonesKardex({ version = '' }: { version?: string }) {
   }, [sacosSalon])
   const skus = useMemo(() => [...new Map(movs.filter(m => m.catalogo_media_id).map(m => [m.catalogo_media_id!, m.catalogo_media?.codigo ?? ''])).entries()]
     .sort((a, b) => a[1].localeCompare(b[1])), [movs])
+  const saldoInicial = useMemo(() => saldoDeSalon(previos.filter(m => !sku || m.catalogo_media_id === sku), salon), [previos, salon, sku])
   const kardex = useMemo(() => {
     const filtrados = movs.filter(m => !sku || m.catalogo_media_id === sku)
-    return salon ? kardexConSaldo(filtrados, salon) : []
-  }, [movs, salon, sku])
+    return salon ? kardexConSaldo(filtrados, salon, saldoInicial) : []
+  }, [movs, salon, sku, saldoInicial])
 
   const imprimir = () => {
     const filas = stockSalon.map(r => `<tr><td>${h(r.codigo)}</td><td>${h(r.sku)}</td><td style="text-align:right">${r.sacos}</td><td style="text-align:right">${r.docenas}</td></tr>`).join('')
@@ -154,6 +160,7 @@ export default function SalonesKardex({ version = '' }: { version?: string }) {
           <div><label htmlFor="kardex-desde" className="block text-slate-400 mb-1">Desde</label><input id="kardex-desde" type="date" value={desde} onChange={e => setDesde(e.target.value)} className="input-dark text-xs" /></div>
           <div><label htmlFor="kardex-hasta" className="block text-slate-400 mb-1">Hasta</label><input id="kardex-hasta" type="date" value={hasta} onChange={e => setHasta(e.target.value)} className="input-dark text-xs" /></div>
         </div>
+        <p className="text-xs text-slate-400" data-testid="saldo-anterior">Saldo anterior al {desde}: <strong className="text-white font-mono">{saldoInicial}</strong> doc.</p>
         <div className="overflow-x-auto">
           <table className="w-full text-left" data-testid="kardex">
             <thead className="text-slate-400 uppercase text-[10px]"><tr><th className="p-2">Fecha y hora</th><th className="p-2">Movimiento</th><th className="p-2">Saco</th><th className="p-2">Producto</th>

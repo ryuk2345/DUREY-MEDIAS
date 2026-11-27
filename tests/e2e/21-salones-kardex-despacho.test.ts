@@ -3,7 +3,7 @@
  * Spec: 02-DOCS/wiki/sdd/specs/fase-6-almacen-ventas-despacho.md · SQL: migración 034.
  */
 import { describe, it, expect } from 'vitest'
-import { compararDespacho, sacosFueraDelPedido, puedeDespachar, signoMovimiento, kardexConSaldo } from '@/lib/domain/despacho'
+import { compararDespacho, sacosFueraDelPedido, puedeDespachar, signoMovimiento, kardexConSaldo, saldoDeSalon } from '@/lib/domain/despacho'
 import { ejecutarRpcAlmacen } from '@/lib/supabase/mockRpcAlmacen'
 import { ejecutarRpcProcesos } from '@/lib/supabase/mockRpcProcesos'
 import { ejecutarRpcLogistica } from '@/lib/supabase/mockRpcLogistica'
@@ -46,6 +46,10 @@ describe('kardex (lib/domain/despacho)', () => {
       { tipo: 'salida_venta', docenas: 2, ubicacion_id: null, created_at: '2026-01-04' },
     ]
     expect(kardexConSaldo(movs, 's1').map(m => m.saldo)).toEqual([6, 9, 5])
+    // Ventana que empieza después: el saldo parte de lo que ya había en el salón
+    const antes = [{ tipo: 'ingreso_salon', docenas: 10, ubicacion_id: 's1' }, { tipo: 'traslado_salida', docenas: 2.5, ubicacion_id: 's1' }, { tipo: 'ingreso_salon', docenas: 7, ubicacion_id: 's2' }]
+    expect(saldoDeSalon(antes, 's1')).toBe(7.5)
+    expect(kardexConSaldo(movs, 's1', saldoDeSalon(antes, 's1')).map(m => m.saldo)).toEqual([13.5, 16.5, 12.5])
   })
 })
 
@@ -104,8 +108,8 @@ describe('mock: almacenar y trasladar con kardex', () => {
     expect(rpc(db, 'trasladar_saco', { __uid: ALM, p_paquete_id: 'a1', p_ubicacion_destino_id: 's2' }).error).toBeNull()
     expect(db.paquetes[0].ubicacion_id).toBe('s2')
     expect(db.movimientos_stock).toEqual([
-      expect.objectContaining({ tipo: 'traslado_salida', ubicacion_id: 's1', ubicacion_destino_id: 's2', usuario_id: ALM, docenas: 6 }),
-      expect.objectContaining({ tipo: 'traslado_entrada', ubicacion_id: 's2', ubicacion_origen_id: 's1', usuario_id: ALM, docenas: 6 }),
+      expect.objectContaining({ tipo: 'traslado_salida', ubicacion_id: 's1', ubicacion_destino_id: 's2', usuario_id: ALM, docenas: 6, catalogo_media_id: 'A' }),
+      expect.objectContaining({ tipo: 'traslado_entrada', ubicacion_id: 's2', ubicacion_origen_id: 's1', usuario_id: ALM, docenas: 6, catalogo_media_id: 'A' }),
     ])
   })
 })
@@ -130,6 +134,8 @@ describe('mock: despachar eligiendo sacos', () => {
     expect(db.guias_remision[0]).toMatchObject({ codigo_guia: r.data, agencia: 'Shalom', despachado_por: ALM })
     expect(db.despacho_detalle.map(x => [x.catalogo_media_id, x.docenas_pedidas, x.docenas_entregadas])).toEqual([['A', 10, 12], ['B', 3, 4]])
     expect(db.movimientos_stock.map(m => [m.tipo, m.paquete_id, m.ubicacion_id])).toEqual([['salida_venta', 'a1', 's1'], ['salida_venta', 'a2', 's2'], ['salida_venta', 'b1', 's1']])
+    const guia = db.guias_remision[0].id
+    expect(db.movimientos_stock.map(m => [m.usuario_id, m.catalogo_media_id, m.venta_id, m.guia_id])).toEqual([[ALM, 'A', 'v1', guia], [ALM, 'A', 'v1', guia], [ALM, 'B', 'v1', guia]])
     expect(db.paquetes.filter(p => ['a1', 'a2', 'b1'].includes(p.id)).every(p => p.estado === 'entregado' && p.ubicacion_id === null && p.venta_id === 'v1')).toBe(true)
     expect(db.ventas[0].estado).toBe('entregado')
     expect(rpc(db, 'despachar_venta_sacos', { __uid: ALM, p_venta_id: 'v1', p_agencia: 'X', p_sacos: ['c1'] }).error?.message).toContain('ya fue despachada')

@@ -46,9 +46,14 @@ export function signoMovimiento(tipo: string): 1 | -1 | 0 {
   return 0
 }
 
-/** Movimientos de un salón en orden, con el saldo después de cada uno. */
-export function kardexConSaldo<T extends Movimiento>(movs: T[], ubicacionId: string): (T & { saldo: number })[] {
-  let saldo = 0
+/** Docenas que suman los movimientos de un salón (saldo anterior a la ventana del kardex). */
+export function saldoDeSalon(movs: Pick<Movimiento, 'tipo' | 'docenas' | 'ubicacion_id'>[], ubicacionId: string): number {
+  return r2(movs.filter(m => m.ubicacion_id === ubicacionId).reduce((t, m) => t + signoMovimiento(m.tipo) * Number(m.docenas ?? 0), 0))
+}
+
+/** Movimientos de un salón en orden, con el saldo después de cada uno, partiendo del saldo anterior. */
+export function kardexConSaldo<T extends Movimiento>(movs: T[], ubicacionId: string, saldoInicial = 0): (T & { saldo: number })[] {
+  let saldo = saldoInicial
   return movs
     .filter(m => m.ubicacion_id === ubicacionId && signoMovimiento(m.tipo) !== 0)
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
