@@ -6,7 +6,7 @@ tags: [sdd, spec, fase-5]
 timestamp: 2026-11-26T21:00:00Z
 topic: sdd
 slug: fase-5-flujo-produccion
-branch: fase-5/flujo-produccion
+branch: fase-5b/crudo-volteado-tintoreria
 status: approved
 ---
 
@@ -97,10 +97,13 @@ Quién: usuarios con sesión y acceso al módulo (MODULOS_POR_ROL). Nadie sin se
 - **supuesto** — Planchado y preparado se asignan por SKU (uno o varios por persona y día); se dejan los criterios por talla o público. *Riesgo:* si se siguen usando, se mantienen como atajo para elegir varios SKU.
 - **supuesto** — Lo que hoy está en proceso con color (lotes de remallado abiertos, stock por planchar) termina su camino como antes.
 
+- **decidido (dueño, 2026-11-26)** — La base bloquea los registros de producción según el rol (no solo la pantalla). Para 5B: crudos automáticos (Q1-A), rol tintorero (Q2-A), Volteado visible para administrador y supervisor (Q3-A), SKU de color creado en Catálogo (Q4-A), bloqueo en las funciones de producción ahora y el resto en la Fase 6 (Q5-A). Detalle: [plan 5B](../plans/fase-5b-crudo-volteado-tintoreria.md).
+
 ## Construction
 Dos PRs en esta rama de trabajo:
 - **5A** (migración 032): tejido 24/6 con operario por turno, preparado con la lógica de planchado, varios SKU por día, stock de fuera.
-- **5B** (migración 033): catálogo crudo, remallado → volteado → tintorería → planchado, tintorería con merma.
+- **5A** hecha: PR #22, migración 032 en la base real (2026-11-26).
+- **5B** (migración 033): catálogo crudo, remallado → volteado → tintorería → planchado, tintorería con merma, bloqueo por rol en la base.
 
 ## Approval
 Decisiones del dueño (2026-11-26): 1-A (todo se teje crudo; en tintorería pasa a su SKU de color), 2-A (por turno), 3-B (todas pasan por tintorería), 4 (tintorería interna sin costo), 5-A (stock de fuera sin egreso), 6 (se sigue volteando, entre remallado y tintorería), 7-A (merma con motivo), C1 (stock de fuera: se elige la etapa), C2 (remallado sigue manual), C3-A (hilo por docenas reales). Supuestos mostrados y no objetados. Especificación aprobada el 2026-11-26.
