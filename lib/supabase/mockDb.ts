@@ -7,6 +7,7 @@ import { ejecutarRpcProcesos, RPC_PROCESOS } from './mockRpcProcesos'
 import { ejecutarRpcMateriaPrima, RPC_MATERIA_PRIMA } from './mockRpcMateriaPrima'
 import { ejecutarRpcLogistica, RPC_LOGISTICA } from './mockRpcLogistica'
 import { ejecutarRpcMantenimiento, RPC_MANTENIMIENTO } from './mockRpcMantenimiento'
+import { ejecutarRpcTejido, RPC_TEJIDO } from './mockRpcTejido'
 import { construirHistoriaMock } from './mockHistoria'
 
 const SEMILLAS = {
@@ -166,6 +167,11 @@ const SEMILLAS = {
   planes_mantenimiento: [],
   mantenimientos_preventivos: [],
   mantenimiento_repuestos: [],
+  // Fase 5A (migración 032)
+  productos_maquina: [],
+  stock_listo_preparar: [],
+  reportes_preparado: [],
+  ingresos_stock_fuera: [],
   guias_remision: [],
   movimientos_stock: [],
   disenos: [],
@@ -577,6 +583,7 @@ class MockQueryBuilder {
               ...r,
               maquina: db.maquinas.find((m: any) => m.id === r.maquina_id) || null,
               catalogo_media: db.catalogo_medias.find((c: any) => c.id === r.catalogo_media_id) || null,
+              operario: db.usuarios.find((u: any) => u.id === r.operario_id) || null,
               turno: {
                 ...t,
                 tejedor: tej
@@ -621,6 +628,18 @@ class MockQueryBuilder {
           result = result.map(s => ({
             ...s,
             catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || null
+          }));
+        } else if (self.tableName === 'stock_listo_preparar' || self.tableName === 'productos_maquina') {
+          result = result.map(s => ({
+            ...s,
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || null
+          }));
+        } else if (self.tableName === 'reportes_preparado' || self.tableName === 'ingresos_stock_fuera') {
+          result = result.map(r => ({
+            ...r,
+            preparador: db.usuarios.find((u: any) => u.id === r.preparador_id) || null,
+            registrador: db.usuarios.find((u: any) => u.id === r.registrado_por) || null,
+            catalogo_media: db.catalogo_medias.find((c: any) => c.id === r.catalogo_media_id) || null
           }));
         } else if (self.tableName === 'stock_listo_voltear') {
           result = result.map(s => ({
@@ -793,15 +812,24 @@ class MockQueryBuilder {
 
 const archivosMock = new Map<string, string>();
 
+/** Usuario de la sesión mock (en SQL, auth.uid()): la cookie que deja /api/auth/login en modo mock. */
+function idSesionMock(): string | null {
+  if (typeof document === 'undefined') return null
+  const valor = document.cookie.split('; ').find(c => c.startsWith('durey_mock_session='))?.split('=').slice(1).join('=')
+  if (!valor) return null
+  try { return JSON.parse(decodeURIComponent(valor)).id ?? null } catch { return null }
+}
+
 export function createMockClient() {
   return {
     from(tableName: string) {
       return new MockQueryBuilder(tableName);
     },
     async rpc(fnName: string, params: any) {
-      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO].includes(fnName as never)) {
+      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO, ...RPC_TEJIDO].includes(fnName as never)) {
         const db = await getMockDb();
-        const resultado = (ejecutarRpcProduccion(db, fnName, params)
+        const resultado = (ejecutarRpcTejido(db, fnName, { ...params, __uid: idSesionMock() })
+          ?? ejecutarRpcProduccion(db, fnName, params)
           ?? ejecutarRpcProcesos(db, fnName, params)
           ?? ejecutarRpcMateriaPrima(db, fnName, params)
           ?? ejecutarRpcLogistica(db, fnName, params)

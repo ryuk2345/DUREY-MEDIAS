@@ -8,6 +8,7 @@
 import { generarCodigoVenta, generarCodigoGuia } from '@/lib/utils'
 import { validarTransicionEstadoPaquete, type EstadoPaquete } from '@/lib/domain/packaging'
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
+import { sumarStockEtapa } from './mockRpcTejido'
 
 export const RPC_PROCESOS = [
   'registrar_venta',
@@ -260,9 +261,12 @@ function traspasarLoteRemallado(db: Db, p: any) {
 
 function registrarProduccionPlanchado(db: Db, p: any) {
   const items: any[] = Array.isArray(p.p_items) ? p.p_items : []
-  const conDatos = items.filter(i => num(i.docenas_planchadas) + num(i.docenas_defectuosas) > 0)
+  // Igual que el SQL: NaN pasa el "> 0" (en Postgres NaN es mayor que todo) y cae en la validación siguiente
+  const esNaN = (v: unknown) => v != null && Number.isNaN(Number(v))
+  const conDatos = items.filter(i => num(i.docenas_planchadas) + num(i.docenas_defectuosas) > 0 || esNaN(i.docenas_planchadas) || esNaN(i.docenas_defectuosas))
   if (conDatos.length === 0) throw new ErrorNegocio('Ingresa al menos una docena planchada o defectuosa para guardar')
-  if (items.some(i => num(i.docenas_planchadas) < 0 || num(i.docenas_defectuosas) < 0 || !i.catalogo_media_id)) {
+  if (items.some(i => num(i.docenas_planchadas) < 0 || num(i.docenas_defectuosas) < 0 || !i.catalogo_media_id
+    || esNaN(i.docenas_planchadas) || esNaN(i.docenas_defectuosas))) {
     throw new ErrorNegocio('Las docenas no pueden ser negativas')
   }
   const porMedia = new Map<string, number>()
@@ -280,6 +284,10 @@ function registrarProduccionPlanchado(db: Db, p: any) {
     fila.docenas = num(fila.docenas) - total
     fila.updated_at = new Date().toISOString()
   }
+  // 032: lo planchado (sin defectuosas) queda por preparar
+  const buenas = new Map<string, number>()
+  for (const i of conDatos) buenas.set(i.catalogo_media_id, (buenas.get(i.catalogo_media_id) ?? 0) + num(i.docenas_planchadas))
+  for (const [mediaId, n] of buenas) if (n > 0) sumarStockEtapa(db, 'stock_listo_preparar', mediaId, n)
   for (const i of conDatos) {
     tabla(db, 'reportes_planchado').push({
       id: nuevoId(), planchador_id: i.planchador_id ?? null, catalogo_media_id: i.catalogo_media_id,
