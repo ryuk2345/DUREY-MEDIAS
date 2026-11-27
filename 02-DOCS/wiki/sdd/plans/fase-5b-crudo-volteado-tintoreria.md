@@ -50,3 +50,19 @@ spec: ../specs/fase-5-flujo-produccion.md
 | T3 | Volteado y Remallado | 1 | Playwright |
 | T4 | Tintorería | 2 | Playwright |
 | T5 | Panel, PR, fusión, 033 en la base real | 2 | permisos y advisors |
+
+## Evidencia (2026-11-27)
+| # | Estado | Prueba observada |
+|---|---|---|
+| T1 | hecha (ab8e053) | `probar_migraciones.sh`: PASA 033 y "PASA reversión 033"; las pruebas 022, 028 y 032 corren con sesión |
+| T2 | hecha (c782d68) | `tests/e2e/20-crudo-volteado-tintoreria.test.ts` (incluye `modulos_por_rol` = `MODULOS_POR_ROL`) |
+| T3 | hecha | Playwright "Volteado: stock de fuera en crudo, voltear y queda por teñir"; Tejido 24/6 con media cruda |
+| T4 | hecha | Playwright "Tintorería: enviar 8 en crudo, recibir 7 con merma y motivo" |
+| T5 | en curso | panel de 3 revisores; luego PR, fusión, 033 en la base real |
+
+Batería: `npm test` 267/267 · Playwright 54/54 · build y `tsc` en verde · ESLint sin errores nuevos (mockDb.ts baja de 118 a 113).
+
+## Anotado
+- `proxy.ts` tiene su propia lista de rutas por rol (duplica `MODULOS_POR_ROL`, y el supervisor tiene ahí Mantenimiento). Se añadieron solo las rutas nuevas; unificarlo queda para la Fase 7.
+- `asignar_producto_maquina` no exige media cruda en la base (la pantalla solo ofrece crudas), para no romper lo ya asignado.
+- Los cronogramas de Planchado y Preparado se siguen escribiendo directo (no mueven stock).

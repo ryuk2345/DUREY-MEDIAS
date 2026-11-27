@@ -63,9 +63,9 @@ test('Tejido 24/6: la máquina malograda no registra; asignar producto y registr
   const fila = page.getByTestId('fila-tejido-ANGE02')
   await expect(fila.getByText('Asigna un producto para registrar')).toBeVisible()
   await fila.getByRole('button', { name: 'Asignar producto' }).click()
-  await elegir(page, 'Elegir producto…', 'TST-1')
+  await elegir(page, 'Elegir producto…', 'CRU-1')  // 5B: se teje en crudo
   await page.getByRole('button', { name: 'Guardar producto' }).click()
-  await expect(page.getByText('Máquina ANGE02: ahora teje TST-1')).toBeVisible()
+  await expect(page.getByText('Máquina ANGE02: ahora teje CRU-1')).toBeVisible()
 
   // Turno día de hoy: encargado y, en la fila, docenas y operario
   const hiloAntes = (await (await page.request.get('/api/mock-db')).json()).materia_prima.find((m: { id: string }) => m.id === 'mp1').stock_kg
@@ -77,7 +77,7 @@ test('Tejido 24/6: la máquina malograda no registra; asignar producto y registr
   await expect(fila.getByText('14.5')).toBeVisible()
   let db = await (await page.request.get('/api/mock-db')).json()
   const rep = db.reportes_produccion.find((r: { maquina_id: string; operario_id?: string }) => r.maquina_id === 'm2' && r.operario_id)
-  expect(rep).toMatchObject({ docenas_producidas: 14.5, operario_id: 'tej1', catalogo_media_id: 'media1' })
+  expect(rep).toMatchObject({ docenas_producidas: 14.5, operario_id: 'tej1', catalogo_media_id: 'cru1' })
   expect(db.materia_prima.find((m: { id: string }) => m.id === 'mp1').stock_kg).toBeCloseTo(hiloAntes - 14.5 * 0.4)
 
   // El administrador corrige el mismo día: 14,5 → 10 (el hilo se devuelve)

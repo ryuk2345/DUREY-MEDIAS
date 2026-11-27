@@ -13,12 +13,12 @@ const ROLE_ROUTES: Record<string, string[]> = {
     '/egresos', '/balance', '/calendario'
   ],
   supervisor: [
-    '/usuarios', '/catalogo', '/maquinas', '/disenos', '/produccion', '/remallado', 
+    '/usuarios', '/catalogo', '/maquinas', '/disenos', '/produccion', '/remallado', '/volteado', '/tintoreria',
     '/planchado', '/preparado', '/almacen', '/ventas', '/clientes', '/despacho', 
     '/mantenimiento', '/reportes', '/materia-prima', '/calendario'
   ],
   operador: [
-    '/produccion', '/remallado', '/disenos', '/planchado', '/preparado', '/almacen', 
+    '/produccion', '/remallado', '/tintoreria', '/disenos', '/planchado', '/preparado', '/almacen',
     '/mantenimiento'
   ],
   disenador: ['/disenos', '/catalogo', '/maquinas'],
@@ -30,6 +30,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
   almacenero: ['/almacen', '/despacho', '/materia-prima'],
   vendedora: ['/ventas', '/clientes', '/catalogo', '/despacho'],
   volteador: ['/volteado'],
+  tintorero: ['/tintoreria'],
 }
 
 

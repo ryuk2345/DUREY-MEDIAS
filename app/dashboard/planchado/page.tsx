@@ -545,7 +545,7 @@ export default function PlanchadoPage() {
 
         {/* Botones de Impresión */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          <IngresoStockFuera etapa="planchado" catalogo={catalogo} onIngreso={cargarDatos} />
+          <IngresoStockFuera etapa="planchado" onIngreso={cargarDatos} />
           <button onClick={imprimirCronogramaSemanal} className="btn-secondary text-xs py-2 rounded-2xl">
             <Printer className="w-4 h-4 text-red-400" /> Imprimir Cronograma Semanal
           </button>

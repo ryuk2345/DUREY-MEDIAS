@@ -278,7 +278,7 @@ export default function PreparadoPage() {
           </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
-          <IngresoStockFuera etapa="preparado" catalogo={catalogo} onIngreso={recargar} />
+          <IngresoStockFuera etapa="preparado" onIngreso={recargar} />
           <Link href="/dashboard/almacen" className="btn-primary text-xs py-2 px-4 rounded-2xl bg-cyan-600 hover:bg-cyan-500 border-none flex items-center gap-1.5 font-bold">
             <Scan className="w-4 h-4" /> Escáner / Salones
           </Link>
