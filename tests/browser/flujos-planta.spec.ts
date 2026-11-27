@@ -68,6 +68,7 @@ test('Tejido 24/6: la máquina malograda no registra; asignar producto y registr
   await expect(page.getByText('Máquina ANGE02: ahora teje TST-1')).toBeVisible()
 
   // Turno día de hoy: encargado y, en la fila, docenas y operario
+  const hiloAntes = (await (await page.request.get('/api/mock-db')).json()).materia_prima.find((m: { id: string }) => m.id === 'mp1').stock_kg
   await page.getByLabel('Encargado del turno').selectOption({ label: 'Tejedor Prueba' })
   await fila.getByLabel('Docenas de ANGE02').fill('14.5')
   await fila.getByLabel('Operario de ANGE02').selectOption({ label: 'Tejedor Prueba' })
@@ -77,7 +78,7 @@ test('Tejido 24/6: la máquina malograda no registra; asignar producto y registr
   let db = await (await page.request.get('/api/mock-db')).json()
   const rep = db.reportes_produccion.find((r: { maquina_id: string; operario_id?: string }) => r.maquina_id === 'm2' && r.operario_id)
   expect(rep).toMatchObject({ docenas_producidas: 14.5, operario_id: 'tej1', catalogo_media_id: 'media1' })
-  expect(db.materia_prima.find((m: { id: string }) => m.id === 'mp1').stock_kg).toBeCloseTo(20 - 14.5 * 0.4)
+  expect(db.materia_prima.find((m: { id: string }) => m.id === 'mp1').stock_kg).toBeCloseTo(hiloAntes - 14.5 * 0.4)
 
   // El administrador corrige el mismo día: 14,5 → 10 (el hilo se devuelve)
   await fila.getByRole('button', { name: 'Corregir' }).click()
@@ -85,7 +86,7 @@ test('Tejido 24/6: la máquina malograda no registra; asignar producto y registr
   await page.getByRole('button', { name: 'Guardar corrección' }).click()
   await expect(page.getByText('Corrección guardada en ANGE02')).toBeVisible()
   db = await (await page.request.get('/api/mock-db')).json()
-  expect(db.materia_prima.find((m: { id: string }) => m.id === 'mp1').stock_kg).toBeCloseTo(20 - 10 * 0.4)
+  expect(db.materia_prima.find((m: { id: string }) => m.id === 'mp1').stock_kg).toBeCloseTo(hiloAntes - 10 * 0.4)
 })
 
 test('Mantenimiento: entra el mecánico, usa un repuesto del stock y al cerrar el costo sale solo', async ({ page }) => {

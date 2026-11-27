@@ -583,7 +583,7 @@ class MockQueryBuilder {
               ...r,
               maquina: db.maquinas.find((m: any) => m.id === r.maquina_id) || null,
               catalogo_media: db.catalogo_medias.find((c: any) => c.id === r.catalogo_media_id) || null,
-              operario: db.usuarios.find((u: any) => u.id === r.operario_id) || null,
+              operario: db.usuarios.find((u: { id: string }) => u.id === r.operario_id) || null,
               turno: {
                 ...t,
                 tejedor: tej
@@ -632,14 +632,14 @@ class MockQueryBuilder {
         } else if (self.tableName === 'stock_listo_preparar' || self.tableName === 'productos_maquina') {
           result = result.map(s => ({
             ...s,
-            catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || null
+            catalogo_media: db.catalogo_medias.find((c: { id: string }) => c.id === s.catalogo_media_id) || null
           }));
         } else if (self.tableName === 'reportes_preparado' || self.tableName === 'ingresos_stock_fuera') {
           result = result.map(r => ({
             ...r,
-            preparador: db.usuarios.find((u: any) => u.id === r.preparador_id) || null,
-            registrador: db.usuarios.find((u: any) => u.id === r.registrado_por) || null,
-            catalogo_media: db.catalogo_medias.find((c: any) => c.id === r.catalogo_media_id) || null
+            preparador: db.usuarios.find((u: { id: string }) => u.id === r.preparador_id) || null,
+            registrador: db.usuarios.find((u: { id: string }) => u.id === r.registrado_por) || null,
+            catalogo_media: db.catalogo_medias.find((c: { id: string }) => c.id === r.catalogo_media_id) || null
           }));
         } else if (self.tableName === 'stock_listo_voltear') {
           result = result.map(s => ({

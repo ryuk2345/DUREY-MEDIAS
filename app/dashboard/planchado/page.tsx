@@ -13,6 +13,7 @@ import { getSemanaAnio, getDiaSemana, formatearRangoSemana } from '@/lib/utils'
 import CustomSelect from '@/components/ui/CustomSelect'
 import SelectorMedia from '@/components/ui/SelectorMedia'
 import Modal from '@/components/ui/Modal'
+import IngresoStockFuera from '@/components/produccion/IngresoStockFuera'
 
 interface Planchador { id: string; nombre: string }
 interface StockPlanchar {
@@ -69,7 +70,9 @@ export default function PlanchadoPage() {
     planchador_id: '',
     dia_semana: 'lunes',
     criterio: 'media',
-    valor_criterio: ''
+    valor_criterio: '',
+    // Fase 5A: al asignar por código se pueden elegir varios SKU a la vez (una fila por SKU)
+    extras: [] as string[]
   })
 
   // Estado de inputs para TODOS los planchadores en el día seleccionado
@@ -337,7 +340,8 @@ export default function PlanchadoPage() {
         planchador_id: planchadorId,
         dia_semana: dia,
         criterio: asignacionExistente.criterio || 'media',
-        valor_criterio: asignacionExistente.valor_criterio
+        valor_criterio: asignacionExistente.valor_criterio,
+        extras: []
       })
     } else {
       setCronoForm({
@@ -345,14 +349,15 @@ export default function PlanchadoPage() {
         planchador_id: planchadorId,
         dia_semana: dia,
         criterio: 'media',
-        valor_criterio: catalogo[0]?.codigo || ''
+        valor_criterio: '',
+        extras: []
       })
     }
     setShowCronoModal(true)
   }
 
   const guardarAsignacion = async () => {
-    if (!cronoForm.planchador_id || !cronoForm.valor_criterio) {
+    if (!cronoForm.planchador_id || (!cronoForm.valor_criterio && cronoForm.extras.length === 0)) {
       toast.error('Selecciona el planchador y el tipo de media / criterio')
       return
     }
@@ -368,17 +373,21 @@ export default function PlanchadoPage() {
       if (error) { toast.error('Error al actualizar asignación: ' + (error.message || JSON.stringify(error))); return }
       toast.success('✅ Asignación actualizada en el cronograma')
     } else {
-      const { error } = await supabase.from('cronograma_planchado').insert({
+      // Varios SKU a la vez: una fila por SKU, sin repetir lo que ya tiene ese día
+      const yaTiene = new Set(cronograma.filter(c => c.planchador_id === cronoForm.planchador_id && c.dia_semana === cronoForm.dia_semana && c.criterio === cronoForm.criterio).map(c => c.valor_criterio))
+      const valores = [...new Set([cronoForm.valor_criterio, ...(cronoForm.criterio === 'media' ? cronoForm.extras : [])].filter(v => v && !yaTiene.has(v)))]
+      if (valores.length === 0) { toast.error('Ese planchador ya tiene asignado eso ese día'); return }
+      const { error } = await supabase.from('cronograma_planchado').insert(valores.map(v => ({
         semana: semanaSeleccionada,
         anio: anioSeleccionado,
         planchador_id: cronoForm.planchador_id,
         dia_semana: cronoForm.dia_semana,
         criterio: cronoForm.criterio,
-        valor_criterio: cronoForm.valor_criterio,
-      })
+        valor_criterio: v,
+      })))
 
       if (error) { toast.error('Error al guardar asignación: ' + (error.message || JSON.stringify(error))); return }
-      toast.success('✅ Nueva asignación agregada al cronograma')
+      toast.success(valores.length > 1 ? `${valores.length} SKU asignados en el cronograma` : 'Nueva asignación agregada al cronograma')
     }
 
 
@@ -536,6 +545,7 @@ export default function PlanchadoPage() {
 
         {/* Botones de Impresión */}
         <div className="flex items-center gap-2.5 flex-wrap">
+          <IngresoStockFuera etapa="planchado" catalogo={catalogo} onIngreso={cargarDatos} />
           <button onClick={imprimirCronogramaSemanal} className="btn-secondary text-xs py-2 rounded-2xl">
             <Printer className="w-4 h-4 text-red-400" /> Imprimir Cronograma Semanal
           </button>
@@ -669,7 +679,8 @@ export default function PlanchadoPage() {
                       return (
                         <td
                           key={d}
-                          onClick={() => abrirModalAsignacionCelda(p.id, d, asigList[0])}
+                          onClick={() => abrirModalAsignacionCelda(p.id, d)}
+                          aria-label={`Asignar a ${p.nombre} el ${d}`}
                           className={`cursor-pointer hover:bg-white/[0.04] transition-all p-3 text-center ${
                             isSelectedDay ? 'bg-red-500/[0.04]' : ''
                           }`}
@@ -679,6 +690,8 @@ export default function PlanchadoPage() {
                               {asigList.map(a => (
                                 <div
                                   key={a.id}
+                                  onClick={e => { e.stopPropagation(); abrirModalAsignacionCelda(p.id, d, a) }}
+                                  title="Modificar esta asignación"
                                   className="inline-flex items-center justify-between gap-1.5 px-2.5 py-1 rounded-xl bg-red-500/20 text-red-200 border border-red-500/30 text-[11px] font-bold shadow-sm hover:bg-red-500/30 w-full"
                                 >
                                   <span className="truncate max-w-[120px] font-mono">{a.valor_criterio}</span>
@@ -920,7 +933,7 @@ export default function PlanchadoPage() {
               onChange={val => {
                 const nuevoCrit = val
                 let defaultVal = ''
-                if (nuevoCrit === 'media') defaultVal = catalogo[0]?.codigo || ''
+                if (nuevoCrit === 'media') defaultVal = ''
                 if (nuevoCrit === 'talla') defaultVal = 'única'
                 if (nuevoCrit === 'publico') defaultVal = 'Dama'
                 setCronoForm({ ...cronoForm, criterio: nuevoCrit, valor_criterio: defaultVal })
@@ -937,16 +950,36 @@ export default function PlanchadoPage() {
           <div>
             <label className="block font-semibold text-slate-400 mb-1 uppercase tracking-wider">Valor Asignado</label>
             {cronoForm.criterio === 'media' ? (
-              <SelectorMedia
-                items={catalogo}
-                value={cronoForm.valor_criterio}
-                onChange={val => setCronoForm({ ...cronoForm, valor_criterio: val })}
-                valorDe={c => c.codigo}
-                emptyOption={{ value: '', label: 'Seleccionar media...' }}
-                toOption={c => ({ value: c.codigo, label: c.codigo })}
-                triggerClassName="text-xs font-mono font-medium"
-                placeholder="Seleccionar media..."
-              />
+              <div className="space-y-2">
+                <SelectorMedia
+                  items={catalogo}
+                  value={cronoForm.valor_criterio}
+                  onChange={val => setCronoForm({ ...cronoForm, valor_criterio: val })}
+                  valorDe={c => c.codigo}
+                  emptyOption={{ value: '', label: 'Seleccionar media...' }}
+                  toOption={c => ({ value: c.codigo, label: c.codigo })}
+                  triggerClassName="text-xs font-mono font-medium"
+                  placeholder="Seleccionar media..."
+                />
+                {!cronoForm.id && (
+                  <>
+                    <button type="button" className="btn-secondary text-[11px] py-1 px-2" disabled={!cronoForm.valor_criterio}
+                      onClick={() => setCronoForm({ ...cronoForm, extras: [...new Set([...cronoForm.extras, cronoForm.valor_criterio])], valor_criterio: '' })}>
+                      <Plus className="w-3 h-3" /> Añadir otro SKU
+                    </button>
+                    {cronoForm.extras.length > 0 && (
+                      <div className="flex flex-wrap gap-1" data-testid="skus-elegidos">
+                        {cronoForm.extras.map(v => (
+                          <span key={v} className="badge badge-danger text-[10px] font-mono inline-flex items-center gap-1">
+                            {v}
+                            <button type="button" aria-label={`Quitar ${v}`} onClick={() => setCronoForm({ ...cronoForm, extras: cronoForm.extras.filter(x => x !== v) })}><X className="w-3 h-3" /></button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             ) : (
               <input
                 type="text"
