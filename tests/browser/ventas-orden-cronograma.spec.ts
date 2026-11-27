@@ -91,3 +91,14 @@ test('Orden de despacho: se imprime desde Ventas y desde Despacho con lo pedido 
   expect(html2).toContain('ORDEN DE DESPACHO')
   expect(html2).toContain(venta.codigo_venta)
 })
+
+test('Ventas no ofrece crudos y marca sin stock lo que no se puede vender (035)', async ({ page }) => {
+  await page.goto('/dashboard/ventas')
+  await page.getByRole('button', { name: /Nueva Venta/ }).click()
+  await page.waitForTimeout(500)
+  await page.getByRole('combobox').filter({ hasText: /Tipo de media|TST-/ }).first().click()
+  const opciones = await page.getByRole('option').allInnerTexts()
+  expect(opciones.some(o => o.includes('CRU-1'))).toBe(false)
+  expect(opciones.some(o => o.includes('TST-2'))).toBe(true)
+  await expect(page.getByRole('option', { name: /^TST-2/ })).toHaveAttribute('aria-disabled', 'true')
+})

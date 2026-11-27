@@ -9,6 +9,7 @@ import { generarCodigoVenta, generarCodigoGuia } from '@/lib/utils'
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
 import { sumarStockEtapa } from './mockRpcTejido'
 import { exigirModulo } from './mockRpcTintoreria'
+import { stockVendible, motivoNoVendible } from '@/lib/domain/stockVenta'
 
 export const RPC_PROCESOS = [
   'registrar_venta',
@@ -61,6 +62,9 @@ function registrarVenta(db: Db, p: any) {
   if (p.p_tipo_pago === 'cuotas' && (!Array.isArray(cuotas) || cuotas.length === 0)) {
     throw new ErrorNegocio('Una venta a cuotas necesita su cronograma de pagos')
   }
+  // 035: sin crudos y sin vender más de lo que hay para vender
+  const motivo = motivoNoVendible(items, stockVendible(db), db.catalogo_medias ?? [])
+  if (motivo) throw new ErrorNegocio(motivo)
   const total = items.reduce((s, i) => s + num(i.docenas) * num(i.precio_docena), 0)
   const adelanto = num(p.p_monto_adelanto)
   if (adelanto < 0 || adelanto > total) throw new ErrorNegocio('El adelanto debe estar entre 0 y el total de la venta')

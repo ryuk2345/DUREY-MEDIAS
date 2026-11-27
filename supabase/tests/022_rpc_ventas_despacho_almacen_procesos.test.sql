@@ -37,6 +37,10 @@ INSERT INTO catalogo_medias (id, codigo, modelo, publico, diseno_color, talla) V
   ('00000000-0000-0000-0000-0000000001c1', 'T22-A', 'M', 'adulto', 'Liso', 'M'),
   ('00000000-0000-0000-0000-0000000001c2', 'T22-B', 'M', 'adulto', 'Rayas', 'M');
 INSERT INTO ubicaciones (id, nombre, tipo) VALUES ('00000000-0000-0000-0000-0000000001e1', 'Salón Test', 'salon');
+-- 035: Ventas no vende sin stock. Sacos por almacenar (no los toma el despacho) para las ventas de abajo
+INSERT INTO paquetes (codigo_paquete, catalogo_media_id, docenas, estado) VALUES
+  ('T22-STOCK-A', '00000000-0000-0000-0000-0000000001c1', 8, 'pendiente_almacenar'),
+  ('T22-STOCK-B', '00000000-0000-0000-0000-0000000001c2', 2, 'pendiente_almacenar');
 INSERT INTO maquinas (id, codigo, tipo, estado) VALUES
   ('00000000-0000-0000-0000-0000000001d1', 'R22-1', 'remalladora', 'activa'),
   ('00000000-0000-0000-0000-0000000001d2', 'R22-2', 'remalladora', 'activa'),
@@ -66,6 +70,9 @@ CREATE TEMP TABLE t_v2 AS SELECT registrar_venta(
 SELECT pg_temp.verificar((SELECT count(*) = 1 AND max(nombre) = 'Cliente Uno SAC' FROM clientes WHERE numero_documento = '11111111'), 'cliente actualizado sin duplicar');
 SELECT pg_temp.verificar((SELECT (a.r->>'codigo_venta') <> (b.r->>'codigo_venta') FROM t_v1 a, t_v2 b), 'códigos de venta distintos');
 SELECT pg_temp.verificar((SELECT (r->>'codigo_venta') ~ '^V-[0-9]{4,}$' FROM t_v2), 'formato V-NNNN');
+
+-- Los sacos que solo daban stock para vender salen, para que el despacho cuente solo los suyos
+UPDATE paquetes SET estado = 'entregado' WHERE codigo_paquete LIKE 'T22-STOCK-%';
 
 -- ── 3. almacenar_paquete (stock para el despacho) ──────────────────────────
 SELECT pg_temp.debe_fallar($$SELECT almacenar_paquete(NULL, NULL, 'X', NULL, 1, 12, NULL, 'ingreso_directo', 'x')$$, 'salón de destino');

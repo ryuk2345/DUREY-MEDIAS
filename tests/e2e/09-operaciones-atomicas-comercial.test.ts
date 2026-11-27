@@ -52,7 +52,14 @@ beforeEach(() => {
   }
 })
 
+/** 035: Ventas no vende sin stock. Sacos por almacenar que solo dan stock para vender. */
+function darStockParaVender() {
+  db.paquetes.push({ id: 'stockA', codigo_paquete: 'STOCK-A', catalogo_media_id: 'A', docenas: 50, estado: 'pendiente_almacenar' },
+    { id: 'stockB', codigo_paquete: 'STOCK-B', catalogo_media_id: 'B', docenas: 50, estado: 'pendiente_almacenar' })
+}
+
 describe('registrar_venta', () => {
+  beforeEach(darStockParaVender)
   it('crea cliente, venta, productos y cuotas con el total calculado', () => {
     const r = venta({
       p_tipo_pago: 'cuotas', p_monto_adelanto: 20,
@@ -101,7 +108,8 @@ describe('almacenar_paquete y despachar_venta', () => {
 
   it('[NEGOCIO] sin stock suficiente no entrega nada ni crea guía', () => {
     rpc('almacenar_paquete', { p_ubicacion_id: 'sal1', p_codigo_paquete: 'P1', p_catalogo_media_id: 'A', p_docenas: 4 })
-    const ventaId = (venta().data as { venta_id: string }).venta_id
+    // 035: solo se venden las 4 que hay; el despacho anterior recibía las líneas de la pantalla
+    const ventaId = (venta({ p_items: [{ catalogo_media_id: 'A', docenas: 4, precio_docena: 40 }] }).data as { venta_id: string }).venta_id
     const antes = structuredClone(db)
     expect(rpc('despachar_venta', { p_venta_id: ventaId, p_agencia: 'Shalom', p_lineas: [{ catalogo_media_id: 'A', docenas: 5 }] }).error?.message)
       .toContain('Stock insuficiente')
@@ -165,6 +173,7 @@ describe('cobros reales y caja diaria (migración 023)', () => {
   const hoy = new Date().toISOString().split('T')[0]
 
   beforeEach(() => {
+    darStockParaVender()
     db.cobros = []
     db.cajas_diarias = [{ id: 'caja1', asesora_id: 'vend1', fecha: hoy, estado: 'abierta', saldo_inicial: 100, ventas_efectivo: 0, ventas_digital: 0, cobros_efectivo: 0, cobros_digital: 0 }]
   })

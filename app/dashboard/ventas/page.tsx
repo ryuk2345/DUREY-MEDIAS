@@ -19,6 +19,7 @@ import { Modal } from '@/components/ui/Modal'
 import { htmlCronogramaPagos, htmlCarteraCobranza, imprimirHtml, type ProductoVendido } from '@/lib/impresion/ventas'
 import { imprimirOrdenDespacho } from '@/lib/impresion/ordenDespacho'
 import { tipoDocumento } from '@/lib/domain/documento'
+import { motivoNoVendible } from '@/lib/domain/stockVenta'
 
 interface Cliente {
   id: string
@@ -30,7 +31,7 @@ interface Cliente {
 }
 
 interface Vendedora { id: string; nombre: string }
-interface MediaItem { id: string; codigo: string; modelo: string; publico: string; sku?: string; diseno_color?: string; talla?: string }
+interface MediaItem { id: string; codigo: string; modelo: string; publico: string; sku?: string; diseno_color?: string; talla?: string; es_crudo?: boolean }
 interface Venta {
   id: string; codigo_venta: string; total_soles: number; tipo_pago: string; estado: string; fecha: string
   cliente: { id: string; nombre: string; numero_documento: string; telefono?: string; direccion?: string }
@@ -63,7 +64,7 @@ export default function VentasPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [vendedoras, setVendedoras] = useState<Vendedora[]>([])
   const [catalogo, setCatalogo] = useState<MediaItem[]>([])
-  // Stock disponible en almacén por catalogo_media_id → docenas totales en paquetes 'almacenado'
+  // Stock para vender por producto (vista_stock_vendible, 035): sacos menos lo vendido sin despachar
   const [stockPorMedia, setStockPorMedia] = useState<Record<string, number>>({})
   const [ventas, setVentas] = useState<Venta[]>([])
   const [deudas, setDeudas] = useState<Deuda[]>([])
@@ -137,7 +138,8 @@ export default function VentasPage() {
     const [cli, vend, cat, ven, deu, caj, paq] = await Promise.all([
       supabase.from('clientes').select('*').order('nombre'),
       listarUsuarios({ rol: 'vendedora', campos: 'id,nombre' }),
-      supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla').eq('estado', 'activo').order('codigo'),
+      // 035: los crudos no se venden
+      supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla, es_crudo').eq('estado', 'activo').eq('es_crudo', false).order('codigo'),
       supabase.from('ventas').select(`
         id, codigo_venta, total_soles, tipo_pago, estado, fecha,
         cliente:clientes(id, nombre, numero_documento, telefono, direccion),
@@ -149,7 +151,7 @@ export default function VentasPage() {
           items_venta(docenas, precio_docena, catalogo_media:catalogo_medias(codigo, sku)))
       `).order('fecha_vencimiento'),
       supabase.from('cajas_diarias').select('*').eq('fecha', hoy).single(),
-      supabase.from('vista_stock_medias').select('catalogo_media_id, stock_docenas')
+      supabase.from('vista_stock_vendible').select('catalogo_media_id, vendibles')
     ])
 
     if (cli.error) toast.error(`Error al cargar clientes: ${cli.error.message}`)
@@ -170,7 +172,7 @@ export default function VentasPage() {
     const stockMap: Record<string, number> = {}
     for (const row of paq.data ?? []) {
       if (row.catalogo_media_id) {
-        stockMap[row.catalogo_media_id] = Number(row.stock_docenas ?? 0)
+        stockMap[row.catalogo_media_id] = Number(row.vendibles ?? 0)
       }
     }
     setStockPorMedia(stockMap)
@@ -497,6 +499,10 @@ export default function VentasPage() {
     if (!clienteForm.nombre.trim()) { toast.error('Ingresa el Nombre o Razón Social del cliente'); return }
     if (!clienteForm.numero_documento.trim()) { toast.error('Ingresa el DNI o RUC del cliente'); return }
     if (carrito.length === 0) { toast.error('Agrega al menos un producto a la venta'); return }
+    // 035: la base lo vuelve a comprobar; aquí se avisa antes de enviar
+    const motivo = motivoNoVendible(carrito.filter(c => c.catalogo_media_id),
+      Object.entries(stockPorMedia).map(([catalogo_media_id, vendibles]) => ({ catalogo_media_id, fisico: 0, comprometidas: 0, vendibles })), catalogo)
+    if (motivo) { toast.error(motivo); return }
 
     setGuardandoVenta(true)
 
@@ -1224,8 +1230,8 @@ export default function VentasPage() {
                             const s = stockPorMedia[c.id] ?? 0
                             return {
                               value: c.id,
-                              label: `${c.codigo} ${s === 0 ? '⛔ SIN STOCK' : s <= 5 ? `⚠️ Stock: ${s} doc.` : ''}`,
-                              disabled: s === 0
+                              label: `${c.codigo} ${s <= 0 ? '⛔ SIN STOCK' : s <= 5 ? `⚠️ Stock: ${s} doc.` : ''}`,
+                              disabled: s <= 0
                             }
                           }}
                           className="col-span-5"
@@ -1285,7 +1291,7 @@ export default function VentasPage() {
                           }
                         </div>
                       )}
-                      {item.catalogo_media_id && stockDisp === 0 && (
+                      {item.catalogo_media_id && stockDisp !== null && stockDisp <= 0 && (
                         <div className="flex items-center gap-1.5 text-[10px] font-semibold px-1 text-red-400">
                           <AlertTriangle className="w-3 h-3" />
                           ⛔ SIN STOCK — No hay docenas de esta media en almacén
