@@ -12,6 +12,7 @@ import { validarTransicionEstadoPaquete, convertirDocenasAPares } from '@/lib/do
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import SalonesKardex from '@/components/almacen/SalonesKardex'
 
 
 interface Ubicacion { id: string; nombre: string; tipo: string }
@@ -1078,6 +1079,9 @@ export default function AlmacenPage() {
           </div>
         </form>
       </Modal>
+
+      {/* SALONES Y KARDEX (Fase 6A): stock por salón imprimible, traslados y kardex */}
+      <SalonesKardex version={paquetes.map(p => `${p.id}:${p.estado}:${p.ubicacion?.nombre ?? ''}`).join('|')} />
 
       {/* CONFIRMAR ELIMINAR ALMACÉN (BORRADO SUAVE) */}
       <ConfirmDialog

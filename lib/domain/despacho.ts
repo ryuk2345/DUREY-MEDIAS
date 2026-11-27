@@ -32,16 +32,16 @@ export function puedeDespachar(pedido: LineaPedido[], sacos: SacoElegible[]): bo
 }
 
 // ── Kardex ────────────────────────────────────────────────────────────────
-export type TipoMovimiento = 'ingreso_salon' | 'traslado_entrada' | 'traslado_salida' | 'salida_venta'
+export type TipoMovimiento = 'ingreso_salon' | 'ingreso_directo' | 'traslado_entrada' | 'traslado_salida' | 'salida_venta'
 export type Movimiento = { tipo: string; docenas: number | null; ubicacion_id: string | null; created_at: string }
 
 export const ETIQUETA_MOVIMIENTO: Record<TipoMovimiento, string> = {
-  ingreso_salon: 'Entrada', traslado_entrada: 'Traslado (entra)', traslado_salida: 'Traslado (sale)', salida_venta: 'Salida por despacho',
+  ingreso_salon: 'Entrada', ingreso_directo: 'Entrada directa', traslado_entrada: 'Traslado (entra)', traslado_salida: 'Traslado (sale)', salida_venta: 'Salida por despacho',
 }
 
 /** +1 si el movimiento suma al salón, −1 si resta, 0 si no cuenta (tipos antiguos sin salón). */
 export function signoMovimiento(tipo: string): 1 | -1 | 0 {
-  if (tipo === 'ingreso_salon' || tipo === 'traslado_entrada') return 1
+  if (tipo === 'ingreso_salon' || tipo === 'ingreso_directo' || tipo === 'traslado_entrada') return 1
   if (tipo === 'traslado_salida' || tipo === 'salida_venta') return -1
   return 0
 }

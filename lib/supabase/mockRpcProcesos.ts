@@ -6,7 +6,6 @@
  * cambios a medias. mockDb.ts guarda la base solo si no hubo error.
  */
 import { generarCodigoVenta, generarCodigoGuia } from '@/lib/utils'
-import { validarTransicionEstadoPaquete, type EstadoPaquete } from '@/lib/domain/packaging'
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
 import { sumarStockEtapa } from './mockRpcTejido'
 import { exigirModulo } from './mockRpcTintoreria'

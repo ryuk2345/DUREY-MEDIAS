@@ -176,8 +176,9 @@ export default function PreparadoPage() {
   }
 
   // ── Saco ──
-  const prepararSaco = async (prep: Preparador) => {
-    const items: ItemSaco[] = skusDelDia(prep.id).flatMap(c => {
+  // 034: un saco lleva un solo SKU (decisión del dueño): se embolsa por fila de SKU
+  const prepararSaco = async (prep: Preparador, producto: CatalogoMedia) => {
+    const items: ItemSaco[] = [producto].flatMap(c => {
       const v = planilla[`${prep.id}__${c.id}`]
       const docenas = Number(v?.docenas || 0)
       const defectuosas = Number(v?.defectuosas || 0)
@@ -186,7 +187,7 @@ export default function PreparadoPage() {
     })
     if (items.some(i => !Number.isFinite(i.docenas) || !Number.isFinite(i.defectuosas) || i.docenas < 0 || i.defectuosas < 0)) { toast.error('Las docenas no pueden ser negativas'); return }
     const totalDocenas = items.reduce((s, i) => s + i.docenas, 0)
-    if (totalDocenas <= 0) { toast.error(`Anota las docenas preparadas por ${prep.nombre}`); return }
+    if (totalDocenas <= 0) { toast.error(`Anota las docenas preparadas de ${producto.codigo} por ${prep.nombre}`); return }
     const falta = items.find(i => i.docenas + i.defectuosas > stockDe(i.catalogo_media_id))
     if (falta) { toast.error(`No hay suficiente stock por preparar de ${falta.codigo}: hay ${stockDe(falta.catalogo_media_id)} docenas`); return }
 
@@ -230,7 +231,7 @@ export default function PreparadoPage() {
     if (error) { toast.error(`No se pudo registrar el saco: ${error.message}`); return }
     const salon = ubicaciones.find(u => u.id === saco.salon_id)?.nombre ?? ''
     toast.success(`Saco ${saco.codigo_saco} registrado con ${saco.totalPares} pares. Listo para bajar a ${salon}.`)
-    setPlanilla(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(`${saco.preparador.id}__`))))
+    setPlanilla(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !saco.items.some(i => k === `${saco.preparador.id}__${i.catalogo_media_id}`))))
     setSaco(null)
     recargar()
   }
@@ -381,13 +382,17 @@ export default function PreparadoPage() {
                           const clave = `${p.id}__${c.id}`
                           const v = planilla[clave] ?? { docenas: '', defectuosas: '' }
                           return (
-                            <div key={c.id} className="grid grid-cols-[1fr_6rem_7rem_7rem] gap-3 items-center">
+                            <div key={c.id} className="grid grid-cols-[1fr_6rem_7rem_7rem_auto] gap-3 items-center">
                               <span className="font-mono">{c.codigo}</span>
                               <span className="text-right font-mono text-emerald-300">{stockDe(c.id)} doc.</span>
                               <input type="number" min="0" step="0.5" aria-label={`Preparadas de ${c.codigo} por ${p.nombre}`} value={v.docenas}
                                 onChange={e => editar(clave, 'docenas', e.target.value)} className="input-dark text-xs py-1.5" />
                               <input type="number" min="0" step="0.5" aria-label={`Defectuosas de ${c.codigo} por ${p.nombre}`} value={v.defectuosas}
                                 onChange={e => editar(clave, 'defectuosas', e.target.value)} className="input-dark text-xs py-1.5" />
+                              <button type="button" onClick={() => prepararSaco(p, c)} aria-label={`Embolsar ${c.codigo} de ${p.nombre}`}
+                                className="btn-primary text-[11px] py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 border-none">
+                                <Barcode className="w-3.5 h-3.5" /> Embolsar
+                              </button>
                             </div>
                           )
                         })}
@@ -397,12 +402,7 @@ export default function PreparadoPage() {
                             triggerClassName="text-[11px] py-1.5 font-mono" placeholder="+ Añadir otro SKU hoy…" />
                         </div>
                       </td>
-                      <td className="p-3 text-right">
-                        <button type="button" onClick={() => prepararSaco(p)} disabled={skus.length === 0}
-                          className="btn-primary text-xs py-2 bg-emerald-600 hover:bg-emerald-500 border-none disabled:opacity-40">
-                          <Barcode className="w-4 h-4" /> Embolsar y crear saco
-                        </button>
-                      </td>
+                      <td className="p-3 text-right text-[10px] text-slate-500">Un saco por SKU</td>
                     </tr>
                   )
                 })}

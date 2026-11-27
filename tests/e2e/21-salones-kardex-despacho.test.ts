@@ -37,7 +37,7 @@ describe('compararDespacho (lib/domain/despacho)', () => {
 
 describe('kardex (lib/domain/despacho)', () => {
   it('signos y saldo por salón en orden de fecha', () => {
-    expect(['ingreso_salon', 'traslado_entrada', 'traslado_salida', 'salida_venta', 'otro'].map(signoMovimiento)).toEqual([1, 1, -1, -1, 0])
+    expect(['ingreso_salon', 'ingreso_directo', 'traslado_entrada', 'traslado_salida', 'salida_venta', 'otro'].map(signoMovimiento)).toEqual([1, 1, 1, -1, -1, 0])
     const movs = [
       { tipo: 'salida_venta', docenas: 4, ubicacion_id: 's1', created_at: '2026-01-03' },
       { tipo: 'ingreso_salon', docenas: 6, ubicacion_id: 's1', created_at: '2026-01-01' },

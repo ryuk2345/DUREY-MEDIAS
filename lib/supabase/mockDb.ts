@@ -636,6 +636,34 @@ class MockQueryBuilder {
             ...s,
             catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || null
           }));
+        } else if (self.tableName === 'guias_remision') {
+          type Fila = { id: string; [k: string]: unknown }
+          const media = (id: unknown) => db.catalogo_medias.find((c: Fila) => c.id === id) || null
+          result = result.map(g => {
+            const v = (db.ventas || []).find((x: Fila) => x.id === g.venta_id)
+            return {
+              ...g,
+              despachado: db.usuarios.find((u: Fila) => u.id === g.despachado_por) || null,
+              despacho_detalle: (db.despacho_detalle || []).filter((d: Fila) => d.guia_id === g.id).map((d: Fila) => ({ ...d, catalogo_media: media(d.catalogo_media_id) })),
+              venta: v ? {
+                ...v,
+                cliente: (db.clientes || []).find((c: Fila) => c.id === v.cliente_id) || null,
+                items_venta: (db.items_venta || []).filter((i: Fila) => i.venta_id === v.id).map((i: Fila) => ({ ...i, catalogo_media: media(i.catalogo_media_id) }))
+              } : null
+            };
+          });
+        } else if (self.tableName === 'movimientos_stock') {
+          result = result.map(m => ({
+            ...m,
+            paquete: (db.paquetes || []).find((p: { id: string }) => p.id === m.paquete_id) || null,
+            usuario: db.usuarios.find((u: { id: string }) => u.id === m.usuario_id) || null,
+            catalogo_media: db.catalogo_medias.find((c: { id: string }) => c.id === m.catalogo_media_id) || null
+          }));
+        } else if (self.tableName === 'despacho_detalle') {
+          result = result.map(d => ({
+            ...d,
+            catalogo_media: db.catalogo_medias.find((c: { id: string }) => c.id === d.catalogo_media_id) || null
+          }));
         } else if (self.tableName === 'lotes_tintoreria') {
           result = result.map(l => ({
             ...l,

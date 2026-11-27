@@ -33,3 +33,19 @@ spec: ../specs/fase-6-almacen-ventas-despacho.md
 | T3 | Almacén: salones, imprimir, traslados, kardex | 1 | Playwright |
 | T4 | Despacho por sacos y Preparado un saco por SKU | 2 | Playwright |
 | T5 | Panel, PR, fusión, 034 en la base real | 2 | permisos y advisors |
+
+## Evidencia (2026-11-27)
+| # | Estado | Prueba observada |
+|---|---|---|
+| T1 | hecha (51c0584) | `probar_migraciones.sh`: PASA 034 y "PASA reversión 034"; 023, 027, 030 y 032 adaptadas (sesión, permisos de agencias, saco de un SKU) |
+| T2 | hecha (d99bb96) | `tests/e2e/21-salones-kardex-despacho.test.ts` |
+| T3 | hecha | Playwright "Almacén: el salón muestra su stock, se traslada un saco y el kardex lo registra con usuario" |
+| T4 | hecha | Playwright "Despacho: … GR-9001" (elige un saco de 3 para un pedido de 2: aviso de sobrante, quién despachó) y Preparado por SKU |
+| T5 | en curso | panel; luego PR, fusión, 034 en la base real |
+
+Batería: `npm test` 279/279 · Playwright 55/55 · build y `tsc` en verde · ESLint sin errores nuevos.
+
+## Anotado
+- El tipo `ingreso_directo` (ingreso directo de Almacén) cuenta como entrada en el kardex.
+- `clientes` y `cajas_diarias` se siguen escribiendo directo desde sus pantallas (no mueven stock).
+- Los sacos "pendiente de almacenar" no se despachan hasta entrar a un salón (supuesto de la spec).
