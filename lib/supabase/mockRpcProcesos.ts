@@ -9,6 +9,7 @@ import { generarCodigoVenta, generarCodigoGuia } from '@/lib/utils'
 import { validarTransicionEstadoPaquete, type EstadoPaquete } from '@/lib/domain/packaging'
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
 import { sumarStockEtapa } from './mockRpcTejido'
+import { exigirModulo } from './mockRpcTintoreria'
 
 export const RPC_PROCESOS = [
   'registrar_venta',
@@ -260,6 +261,7 @@ function traspasarLoteRemallado(db: Db, p: any) {
 }
 
 function registrarProduccionPlanchado(db: Db, p: any) {
+  exigirModulo(db, p.__uid, 'planchado')
   const items: any[] = Array.isArray(p.p_items) ? p.p_items : []
   // Igual que el SQL: NaN pasa el "> 0" (en Postgres NaN es mayor que todo) y cae en la validación siguiente
   const esNaN = (v: unknown) => v != null && Number.isNaN(Number(v))

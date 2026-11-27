@@ -10,6 +10,7 @@ import {
 import { toast } from 'sonner'
 import { formatearFecha } from '@/lib/utils'
 import Modal from '@/components/ui/Modal'
+import IngresoStockFuera from '@/components/produccion/IngresoStockFuera'
 
 interface Volteador { id: string; nombre: string }
 interface StockVoltear { id: string; docenas: number; catalogo_media: { id: string; sku?: string; codigo: string; modelo?: string; talla: string; publico: string } }
@@ -22,7 +23,7 @@ interface LoteVolteado {
   estado: 'en_proceso' | 'completado'
   created_at: string
   volteador?: { nombre: string }
-  catalogo_media?: { id: string; sku?: string; codigo: string; modelo?: string; talla: string; publico: string }
+  catalogo_media?: { id: string; sku?: string; codigo: string; modelo?: string; talla: string; publico: string; es_crudo?: boolean }
 }
 interface ReporteVolteado {
   id: string
@@ -89,7 +90,7 @@ export default function VolteadoPage() {
         supabase.from('lotes_volteado').select(`
           id, volteador_id, catalogo_media_id, docenas_asignadas, docenas_pendientes, estado, created_at,
           volteador:usuarios(nombre),
-          catalogo_media:catalogo_medias(id, sku, codigo, modelo, talla, publico)
+          catalogo_media:catalogo_medias(id, sku, codigo, modelo, talla, publico, es_crudo)
         `).order('created_at', { ascending: false }),
         supabase.from('reportes_volteado').select(`
           id, docenas_volteadas, pares_defectuosos, fecha,
@@ -206,29 +207,12 @@ export default function VolteadoPage() {
 
     setSaving(true)
 
-    // 1. Crear el lote de volteado (estado por defecto: 'en_proceso' como en lotes_remallado)
-    const { data: nuevoLote, error: insertErr } = await supabase.from('lotes_volteado').insert({
-      volteador_id,
-      catalogo_media_id,
-      docenas_asignadas: docenasNum,
-      docenas_pendientes: docenasNum,
-      estado: 'en_proceso'
-    }).select().single()
-
-    if (insertErr) {
-      toast.error(`Error al asignar lote: ${insertErr.message}`)
-      setSaving(false)
-      return
-    }
-
-    // 2. Decrementar el stock listo para voltear
-    const nuevoStock = Number(stockDisponible.docenas) - docenasNum
-    const { error: stockErr } = await supabase.from('stock_listo_voltear')
-      .update({ docenas: nuevoStock })
-      .eq('id', stockDisponible.id)
-
-    if (stockErr) {
-      toast.error(`Error al actualizar stock: ${stockErr.message}`)
+    // 033: una sola operación atómica (descuenta de por voltear y crea el lote)
+    const { error: rpcErr } = await supabase.rpc('iniciar_lote_volteado', {
+      p_volteador_id: volteador_id, p_catalogo_media_id: catalogo_media_id, p_docenas: docenasNum,
+    })
+    if (rpcErr) {
+      toast.error(`Error al asignar lote: ${rpcErr.message}`)
       setSaving(false)
       return
     }
@@ -261,74 +245,18 @@ export default function VolteadoPage() {
 
     setSaving(true)
 
-    // 1. Insertar reporte de volteado
-    const { error: repErr } = await supabase.from('reportes_volteado').insert({
-      lote_volteado_id: selectedLote.id,
-      volteador_id: selectedLote.volteador_id,
-      catalogo_media_id: selectedLote.catalogo_media_id,
-      docenas_volteadas: docenasReportadas,
-      pares_defectuosos: defectos,
-      comentarios: comentarios.trim() || null
+    // 033: una sola operación atómica. Si la media es cruda queda por teñir (Tintorería); si tiene color, por planchar
+    const { error: rpcErr } = await supabase.rpc('reportar_lote_volteado', {
+      p_lote_id: selectedLote.id, p_docenas: docenasReportadas, p_pares_defectuosos: defectos, p_comentarios: comentarios.trim() || null,
     })
-
-    if (repErr) {
-      toast.error(`Error al registrar el reporte: ${repErr.message}`)
+    if (rpcErr) {
+      toast.error(`Error al registrar el reporte: ${rpcErr.message}`)
       setSaving(false)
       return
     }
 
-    // 2. Actualizar las docenas pendientes del lote
-    const pendientesNuevas = Math.max(0, Number(selectedLote.docenas_pendientes) - docenasReportadas)
-    const nuevoEstado = pendientesNuevas === 0 ? 'completado' : 'en_proceso'
-
-    const { error: loteUpdErr } = await supabase.from('lotes_volteado')
-      .update({
-        docenas_pendientes: pendientesNuevas,
-        estado: nuevoEstado
-      })
-      .eq('id', selectedLote.id)
-
-    if (loteUpdErr) {
-      toast.error(`Error al actualizar estado del lote: ${loteUpdErr.message}`)
-      setSaving(false)
-      return
-    }
-
-    // 3. Incrementar stock listo para planchar
-    const { data: slpExist, error: slpFindErr } = await supabase.from('stock_listo_planchar')
-      .select('id, docenas')
-      .eq('catalogo_media_id', selectedLote.catalogo_media_id)
-      .maybeSingle()
-
-    if (slpFindErr) {
-      toast.error(`Error al consultar stock de planchado: ${slpFindErr.message}`)
-      setSaving(false)
-      return
-    }
-
-    if (slpExist) {
-      const { error: slpUpdErr } = await supabase.from('stock_listo_planchar')
-        .update({ docenas: Number(slpExist.docenas) + docenasReportadas })
-        .eq('id', slpExist.id)
-      if (slpUpdErr) {
-        toast.error(`Error al actualizar stock de planchado: ${slpUpdErr.message}`)
-        setSaving(false)
-        return
-      }
-    } else {
-      const { error: slpInsErr } = await supabase.from('stock_listo_planchar')
-        .insert({
-          catalogo_media_id: selectedLote.catalogo_media_id,
-          docenas: docenasReportadas
-        })
-      if (slpInsErr) {
-        toast.error(`Error al registrar stock de planchado: ${slpInsErr.message}`)
-        setSaving(false)
-        return
-      }
-    }
-
-    toast.success(`🎉 Reporte registrado. ${docenasReportadas} doc. enviadas al stock de Planchado.`)
+    const crudo = !!selectedLote.catalogo_media?.es_crudo
+    toast.success(`Reporte registrado: ${docenasReportadas} doc. ${crudo ? 'quedan por teñir en Tintorería' : 'enviadas al stock de Planchado'}.`)
     setShowReportarModal(false)
     setSelectedLote(null)
     setReporteForm({ docenas_volteadas: '', pares_defectuosos: '0', comentarios: '' })
@@ -355,12 +283,13 @@ export default function VolteadoPage() {
             </div>
             <div>
               <h1 className="text-2xl font-black text-white tracking-tight">Monitor de Volteado (Turning)</h1>
-              <p className="text-slate-400 text-xs font-medium">Inspección de calcetines, mermas y transición al planchado</p>
+              <p className="text-slate-400 text-xs font-medium">Se voltea en crudo: lo volteado queda por teñir en Tintorería</p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          <IngresoStockFuera etapa="volteado" onIngreso={cargarDatos} />
           {/* Badges de Estado */}
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-bold">
             <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse" />
@@ -547,7 +476,7 @@ export default function VolteadoPage() {
                     <option value="">Seleccionar SKU...</option>
                     {stockListo.map(s => (
                       <option key={s.catalogo_media?.id} value={s.catalogo_media?.id}>
-                        {s.catalogo_media?.sku} ({s.docenas} docenas disponibles)
+                        {s.catalogo_media?.sku || s.catalogo_media?.codigo} ({s.docenas} docenas disponibles)
                       </option>
                     ))}
                   </select>

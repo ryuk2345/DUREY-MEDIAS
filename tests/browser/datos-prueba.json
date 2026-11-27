@@ -56,6 +56,22 @@
       "rol": "preparador",
       "activo": true,
       "estado": "disponible"
+    },
+    {
+      "id": "volt1",
+      "nombre": "Volteador Prueba",
+      "email": "volt@test",
+      "rol": "volteador",
+      "activo": true,
+      "estado": "disponible"
+    },
+    {
+      "id": "tinto1",
+      "nombre": "Tintorero Prueba",
+      "email": "tinto@test",
+      "rol": "tintorero",
+      "activo": true,
+      "estado": "disponible"
     }
   ],
   "marcas_maquinas": [
@@ -109,7 +125,8 @@
       "estado": "activo",
       "peso_docena_g": 400,
       "materia_prima_id": "mp1",
-      "sku": "SKU-TST-1"
+      "sku": "SKU-TST-1",
+      "es_crudo": false
     },
     {
       "id": "media2",
@@ -120,7 +137,21 @@
       "estado": "activo",
       "peso_docena_g": 400,
       "materia_prima_id": "mp1",
-      "sku": "SKU-TST-2"
+      "sku": "SKU-TST-2",
+      "es_crudo": false
+    },
+    {
+      "id": "cru1",
+      "codigo": "CRU-1",
+      "modelo": "Clasica",
+      "publico": "adulto",
+      "talla": "M",
+      "estado": "activo",
+      "peso_docena_g": 400,
+      "materia_prima_id": "mp1",
+      "sku": null,
+      "es_crudo": true,
+      "diseno_color": "CRUDO"
     }
   ],
   "materia_prima": [

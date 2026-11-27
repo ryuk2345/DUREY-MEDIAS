@@ -73,7 +73,7 @@ INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
   ('00000000-0000-0000-0000-0000000032a2', 'Super 032', 's032@test', 'supervisor', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000032a3', 'Juan Operario', 'j032@test', 'tejedor', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000032a4', 'Ana Encargada', 'e032@test', 'tejedor', true, 'disponible'),
-  ('00000000-0000-0000-0000-0000000032a5', 'Prep 032', 'p032@test', 'preparador', true, 'disponible'),
+  ('00000000-0000-0000-0000-0000000032a5', 'Prep 032', 'p032@test', 'operador', true, 'disponible'),  -- 033: operador (planchado y preparado)
   ('00000000-0000-0000-0000-0000000032a6', 'Baja 032', 'b032@test', 'tejedor', false, 'disponible'),
   ('00000000-0000-0000-0000-0000000032a7', 'Admin Baja 032', 'ab032@test', 'admin', false, 'disponible');
 INSERT INTO materia_prima (id, material, color, stock_kg) VALUES
@@ -245,7 +245,7 @@ SELECT pg_temp.verificar((SELECT docenas = 7 FROM stock_listo_preparar WHERE cat
 -- ── Stock de fuera ─────────────────────────────────────────────────────────
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000032a5');
-SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('tintoreria', '00000000-0000-0000-0000-0000000032c1', 5, 'x')$$, 'etapa');
+SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('empaque', '00000000-0000-0000-0000-0000000032c1', 5, 'x')$$, 'etapa');
 SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('planchado', '00000000-0000-0000-0000-0000000032c1', 0, 'x')$$, 'mayores a 0');
 SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('planchado', '00000000-0000-0000-0000-0000000032c1', 'NaN', 'x')$$, 'mayores a 0');
 SELECT pg_temp.debe_fallar($$SELECT ingresar_stock_fuera('planchado', '00000000-0000-0000-0000-0000000032c1', 5, '  ')$$, 'de dónde vienen');

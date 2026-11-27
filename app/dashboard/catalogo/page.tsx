@@ -21,6 +21,7 @@ interface CatalogoMedia {
   costo_produccion_docena: number
   precio_venta_sugerido: number
   estado: 'activo' | 'inactivo'
+  es_crudo?: boolean
 }
 
 interface ModeloMedia {
@@ -65,7 +66,8 @@ export default function CatalogoPage() {
     diseno_color: '',
     talla: '',
     costo_produccion_docena: '',
-    precio_venta_sugerido: ''
+    precio_venta_sugerido: '',
+    es_crudo: false
   })
 
   const codigoPreview = form.codigo.trim() || (form.modelo && form.publico && form.diseno_color && form.talla
@@ -99,7 +101,7 @@ export default function CatalogoPage() {
 
   const abrirNuevo = () => {
     setEditando(null)
-    setForm({ sku: '', codigo: '', modelo: '', publico: '', diseno_color: '', talla: '', costo_produccion_docena: '', precio_venta_sugerido: '' })
+    setForm({ sku: '', codigo: '', modelo: '', publico: '', diseno_color: '', talla: '', costo_produccion_docena: '', precio_venta_sugerido: '', es_crudo: false })
     setShowModal(true)
   }
 
@@ -113,7 +115,8 @@ export default function CatalogoPage() {
       diseno_color: item.diseno_color,
       talla: item.talla,
       costo_produccion_docena: String(item.costo_produccion_docena),
-      precio_venta_sugerido: String(item.precio_venta_sugerido ?? 0)
+      precio_venta_sugerido: String(item.precio_venta_sugerido ?? 0),
+      es_crudo: !!item.es_crudo
     })
     setShowModal(true)
   }
@@ -172,6 +175,8 @@ export default function CatalogoPage() {
       talla: form.talla,
       costo_produccion_docena: parseFloat(form.costo_produccion_docena),
       precio_venta_sugerido: parseFloat(form.precio_venta_sugerido) || 0,
+      // 033: la media cruda se teje y remalla sin color; en Tintorería pasa a su SKU de color
+      es_crudo: form.es_crudo,
     }
 
     if (editando) {
@@ -520,6 +525,11 @@ export default function CatalogoPage() {
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Diseño / Color *</label>
                   <input type="text" placeholder="Ej. Con diseño / Negro" value={form.diseno_color} onChange={e => setForm({ ...form, diseno_color: e.target.value })} className="input-dark w-full" />
+                  <label className="flex items-center gap-2 mt-2 text-[11px] text-slate-300">
+                    <input type="checkbox" checked={form.es_crudo}
+                      onChange={e => setForm({ ...form, es_crudo: e.target.checked, diseno_color: e.target.checked && !form.diseno_color ? 'CRUDO' : form.diseno_color })} />
+                    Media cruda (se tiñe en Tintorería)
+                  </label>
                 </div>
 
                 <div>

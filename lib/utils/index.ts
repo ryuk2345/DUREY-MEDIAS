@@ -131,6 +131,7 @@ export const ROLES_LABELS: Record<string, string> = {
   remalladora: 'Remallador / Remalladora',
   remallador: 'Remallador / Remalladora',
   volteador: 'Volteador (Turning)',
+  tintorero: 'Tintorería',
   planchador: 'Planchador (Hormado)',
   preparador: 'Preparador (Empaques)',
   almacenero: 'Almacenero y Despacho',
@@ -138,19 +139,23 @@ export const ROLES_LABELS: Record<string, string> = {
   operador: 'Operador Multifuncional',
 }
 
+// La base tiene la misma tabla (modulos_por_rol, migración 033) y la usa para bloquear
+// las funciones de producción: si se cambia aquí, hace falta una migración nueva
+// (tests/e2e/20-crudo-volteado-tintoreria.test.ts compara las dos).
 export const MODULOS_POR_ROL: Record<string, string[]> = {
-  admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'disenos', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'ventas', 'clientes', 'despacho', 'mantenimiento', 'materia_prima', 'reportes', 'egresos', 'balance', 'calendario'],
-  supervisor: ['usuarios', 'catalogo', 'maquinas', 'disenos', 'produccion', 'remallado', 'planchado', 'preparado', 'almacen', 'ventas', 'clientes', 'despacho', 'materia_prima', 'reportes', 'calendario'],
+  admin: ['admin', 'usuarios', 'catalogo', 'maquinas', 'disenos', 'produccion', 'remallado', 'volteado', 'tintoreria', 'planchado', 'preparado', 'almacen', 'ventas', 'clientes', 'despacho', 'mantenimiento', 'materia_prima', 'reportes', 'egresos', 'balance', 'calendario'],
+  supervisor: ['usuarios', 'catalogo', 'maquinas', 'disenos', 'produccion', 'remallado', 'volteado', 'tintoreria', 'planchado', 'preparado', 'almacen', 'ventas', 'clientes', 'despacho', 'materia_prima', 'reportes', 'calendario'],
   disenador: ['disenos', 'catalogo', 'maquinas'],
   tejedor: ['produccion', 'disenos', 'mantenimiento'],
   remalladora: ['remallado', 'mantenimiento'],
   remallador: ['remallado', 'mantenimiento'],
   volteador: ['volteado'],
+  tintorero: ['tintoreria'],
   planchador: ['planchado', 'mantenimiento'],
   preparador: ['preparado'],
   almacenero: ['almacen', 'despacho', 'materia_prima'],
   vendedora: ['ventas', 'clientes', 'catalogo', 'despacho'],
-  operador: ['produccion', 'remallado', 'disenos', 'planchado', 'preparado', 'almacen', 'mantenimiento'],
+  operador: ['produccion', 'remallado', 'tintoreria', 'disenos', 'planchado', 'preparado', 'almacen', 'mantenimiento'],
 }
 
 

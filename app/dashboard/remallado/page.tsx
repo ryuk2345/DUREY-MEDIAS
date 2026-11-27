@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { validarTransicionEstadoMaquina } from '@/lib/domain/machines'
 import CustomSelect from '@/components/ui/CustomSelect'
 import SelectorMedia from '@/components/ui/SelectorMedia'
+import IngresoStockFuera from '@/components/produccion/IngresoStockFuera'
 import Modal from '@/components/ui/Modal'
 
 
@@ -37,7 +38,7 @@ interface MaquinaRem {
   estado: string
   marca?: { id: string; nombre: string }
 }
-interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: string; sku?: string; diseno_color?: string; talla?: string }
+interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: string; sku?: string; diseno_color?: string; talla?: string; es_crudo?: boolean }
 
 
 export default function RemalladoMonitorPage() {
@@ -84,7 +85,7 @@ export default function RemalladoMonitorPage() {
           maquina_remalladora:maquinas(id, codigo)
         `).eq('estado', 'en_proceso'),
       supabase.from('maquinas').select('id, codigo, marca_id, tipo, estado, marca:marcas_maquinas(id, nombre)').eq('tipo', 'remalladora').order('codigo'),
-      supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla').eq('estado', 'activo').order('codigo'),
+      supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla, es_crudo').eq('estado', 'activo').order('codigo'),
     ])
 
     if (lot.error) {
@@ -268,7 +269,8 @@ export default function RemalladoMonitorPage() {
       return
     }
 
-    toast.success(`🎉 ${remalladas} doc. remalladas enviadas a Planchado. Máquina liberada.`)
+    const crudo = !!catalogo.find(c => c.id === loteSeleccionado.catalogo_media_id)?.es_crudo
+    toast.success(`${remalladas} doc. remalladas ${crudo ? 'quedan por voltear' : 'enviadas a Planchado'}. Máquina liberada.`)
     setShowReporteModal(false)
     cargarDatos()
   }
@@ -330,6 +332,7 @@ export default function RemalladoMonitorPage() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          <IngresoStockFuera etapa="remallado" />
           {/* Badges de Estado */}
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -544,7 +547,7 @@ export default function RemalladoMonitorPage() {
                   Tipo de Media a Remallar (Catálogo)
                 </label>
                 <SelectorMedia
-                  items={catalogo}
+                  items={catalogo.filter(c => c.es_crudo)}  // 5B: se remalla en crudo
                   value={cargaForm.catalogo_media_id}
                   onChange={val => setCargaForm({ ...cargaForm, catalogo_media_id: val })}
                   emptyOption={{ value: '', label: 'Seleccionar código de media...' }}

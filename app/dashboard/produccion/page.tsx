@@ -19,7 +19,7 @@ import Modal from '@/components/ui/Modal'
 interface Marca { id: string; nombre: string }
 interface Maquina { id: string; codigo: string; marca_id: string; estado: string; marca?: { nombre: string } | null }
 interface Persona { id: string; nombre: string }
-interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: string; talla: string; sku?: string; diseno_color?: string }
+interface CatalogoMedia { id: string; codigo: string; modelo: string; publico: string; talla: string; sku?: string; diseno_color?: string; es_crudo?: boolean }
 interface Reporte { id: string; maquina_id: string; docenas_producidas: number; operario_id: string | null; created_at: string }
 interface TurnoRegistro { id: string; tejedor_id: string; tejedor?: { nombre: string } | null }
 
@@ -62,7 +62,7 @@ export default function ProduccionTejidoPage() {
       supabase.from('marcas_maquinas').select('id, nombre').order('nombre'),
       supabase.from('maquinas').select('id, codigo, marca_id, estado, marca:marcas_maquinas(nombre)').eq('tipo', 'tejedora').order('codigo'),
       supabase.from('productos_maquina').select('id, maquina_id, catalogo_media_id, desde, hasta'),
-      supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla').eq('estado', 'activo').order('codigo'),
+      supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla, es_crudo').eq('estado', 'activo').order('codigo'),
       listarUsuarios({ rol: 'tejedor', campos: 'id,nombre' }),
       supabase.from('asignaciones_turno').select('operador:usuarios(id, nombre)').eq('area', 'tejido').eq('fecha', hoy),
       obtenerUsuarioActual(),
@@ -305,11 +305,11 @@ export default function ProduccionTejidoPage() {
       </div>
 
       <Modal isOpen={!!cambio} onClose={() => setCambio(null)} title={`Producto de la máquina ${cambio?.maquina.codigo ?? ''}`}
-        subtitle="La máquina sigue con este producto todos los turnos, hasta que se cambie otra vez."
+        subtitle="Se teje en crudo (el color se da en Tintorería). La máquina sigue con este producto todos los turnos, hasta que se cambie otra vez."
         footer={<div className="flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setCambio(null)}>Cancelar</button>
           <button type="button" className="btn-primary" onClick={guardarCambioProducto}>Guardar producto</button></div>}>
         {cambio && (
-          <SelectorMedia items={catalogo} value={cambio.producto} onChange={v => setCambio({ ...cambio, producto: v })}
+          <SelectorMedia items={catalogo.filter(c => c.es_crudo)} value={cambio.producto} onChange={v => setCambio({ ...cambio, producto: v })}
             emptyOption={{ value: '', label: 'Elegir producto…' }} toOption={c => ({ value: c.id, label: c.codigo })} placeholder="Elegir producto…" />
         )}
       </Modal>

@@ -12,16 +12,22 @@ import Modal from '@/components/ui/Modal'
 import SelectorMedia from '@/components/ui/SelectorMedia'
 import { formatearFecha } from '@/lib/utils'
 import type { ProductoBuscable } from '@/lib/domain/catalogo'
+import { ETAPA_EN_CRUDO, type EtapaStockFuera } from '@/lib/domain/tintoreria'
 
-export type EtapaStockFuera = 'planchado' | 'preparado'
+export type { EtapaStockFuera }
 
-const TEXTO_ETAPA: Record<EtapaStockFuera, string> = { planchado: 'por planchar', preparado: 'por preparar' }
+const TEXTO_ETAPA: Record<EtapaStockFuera, string> = {
+  remallado: 'en Remallado (solo queda registrado: el lote se asigna a mano)',
+  volteado: 'por voltear', tintoreria: 'por teñir', planchado: 'por planchar', preparado: 'por preparar',
+}
 
-type Producto = ProductoBuscable & { id: string; codigo: string }
+type Producto = ProductoBuscable & { id: string; codigo: string; es_crudo?: boolean | null }
 type Ingreso = { id: string; docenas: number; origen: string; created_at: string; catalogo_media?: { codigo: string } | null; registrador?: { nombre: string } | null }
 
-export default function IngresoStockFuera({ etapa, catalogo, onIngreso }: { etapa: EtapaStockFuera; catalogo: Producto[]; onIngreso?: () => void }) {
+/** En Remallado, Volteado y Tintorería solo medias crudas; en Planchado y Preparado, con color (033). */
+export default function IngresoStockFuera({ etapa, onIngreso }: { etapa: EtapaStockFuera; onIngreso?: () => void }) {
   const supabase = createClient()
+  const [catalogo, setCatalogo] = useState<Producto[]>([])
   const [abierto, setAbierto] = useState(false)
   const [producto, setProducto] = useState('')
   const [docenas, setDocenas] = useState('')
@@ -39,9 +45,18 @@ export default function IngresoStockFuera({ etapa, catalogo, onIngreso }: { etap
 
   useEffect(() => {
     let vigente = true
-    ;(async () => { const d = await leer(); if (vigente) setIngresos(d) })()
+    ;(async () => {
+      const [d, cat] = await Promise.all([
+        leer(),
+        supabase.from('catalogo_medias').select('id, sku, codigo, modelo, publico, diseno_color, talla, es_crudo').eq('estado', 'activo').order('codigo'),
+      ])
+      if (cat.error) toast.error(`Error cargando el catálogo: ${cat.error.message}`)
+      if (!vigente) return
+      setIngresos(d)
+      setCatalogo(((cat.data ?? []) as Producto[]).filter(c => !!c.es_crudo === ETAPA_EN_CRUDO[etapa]))
+    })()
     return () => { vigente = false }
-  }, [leer])
+  }, [leer, supabase, etapa])
 
   const guardar = async () => {
     if (!producto) { toast.error('Elige el producto'); return }

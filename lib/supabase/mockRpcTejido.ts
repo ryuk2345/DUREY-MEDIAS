@@ -8,6 +8,8 @@
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
 import { hoyLocal } from '@/lib/domain/mantenimiento'
 import { kgHilo, productoVigente, registraProduccion, docenasValidas, puedeSupervisarTejido } from '@/lib/domain/tejido'
+import { ETAPAS_STOCK_FUERA, ETAPA_EN_CRUDO, type EtapaStockFuera } from '@/lib/domain/tintoreria'
+import { exigirModulo } from './mockRpcTintoreria'
 
 export const RPC_TEJIDO = [
   'asignar_producto_maquina',
@@ -54,6 +56,7 @@ function asignarProducto(db: Db, p: any) {
 type ItemTejido = { maquina_id: string; docenas: unknown; operario_id?: string | null }
 
 function registrarTejido(db: Db, p: any) {
+  exigirModulo(db, p.__uid, 'produccion')
   const hoy = hoyLocal()
   const fecha: string = p.p_fecha || hoy
   if (p.p_horario !== 'dia' && p.p_horario !== 'noche') throw new ErrorNegocio('Elige el turno: día o noche')
@@ -160,6 +163,7 @@ function corregirTejido(db: Db, p: any) {
 type ItemPreparado = { catalogo_media_id: string; docenas?: unknown; defectuosas?: unknown }
 
 function registrarPreparado(db: Db, p: any) {
+  exigirModulo(db, p.__uid, 'preparado')
   if (!usuarioActivo(db, p.p_preparador_id)) throw new ErrorNegocio('Elige el preparador')
   const codigo = String(p.p_codigo_paquete ?? '').trim()
   if (!codigo) throw new ErrorNegocio('Falta el código del saco')
@@ -220,26 +224,36 @@ function registrarPreparado(db: Db, p: any) {
   return paqueteId
 }
 
-/** Suma docenas al stock de una etapa (planchado → por planchar; preparado → por preparar). */
-export function sumarStockEtapa(db: Db, nombreTabla: 'stock_listo_planchar' | 'stock_listo_preparar', mediaId: string, docenas: number) {
+/** Suma docenas al stock de una etapa (por voltear, por teñir, por planchar, por preparar). */
+export function sumarStockEtapa(db: Db, nombreTabla: 'stock_listo_voltear' | 'stock_listo_tenir' | 'stock_listo_planchar' | 'stock_listo_preparar', mediaId: string, docenas: number) {
   const filas = tabla(db, nombreTabla)
   const fila = filas.find(s => s.catalogo_media_id === mediaId)
   if (fila) { fila.docenas = red2(num(fila.docenas) + docenas); fila.updated_at = ahora() }
   else filas.push({ id: nuevoId(), catalogo_media_id: mediaId, docenas: red2(docenas), updated_at: ahora() })
 }
 
+const TABLA_ETAPA: Record<EtapaStockFuera, 'stock_listo_voltear' | 'stock_listo_tenir' | 'stock_listo_planchar' | 'stock_listo_preparar' | null> = {
+  remallado: null, volteado: 'stock_listo_voltear', tintoreria: 'stock_listo_tenir', planchado: 'stock_listo_planchar', preparado: 'stock_listo_preparar',
+}
+
 function ingresarStockFuera(db: Db, p: any) {
-  if (p.p_etapa !== 'planchado' && p.p_etapa !== 'preparado') throw new ErrorNegocio('Elige la etapa en la que están las medias')
+  if (!(ETAPAS_STOCK_FUERA as readonly string[]).includes(p.p_etapa)) throw new ErrorNegocio('Elige la etapa en la que están las medias')
+  const etapa = p.p_etapa as EtapaStockFuera
+  const uid = exigirModulo(db, p.__uid, etapa)
   const docenas = Number(p.p_docenas)
   if (!Number.isFinite(docenas) || docenas <= 0 || docenas > 100000) throw new ErrorNegocio('Las docenas deben ser mayores a 0')
   const origen = String(p.p_origen ?? '').trim()
   if (!origen) throw new ErrorNegocio('Indica de dónde vienen las medias')
-  if (!tabla(db, 'catalogo_medias').some(c => c.id === p.p_catalogo_media_id)) throw new ErrorNegocio('Elige el producto')
+  const prod = tabla(db, 'catalogo_medias').find(c => c.id === p.p_catalogo_media_id)
+  if (!prod) throw new ErrorNegocio('Elige el producto')
+  if (ETAPA_EN_CRUDO[etapa] && !prod.es_crudo) throw new ErrorNegocio(`En ${etapa} las medias están en crudo: elige la media cruda`)
+  if (!ETAPA_EN_CRUDO[etapa] && prod.es_crudo) throw new ErrorNegocio(`En ${etapa} las medias ya tienen color: elige su SKU de color`)
 
-  sumarStockEtapa(db, p.p_etapa === 'planchado' ? 'stock_listo_planchar' : 'stock_listo_preparar', p.p_catalogo_media_id, docenas)
+  const destino = TABLA_ETAPA[etapa]
+  if (destino) sumarStockEtapa(db, destino, p.p_catalogo_media_id, docenas)  // remallado: solo queda registrado (decisión C2)
   const id = nuevoId()
   tabla(db, 'ingresos_stock_fuera').push({
-    id, etapa: p.p_etapa, catalogo_media_id: p.p_catalogo_media_id, docenas: red2(docenas), origen, registrado_por: p.__uid ?? null, created_at: ahora(),
+    id, etapa, catalogo_media_id: p.p_catalogo_media_id, docenas: red2(docenas), origen, registrado_por: uid ?? p.__uid ?? null, created_at: ahora(),
   })
   return id
 }
