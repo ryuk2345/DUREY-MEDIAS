@@ -21,7 +21,7 @@ Fuera: anular ventas pendientes; las ventas ya sobrevendidas antes de la 035 dej
 - [x] T1 Migración 035 + test SQL + reversión — prueba: `probar_migraciones.sh` PASA 035 y su reversión; 022 y 023 con sacos de stock.
 - [x] T2 Dominio y mock (`stockVendible`, `motivoNoVendible`, vista en el mock, `registrar_venta` del mock) — prueba: `tests/e2e/23-stock-venta.test.ts`; test 09 con stock donde vende.
 - [x] T3 Ventas: catálogo sin crudos, stock para vender, aviso antes de enviar — prueba: Playwright «Ventas no ofrece crudos y marca sin stock…».
-- [x] T4 Controles: `npm test` 305/305, Playwright 59/59, build y `tsc` en verde, ESLint sin errores nuevos.
+- [x] T4 Controles: `npm test` 301/301, Playwright 59/59, build y `tsc` en verde, ESLint sin errores nuevos.
 - [ ] T5 `rsc risk` y revisión según nivel; PR, fusión y 035 en la base real.
 
 ## Next
