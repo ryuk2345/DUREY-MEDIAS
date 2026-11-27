@@ -355,7 +355,8 @@ class MockQueryBuilder {
     let filters: ((item: any) => boolean)[] = [];
     let limitCount: number | null = null;
     let rangeDesde: number | null = null;
-    let orderConfig: { column: string; ascending: boolean } | null = null;
+    // Varias llamadas a order() ordenan por varias columnas, como en supabase-js
+    const ordenes: { column: string; ascending: boolean }[] = [];
 
     const queryObj = {
       eq(column: string, value: any) {
@@ -404,7 +405,7 @@ class MockQueryBuilder {
         return queryObj;
       },
       order(column: string, config?: { ascending: boolean }) {
-        orderConfig = { column, ascending: config?.ascending !== false };
+        ordenes.push({ column, ascending: config?.ascending !== false });
         return queryObj;
       },
       limit(count: number) {
@@ -450,14 +451,16 @@ class MockQueryBuilder {
         }
 
         // Aplicar orden
-        if (orderConfig) {
-          const { column, ascending } = orderConfig;
+        if (ordenes.length) {
           result.sort((a, b) => {
-            if (a[column] === b[column]) return 0;
-            if (a[column] == null) return 1;
-            if (b[column] == null) return -1;
-            const factor = ascending ? 1 : -1;
-            return a[column] > b[column] ? factor : -factor;
+            for (const { column, ascending } of ordenes) {
+              if (a[column] === b[column]) continue;
+              if (a[column] == null) return 1;
+              if (b[column] == null) return -1;
+              const factor = ascending ? 1 : -1;
+              return a[column] > b[column] ? factor : -factor;
+            }
+            return 0;
           });
         }
 

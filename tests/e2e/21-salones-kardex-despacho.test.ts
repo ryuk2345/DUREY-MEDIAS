@@ -3,6 +3,7 @@
  * Spec: 02-DOCS/wiki/sdd/specs/fase-6-almacen-ventas-despacho.md · SQL: migración 034.
  */
 import { describe, it, expect } from 'vitest'
+import { todasLasFilas } from '@/lib/supabase/paginar'
 import { compararDespacho, sacosFueraDelPedido, puedeDespachar, signoMovimiento, kardexConSaldo, saldoDeSalon } from '@/lib/domain/despacho'
 import { ejecutarRpcAlmacen } from '@/lib/supabase/mockRpcAlmacen'
 import { ejecutarRpcProcesos } from '@/lib/supabase/mockRpcProcesos'
@@ -139,5 +140,18 @@ describe('mock: despachar eligiendo sacos', () => {
     expect(db.paquetes.filter(p => ['a1', 'a2', 'b1'].includes(p.id)).every(p => p.estado === 'entregado' && p.ubicacion_id === null && p.venta_id === 'v1')).toBe(true)
     expect(db.ventas[0].estado).toBe('entregado')
     expect(rpc(db, 'despachar_venta_sacos', { __uid: ALM, p_venta_id: 'v1', p_agencia: 'X', p_sacos: ['c1'] }).error?.message).toContain('ya fue despachada')
+  })
+})
+
+describe('lectura por páginas del kardex', () => {
+  const filas = Array.from({ length: 2501 }, (_, i) => i)
+  const api = (desde: number, hasta: number) => Promise.resolve({ data: filas.slice(desde, Math.min(hasta + 1, desde + 1000)), error: null })
+  it('junta todas las filas aunque pasen del tope de la API', async () => {
+    expect((await todasLasFilas(api)).data).toEqual(filas)
+    expect((await todasLasFilas((d, h) => api(d, h), 7)).data).toHaveLength(2501)
+  })
+  it('un error en cualquier página se devuelve, sin datos a medias', async () => {
+    const r = await todasLasFilas(d => Promise.resolve(d === 0 ? { data: filas.slice(0, 1000), error: null } : { data: null, error: { message: 'caída' } }))
+    expect(r).toEqual({ data: null, error: { message: 'caída' } })
   })
 })

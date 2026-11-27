@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Printer, ArrowRightLeft, BookOpen, Loader2 } from 'lucide-react'
 import { escaparHtml as h } from '@/lib/utils'
+import { todasLasFilas } from '@/lib/supabase/paginar'
 import { kardexConSaldo, saldoDeSalon, ETIQUETA_MOVIMIENTO, signoMovimiento, type TipoMovimiento } from '@/lib/domain/despacho'
 import { hoyLocal, sumarDias } from '@/lib/domain/mantenimiento'
 import Modal from '@/components/ui/Modal'
@@ -43,10 +44,11 @@ export default function SalonesKardex({ version = '' }: { version?: string }) {
     const [ub, pq, mv, ant] = await Promise.all([
       supabase.from('ubicaciones').select('id, nombre').eq('activo', true).order('nombre'),
       supabase.from('paquetes').select('id, codigo_paquete, docenas, ubicacion_id, catalogo_media_id, catalogo_media:catalogo_medias(codigo, sku)').eq('estado', 'almacenado'),
-      supabase.from('movimientos_stock').select('id, tipo, docenas, ubicacion_id, created_at, referencia, catalogo_media_id, paquete:paquetes(codigo_paquete), usuario:usuarios(nombre), catalogo_media:catalogo_medias(codigo)')
-        .gte('created_at', inicio).lte('created_at', `${hasta}T23:59:59.999-05:00`).order('created_at', { ascending: true }),
+      todasLasFilas((d, h) => supabase.from('movimientos_stock').select('id, tipo, docenas, ubicacion_id, created_at, referencia, catalogo_media_id, paquete:paquetes(codigo_paquete), usuario:usuarios(nombre), catalogo_media:catalogo_medias(codigo)')
+        .gte('created_at', inicio).lte('created_at', `${hasta}T23:59:59.999-05:00`).order('created_at', { ascending: true }).order('id', { ascending: true }).range(d, h)),
       // Lo anterior a la ventana da el saldo con que empieza el kardex
-      supabase.from('movimientos_stock').select('tipo, docenas, ubicacion_id, catalogo_media_id').lt('created_at', inicio),
+      todasLasFilas((d, h) => supabase.from('movimientos_stock').select('tipo, docenas, ubicacion_id, catalogo_media_id').lt('created_at', inicio)
+        .order('created_at', { ascending: true }).order('id', { ascending: true }).range(d, h)),
     ])
     for (const [n, r] of [['salones', ub], ['sacos', pq], ['kardex', mv], ['saldo anterior', ant]] as const) if (r.error) toast.error(`Error cargando ${n}: ${r.error.message}`)
     return { salones: (ub.data ?? []) as Salon[], sacos: (pq.data ?? []) as unknown as Saco[], movs: (mv.data ?? []) as unknown as Mov[], previos: (ant.data ?? []) as unknown as Mov[] }

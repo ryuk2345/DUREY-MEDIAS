@@ -41,9 +41,9 @@ spec: ../specs/fase-6-almacen-ventas-despacho.md
 | T2 | hecha (d99bb96) | `tests/e2e/21-salones-kardex-despacho.test.ts` |
 | T3 | hecha | Playwright "Almacén: el salón muestra su stock, se traslada un saco y el kardex lo registra con usuario" |
 | T4 | hecha | Playwright "Despacho: … GR-9001" (elige un saco de 3 para un pedido de 2: aviso de sobrante, quién despachó) y Preparado por SKU |
-| T5 | en curso | panel ronda 1 (L95-L104): 7 corregidos (saldo anterior del kardex, fechas en hora de Lima, aviso previo de sacos mezclados, pruebas de bloqueo, entrega exacta, líneas repetidas, saco inexistente, kardex sin NULL); 3 aparcados (L102 se comprueba en la base real antes de aplicar; L103 cajas y clientes, para la Fase 7; L104 menor) |
+| T5 | en curso | panel ronda 1 (L95-L104): 7 corregidos (saldo anterior del kardex, fechas en hora de Lima, aviso previo de sacos mezclados, pruebas de bloqueo, entrega exacta, líneas repetidas, saco inexistente, kardex sin NULL); 3 aparcados (L102 se comprueba en la base real antes de aplicar; L103 cajas y clientes, para la Fase 7; L104 menor); ronda 2: mutantes de la ronda 1 todos muertos; 1 corregido (L105: el kardex se lee por páginas, `lib/supabase/paginar.ts`) |
 
-Batería: `npm test` 279/279 · Playwright 55/55 · build y `tsc` en verde · ESLint sin errores nuevos.
+Batería: `npm test` 281/281 · Playwright 55/55 · build y `tsc` en verde · ESLint sin errores nuevos.
 
 ## Anotado
 - El tipo `ingreso_directo` (ingreso directo de Almacén) cuenta como entrada en el kardex.
