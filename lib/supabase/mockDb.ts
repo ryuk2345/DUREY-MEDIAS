@@ -9,6 +9,7 @@ import { ejecutarRpcLogistica, RPC_LOGISTICA } from './mockRpcLogistica'
 import { ejecutarRpcMantenimiento, RPC_MANTENIMIENTO } from './mockRpcMantenimiento'
 import { ejecutarRpcTejido, RPC_TEJIDO } from './mockRpcTejido'
 import { ejecutarRpcTintoreria, RPC_TINTORERIA } from './mockRpcTintoreria'
+import { ejecutarRpcAlmacen, RPC_ALMACEN } from './mockRpcAlmacen'
 import { construirHistoriaMock } from './mockHistoria'
 
 const SEMILLAS = {
@@ -176,6 +177,8 @@ const SEMILLAS = {
   // Fase 5B (migración 033)
   stock_listo_tenir: [],
   lotes_tintoreria: [],
+  // Fase 6A (migración 034)
+  despacho_detalle: [],
   guias_remision: [],
   movimientos_stock: [],
   disenos: [],
@@ -837,16 +840,16 @@ export function createMockClient() {
       return new MockQueryBuilder(tableName);
     },
     async rpc(fnName: string, params: any) {
-      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO, ...RPC_TEJIDO, ...RPC_TINTORERIA, 'registrar_produccion_planchado'].includes(fnName as never)) {
+      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO, ...RPC_TEJIDO, ...RPC_TINTORERIA, ...RPC_ALMACEN].includes(fnName as never)) {
         const db = await getMockDb();
         const conSesion = { ...params, __uid: idSesionMock() };
         const resultado = (ejecutarRpcTejido(db, fnName, conSesion)
           ?? ejecutarRpcTintoreria(db, fnName, conSesion)
-          ?? (fnName === 'registrar_produccion_planchado' ? ejecutarRpcProcesos(db, fnName, conSesion) : null)
+          ?? ejecutarRpcAlmacen(db, fnName, conSesion)
           ?? ejecutarRpcProduccion(db, fnName, params)
-          ?? ejecutarRpcProcesos(db, fnName, params)
+          ?? ejecutarRpcProcesos(db, fnName, conSesion)
           ?? ejecutarRpcMateriaPrima(db, fnName, params)
-          ?? ejecutarRpcLogistica(db, fnName, params)
+          ?? ejecutarRpcLogistica(db, fnName, conSesion)
           ?? ejecutarRpcMantenimiento(db, fnName, params))!;
         if (!resultado.error) await saveMockDb(db);
         return resultado;

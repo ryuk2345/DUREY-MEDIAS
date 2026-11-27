@@ -13,12 +13,14 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ejecutarRpcProcesos } from '@/lib/supabase/mockRpcProcesos'
+import { ejecutarRpcAlmacen } from '@/lib/supabase/mockRpcAlmacen'
 import type { Db } from '@/lib/supabase/mockRpcComun'
 
 let db: Db
 
 function rpc(fn: string, params: Record<string, unknown>) {
-  return ejecutarRpcProcesos(db, fn, params)!
+  // 034: almacenar vive en mockRpcAlmacen (sin __uid no se aplica el bloqueo por rol)
+  return (ejecutarRpcAlmacen(db, fn, params) ?? ejecutarRpcProcesos(db, fn, params))!
 }
 
 const cliente = { nombre: 'Cliente Uno', numero_documento: '11111111', tipo_documento: 'dni' }

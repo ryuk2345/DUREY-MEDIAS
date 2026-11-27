@@ -230,16 +230,17 @@ describe('mock: planchado → por preparar → saco; stock de fuera', () => {
     expect(saco([{ catalogo_media_id: 'cA', docenas: 0, defectuosas: 1 }]).error?.message).toContain('al menos una docena preparada')
     expect(saco([{ catalogo_media_id: 'cA', docenas: 1 }], ' ').error?.message).toContain('código del saco')
     expect(saco([{ catalogo_media_id: 'cA', docenas: 1 }], 'S-1', null).error?.message).toContain('salón')
-    const r = saco([{ catalogo_media_id: 'cA', docenas: 6, defectuosas: 1 }, { catalogo_media_id: 'cB', docenas: 2 }])
+    // 034: un saco lleva un solo SKU
+    expect(saco([{ catalogo_media_id: 'cA', docenas: 6 }, { catalogo_media_id: 'cB', docenas: 2 }]).error?.message).toContain('un solo SKU')
+    const r = saco([{ catalogo_media_id: 'cA', docenas: 6, defectuosas: 1 }])
     expect(r.error).toBeNull()
+    expect(saco([{ catalogo_media_id: 'cB', docenas: 2 }], 'S-2').error).toBeNull()
     expect(db.stock_listo_preparar.find(s => s.catalogo_media_id === 'cA')?.docenas).toBe(0)
     expect(db.stock_listo_preparar.find(s => s.catalogo_media_id === 'cB')?.docenas).toBe(1)
     const paq = db.paquetes.find(p => p.id === r.data)!
-    expect(paq).toMatchObject({ codigo_paquete: 'S-1', docenas: 8, total_pares: 96, estado: 'pendiente_almacenar', catalogo_media_id: 'cA', ubicacion_id: 's1', qr_data: 'qr' })
-    expect(paq.detalles_contenido).toEqual([
-      { catalogo_media_id: 'cA', sku: 'SKU-TA', codigo: 'T-A', docenas: 6, pares: 72 },
-      { catalogo_media_id: 'cB', sku: 'SKU-T-B', codigo: 'T-B', docenas: 2, pares: 24 },
-    ])
+    expect(paq).toMatchObject({ codigo_paquete: 'S-1', docenas: 6, total_pares: 72, estado: 'pendiente_almacenar', catalogo_media_id: 'cA', ubicacion_id: 's1', qr_data: 'qr' })
+    expect(paq.detalles_contenido).toEqual([{ catalogo_media_id: 'cA', sku: 'SKU-TA', codigo: 'T-A', docenas: 6, pares: 72 }])
+    expect(db.paquetes.find(p => p.codigo_paquete === 'S-2')?.detalles_contenido).toEqual([{ catalogo_media_id: 'cB', sku: 'SKU-T-B', codigo: 'T-B', docenas: 2, pares: 24 }])
     expect(db.reportes_preparado).toHaveLength(2)
     expect(db.reportes_preparado.find(x => x.catalogo_media_id === 'cA')).toMatchObject({ docenas_preparadas: 6, docenas_defectuosas: 1, paquete_id: r.data, preparador_id: PREP })
     // Código repetido: no descuenta nada
