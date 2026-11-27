@@ -41,7 +41,7 @@ export default function ReportesPage() {
         case 'produccion': {
           const { data: rows, error } = await supabase
             .from('reportes_produccion')
-            .select('fecha, docenas_producidas, maquina:maquinas(codigo), catalogo_media:catalogo_medias(codigo), turno:turnos_produccion(fecha, horario, tejedor:usuarios(nombre))')
+            .select('fecha, docenas_producidas, maquina:maquinas(codigo), catalogo_media:catalogo_medias(codigo), operario:usuarios!reportes_produccion_operario_id_fkey(nombre), turno:turnos_produccion(fecha, horario, tejedor:usuarios(nombre))')
             .gte('fecha', fechaInicio).lte('fecha', fechaFin)
           if (error) throw new Error(`Error al generar reporte de producción: ${error.message}`)
           const reportes = (rows ?? []) as unknown as ReporteTejido[]

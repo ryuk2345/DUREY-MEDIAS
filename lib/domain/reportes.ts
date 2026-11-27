@@ -30,6 +30,8 @@ export type ReporteTejido = {
   docenas_producidas: number | null
   maquina?: ConCodigo
   catalogo_media?: ConCodigo
+  /** Operario de la máquina en ese turno (registro 24/6, migración 032). */
+  operario?: ConNombre
   turno?: { fecha?: string | null; horario?: string | null; tejedor?: ConNombre } | null
 }
 export type AsignacionTurno = { fecha: string; turno: string; operador?: ConNombre }
@@ -56,7 +58,9 @@ export function filasProduccion(reportes: ReporteTejido[], asignacionesTejido: A
       // El turno noche puede cerrarse al día siguiente: se cruza por la fecha del turno
       const fechaTurno = r.turno?.fecha ?? r.fecha
       const encargado = r.turno?.tejedor?.nombre?.trim()
-      const nombres = [...(operarios.get(`${fechaTurno}|${r.turno?.horario}`) ?? [])]
+      // Registro 24/6: el operario de esa máquina y turno. Turnos anteriores: los del Calendario de Turnos
+      const operarioDirecto = r.operario?.nombre?.trim()
+      const nombres = operarioDirecto ? [operarioDirecto] : [...(operarios.get(`${fechaTurno}|${r.turno?.horario}`) ?? [])]
         .filter(n => n !== encargado) // el encargado ya tiene su columna
         .sort((x, y) => x.localeCompare(y))
       return {

@@ -248,5 +248,15 @@
     }
   ],
   "mantenimientos_preventivos": [],
-  "mantenimiento_repuestos": []
+  "mantenimiento_repuestos": [],
+  "productos_maquina": [
+    {
+      "id": "pm1",
+      "maquina_id": "m1",
+      "catalogo_media_id": "media1",
+      "desde": "2026-01-01T00:00:00.000Z",
+      "hasta": null,
+      "asignado_por": null
+    }
+  ]
 }
