@@ -8,6 +8,7 @@ import { ejecutarRpcMateriaPrima, RPC_MATERIA_PRIMA } from './mockRpcMateriaPrim
 import { ejecutarRpcLogistica, RPC_LOGISTICA } from './mockRpcLogistica'
 import { ejecutarRpcMantenimiento, RPC_MANTENIMIENTO } from './mockRpcMantenimiento'
 import { ejecutarRpcTejido, RPC_TEJIDO } from './mockRpcTejido'
+import { ejecutarRpcTintoreria, RPC_TINTORERIA } from './mockRpcTintoreria'
 import { construirHistoriaMock } from './mockHistoria'
 
 const SEMILLAS = {
@@ -172,6 +173,9 @@ const SEMILLAS = {
   stock_listo_preparar: [],
   reportes_preparado: [],
   ingresos_stock_fuera: [],
+  // Fase 5B (migración 033)
+  stock_listo_tenir: [],
+  lotes_tintoreria: [],
   guias_remision: [],
   movimientos_stock: [],
   disenos: [],
@@ -629,7 +633,14 @@ class MockQueryBuilder {
             ...s,
             catalogo_media: db.catalogo_medias.find((c: any) => c.id === s.catalogo_media_id) || null
           }));
-        } else if (self.tableName === 'stock_listo_preparar' || self.tableName === 'productos_maquina') {
+        } else if (self.tableName === 'lotes_tintoreria') {
+          result = result.map(l => ({
+            ...l,
+            crudo: db.catalogo_medias.find((c: { id: string }) => c.id === l.crudo_id) || null,
+            color: db.catalogo_medias.find((c: { id: string }) => c.id === l.color_id) || null,
+            remalladora: db.usuarios.find((u: { id: string }) => u.id === l.remalladora_id) || null
+          }));
+        } else if (self.tableName === 'stock_listo_preparar' || self.tableName === 'productos_maquina' || self.tableName === 'stock_listo_tenir') {
           result = result.map(s => ({
             ...s,
             catalogo_media: db.catalogo_medias.find((c: { id: string }) => c.id === s.catalogo_media_id) || null
@@ -826,9 +837,12 @@ export function createMockClient() {
       return new MockQueryBuilder(tableName);
     },
     async rpc(fnName: string, params: any) {
-      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO, ...RPC_TEJIDO].includes(fnName as never)) {
+      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO, ...RPC_TEJIDO, ...RPC_TINTORERIA, 'registrar_produccion_planchado'].includes(fnName as never)) {
         const db = await getMockDb();
-        const resultado = (ejecutarRpcTejido(db, fnName, { ...params, __uid: idSesionMock() })
+        const conSesion = { ...params, __uid: idSesionMock() };
+        const resultado = (ejecutarRpcTejido(db, fnName, conSesion)
+          ?? ejecutarRpcTintoreria(db, fnName, conSesion)
+          ?? (fnName === 'registrar_produccion_planchado' ? ejecutarRpcProcesos(db, fnName, conSesion) : null)
           ?? ejecutarRpcProduccion(db, fnName, params)
           ?? ejecutarRpcProcesos(db, fnName, params)
           ?? ejecutarRpcMateriaPrima(db, fnName, params)
@@ -836,78 +850,6 @@ export function createMockClient() {
           ?? ejecutarRpcMantenimiento(db, fnName, params))!;
         if (!resultado.error) await saveMockDb(db);
         return resultado;
-      }
-
-      if (fnName === 'finalizar_lote_remallado') {
-        const {
-          p_lote_id,
-          p_docenas_remalladas,
-          p_docenas_restantes,
-          p_catalogo_media_id,
-          p_remalladora_id,
-          p_maquina_id
-        } = params;
-
-        try {
-          const db = await getMockDb();
-
-          // 1. INSERT en reportes_remallado
-          const nuevoReporte = {
-            id: 'rep-' + Math.random().toString(36).substring(2, 11),
-            lote_id: p_lote_id,
-            remalladora_id: p_remalladora_id,
-            maquina_id: p_maquina_id,
-            docenas_remalladas: p_docenas_remalladas,
-            docenas_restantes: p_docenas_restantes,
-            fecha: new Date().toISOString().split('T')[0],
-            created_at: new Date().toISOString()
-          };
-          if (!db.reportes_remallado) db.reportes_remallado = [];
-          db.reportes_remallado.push(nuevoReporte);
-
-          // 2. UPDATE lotes_remallado
-          if (!db.lotes_remallado) db.lotes_remallado = [];
-          const lote = db.lotes_remallado.find((l: any) => l.id === p_lote_id);
-          if (lote) {
-            lote.estado = 'completado';
-            lote.docenas_pendientes = p_docenas_restantes;
-          }
-
-          // 3. UPSERT en stock_listo_planchar (en lugar de stock_listo_voltear)
-          if (!db.stock_listo_planchar) db.stock_listo_planchar = [];
-          const stock = db.stock_listo_planchar.find((s: any) => s.catalogo_media_id === p_catalogo_media_id);
-          if (stock) {
-            stock.docenas = Number(stock.docenas) + Number(p_docenas_remalladas);
-            stock.updated_at = new Date().toISOString();
-          } else {
-            db.stock_listo_planchar.push({
-              id: 'slp-' + Math.random().toString(36).substring(2, 11),
-              catalogo_media_id: p_catalogo_media_id,
-              docenas: p_docenas_remalladas,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-          }
-
-          // 4. UPDATE usuarios
-          if (p_remalladora_id) {
-            if (!db.usuarios) db.usuarios = [];
-            const user = db.usuarios.find((u: any) => u.id === p_remalladora_id);
-            if (user) user.estado = 'disponible';
-          }
-
-          // 5. UPDATE maquinas
-          if (p_maquina_id) {
-            if (!db.maquinas) db.maquinas = [];
-            const maq = db.maquinas.find((m: any) => m.id === p_maquina_id);
-            if (maq) maq.estado = 'activa';
-          }
-
-          await saveMockDb(db);
-          return { data: null, error: null };
-        } catch (err: any) {
-          return { data: null, error: err };
-        }
       }
 
       if (fnName === 'registrar_diseno_con_asignaciones') {

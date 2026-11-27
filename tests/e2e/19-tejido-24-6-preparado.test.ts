@@ -23,7 +23,7 @@ function base(): Db {
       { id: SUPER, nombre: 'Super', rol: 'supervisor', activo: true },
       { id: JUAN, nombre: 'Juan', rol: 'tejedor', activo: true },
       { id: ANA, nombre: 'Ana', rol: 'tejedor', activo: true },
-      { id: PREP, nombre: 'Prep', rol: 'preparador', activo: true },
+      { id: PREP, nombre: 'Prep', rol: 'operador', activo: true }, // 033: operador (planchado y preparado)
       { id: BAJA, nombre: 'Baja', rol: 'tejedor', activo: false },
       { id: 'u-admin-baja', nombre: 'Admin baja', rol: 'admin', activo: false },
     ],
@@ -104,7 +104,7 @@ describe('mock: producto fijo por máquina', () => {
 
 describe('mock: registro de producción por turno', () => {
   const registrar = (db: Db, horario: string, encargado: string, items: unknown[], fecha: string | null = null) =>
-    rpc(db, 'registrar_produccion_tejido', { __uid: encargado, p_fecha: fecha, p_horario: horario, p_encargado_id: encargado, p_items: items })
+    rpc(db, 'registrar_produccion_tejido', { __uid: ANA, p_fecha: fecha, p_horario: horario, p_encargado_id: encargado, p_items: items })
 
   it('rechaza lo inválido sin escribir nada', () => {
     const db = conProductos()
@@ -208,7 +208,7 @@ describe('mock: planchado → por preparar → saco; stock de fuera', () => {
     const db = conPlanchado()
     const fuera = (etapa: string, docenas: unknown, origen: string) =>
       rpc(db, 'ingresar_stock_fuera', { __uid: PREP, p_etapa: etapa, p_catalogo_media_id: 'cB', p_docenas: docenas, p_origen: origen })
-    expect(fuera('tintoreria', 5, 'x').error?.message).toContain('etapa')
+    expect(fuera('empaque', 5, 'x').error?.message).toContain('etapa')
     expect(fuera('planchado', 0, 'x').error?.message).toContain('mayores a 0')
     expect(fuera('planchado', 'NaN', 'x').error?.message).toContain('mayores a 0')
     expect(fuera('planchado', 5, '  ').error?.message).toContain('de dónde vienen')

@@ -12,7 +12,7 @@ import {
   Package, Warehouse, ShoppingCart, Truck, Wrench,
   BarChart3, LogOut, ChevronRight, Cpu, Users, Menu, X,
   ClipboardList, Database, RotateCcw, Palette, UserCheck,
-  DollarSign, TrendingUp, CalendarDays
+  DollarSign, TrendingUp, CalendarDays, Droplets
 } from 'lucide-react'
 import StockNotification from './StockNotification'
 
@@ -26,6 +26,7 @@ const MODULO_CONFIG: Record<string, { label: string; icon: React.ReactNode; href
   produccion:   { label: 'Tejido',       icon: <Layers className="w-5 h-5" />,          href: '/dashboard/produccion',    color: 'text-violet-400' },
   remallado:    { label: 'Remallado',    icon: <Scissors className="w-5 h-5" />,        href: '/dashboard/remallado',     color: 'text-orange-400' },
   volteado:     { label: 'Volteado',     icon: <RotateCcw className="w-5 h-5" />,       href: '/dashboard/volteado',      color: 'text-indigo-300' },
+  tintoreria:   { label: 'Tintorería',   icon: <Droplets className="w-5 h-5" />,        href: '/dashboard/tintoreria',    color: 'text-blue-300' },
   planchado:    { label: 'Planchado',    icon: <Wind className="w-5 h-5" />,            href: '/dashboard/planchado',     color: 'text-red-400' },
   preparado:    { label: 'Preparado',    icon: <Package className="w-5 h-5" />,         href: '/dashboard/preparado',     color: 'text-emerald-400' },
   almacen:      { label: 'Almacén',      icon: <Warehouse className="w-5 h-5" />,       href: '/dashboard/almacen',       color: 'text-cyan-400' },

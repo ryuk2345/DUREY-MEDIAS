@@ -137,7 +137,7 @@ export default function UsuariosPage() {
 
   // Operadores y personal de planta activos para asignación de turnos
   const operadoresDisponibles = useMemo(() => {
-    const rolesPlanta = ['operador', 'tejedor', 'remalladora', 'remallador', 'volteador', 'planchador', 'preparador', 'almacenero']
+    const rolesPlanta = ['operador', 'tejedor', 'remalladora', 'remallador', 'volteador', 'tintorero', 'planchador', 'preparador', 'almacenero']
     return usuarios.filter(u => rolesPlanta.includes(u.rol) && u.activo)
   }, [usuarios])
 
