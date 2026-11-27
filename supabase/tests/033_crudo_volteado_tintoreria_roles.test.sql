@@ -277,6 +277,94 @@ UPDATE catalogo_medias SET costo_produccion_docena = 5 WHERE id = '00000000-0000
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT es_crudo FROM catalogo_medias WHERE id = '00000000-0000-0000-0000-0000000033c4'), 'con el módulo y sin stock se marca cruda');
 
+-- ── La regla de "cruda", condición por condición ───────────────────────────
+INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
+  ('00000000-0000-0000-0000-0000000033a7', 'Catálogo Baja', 'cb033@test', 'disenador', false, 'disponible'),
+  ('00000000-0000-0000-0000-0000000033a8', 'Diseñadora 033', 'd033@test', 'disenador', true, 'disponible');
+INSERT INTO catalogo_medias (id, codigo, modelo, publico, diseno_color, talla, es_crudo) VALUES
+  ('00000000-0000-0000-0000-0000000033e1', 'T33-PRUEBA', 'Prueba33', 'adulto', 'Gris', 'XL', false);
+GRANT INSERT ON catalogo_medias TO authenticated;  -- como en la base real (la pantalla de Catálogo inserta directo)
+
+CREATE FUNCTION pg_temp.cambiar_crudo() RETURNS TEXT LANGUAGE plpgsql AS $$
+BEGIN
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000033a8', true);
+    UPDATE catalogo_medias SET es_crudo = NOT es_crudo WHERE id = '00000000-0000-0000-0000-0000000033e1';
+    RESET ROLE;
+    RAISE EXCEPTION 'cambiado';
+  EXCEPTION WHEN OTHERS THEN
+    RESET ROLE;
+    RETURN SQLERRM;
+  END;
+END $$;
+
+-- Sin nada pendiente sí se puede (el cambio se deshace: la función siempre revierte)
+SELECT pg_temp.verificar(pg_temp.cambiar_crudo() = 'cambiado', 'sin stock ni lotes se puede cambiar');
+-- Un stock en 0 no bloquea
+INSERT INTO stock_listo_planchar (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033e1', 0);
+SELECT pg_temp.verificar(pg_temp.cambiar_crudo() = 'cambiado', 'un stock en 0 no bloquea');
+DELETE FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033e1';
+
+-- Cada condición por separado bloquea
+CREATE FUNCTION pg_temp.bloquea(p_sql TEXT, p_deshacer TEXT, p_msg TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
+BEGIN
+  EXECUTE p_sql;
+  IF position('tiene stock, lotes en proceso' IN pg_temp.cambiar_crudo()) = 0 THEN
+    RAISE EXCEPTION 'FALLO: % no bloquea el cambio', p_msg;
+  END IF;
+  EXECUTE p_deshacer;
+END $$;
+SELECT pg_temp.bloquea($$INSERT INTO stock_listo_voltear (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033e1', 1)$$,
+  $$DELETE FROM stock_listo_voltear WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033e1'$$, 'stock por voltear');
+SELECT pg_temp.bloquea($$INSERT INTO stock_listo_tenir (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033e1', 1)$$,
+  $$DELETE FROM stock_listo_tenir WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033e1'$$, 'stock por teñir');
+SELECT pg_temp.bloquea($$INSERT INTO stock_listo_planchar (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033e1', 1)$$,
+  $$DELETE FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033e1'$$, 'stock por planchar');
+SELECT pg_temp.bloquea($$INSERT INTO stock_listo_preparar (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033e1', 1)$$,
+  $$DELETE FROM stock_listo_preparar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033e1'$$, 'stock por preparar');
+SELECT pg_temp.bloquea($$INSERT INTO lotes_remallado (id, catalogo_media_id, maquina_remalladora_id, docenas_asignadas, docenas_pendientes, estado)
+    VALUES ('00000000-0000-0000-0000-0000000033f1', '00000000-0000-0000-0000-0000000033e1', '00000000-0000-0000-0000-0000000033d1', 1, 1, 'en_proceso')$$,
+  $$DELETE FROM lotes_remallado WHERE id = '00000000-0000-0000-0000-0000000033f1'$$, 'lote de remallado en proceso');
+SELECT pg_temp.bloquea($$INSERT INTO lotes_volteado (id, catalogo_media_id, docenas_asignadas, docenas_pendientes, estado)
+    VALUES ('00000000-0000-0000-0000-0000000033f2', '00000000-0000-0000-0000-0000000033e1', 1, 1, 'en_proceso')$$,
+  $$DELETE FROM lotes_volteado WHERE id = '00000000-0000-0000-0000-0000000033f2'$$, 'lote de volteado en proceso');
+SELECT pg_temp.bloquea($$INSERT INTO lotes_tintoreria (id, crudo_id, color_id, material, docenas_enviadas)
+    VALUES ('00000000-0000-0000-0000-0000000033f3', '00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033e1', 'algodon', 1)$$,
+  $$DELETE FROM lotes_tintoreria WHERE id = '00000000-0000-0000-0000-0000000033f3'$$, 'lote en tintorería');
+SELECT pg_temp.bloquea($$INSERT INTO productos_maquina (id, maquina_id, catalogo_media_id) VALUES ('00000000-0000-0000-0000-0000000033f4', '00000000-0000-0000-0000-0000000033d1', '00000000-0000-0000-0000-0000000033e1')$$,
+  $$DELETE FROM productos_maquina WHERE id = '00000000-0000-0000-0000-0000000033f4'$$, 'una máquina que la teje');
+-- Un producto que la máquina ya no teje (hasta con fecha) no bloquea
+INSERT INTO productos_maquina (maquina_id, catalogo_media_id, desde, hasta) VALUES ('00000000-0000-0000-0000-0000000033d1', '00000000-0000-0000-0000-0000000033e1', NOW() - interval '2 days', NOW() - interval '1 day');
+SELECT pg_temp.verificar(pg_temp.cambiar_crudo() = 'cambiado', 'una asignación cerrada no bloquea');
+
+-- Rol: usuario de Catálogo dado de baja no puede; un alta con color sin Catálogo sí (no pasa por la regla)
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a7');
+SELECT pg_temp.debe_fallar($$UPDATE catalogo_medias SET es_crudo = true WHERE id = '00000000-0000-0000-0000-0000000033e1'$$, 'módulo catalogo');
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a5');  -- planchador
+SELECT pg_temp.debe_fallar($$INSERT INTO catalogo_medias (codigo, modelo, publico, diseno_color, talla, es_crudo) VALUES ('NUEVO-CRUDO-33', 'Nuevo33', 'adulto', 'CRUDO', 'S', true)$$, 'módulo catalogo');
+INSERT INTO catalogo_medias (codigo, modelo, publico, diseno_color, talla, es_crudo) VALUES ('NUEVO-COLOR-33', 'Nuevo33', 'adulto', 'Azul', 'S', false);
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a1');
+-- Tope del stock de fuera: exactamente 100 000 se acepta
+SELECT ingresar_stock_fuera('volteado', '00000000-0000-0000-0000-0000000033c0', 100000, 'Inventario inicial');
+RESET ROLE;
+SELECT pg_temp.verificar(EXISTS (SELECT 1 FROM catalogo_medias WHERE codigo = 'NUEVO-COLOR-33'), 'un alta con color no necesita Catálogo en la regla');
+
+-- Recibir 0,004 docenas: se redondea a 0, todo es merma y no entra nada a planchado
+INSERT INTO stock_listo_tenir (catalogo_media_id, docenas) VALUES ('00000000-0000-0000-0000-0000000033c0', 2)
+  ON CONFLICT (catalogo_media_id) DO UPDATE SET docenas = 2;
+CREATE TEMP TABLE t_pl ON COMMIT DROP AS SELECT docenas FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c1';
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000033a4');
+CREATE TEMP TABLE t_lt3 ON COMMIT DROP AS
+  SELECT enviar_lote_tintoreria('00000000-0000-0000-0000-0000000033c0', '00000000-0000-0000-0000-0000000033c1', 'algodon', 2, '00000000-0000-0000-0000-0000000033a2') AS id;
+SELECT recibir_lote_tintoreria((SELECT id FROM t_lt3), 0.004, 'todo manchado');
+RESET ROLE;
+SELECT pg_temp.verificar((SELECT docenas_recibidas = 0 AND docenas_merma = 2 FROM lotes_tintoreria WHERE id = (SELECT id FROM t_lt3)), '0,004 se redondea a 0 y todo es merma');
+SELECT pg_temp.verificar((SELECT docenas FROM stock_listo_planchar WHERE catalogo_media_id = '00000000-0000-0000-0000-0000000033c1') = (SELECT docenas FROM t_pl),
+  'no entra nada a por planchar');
+
 -- ── Sin sesión no se ve nada nuevo ─────────────────────────────────────────
 SET LOCAL ROLE anon;
 SELECT pg_temp.debe_fallar('SELECT count(*) FROM lotes_tintoreria', 'permission denied');
