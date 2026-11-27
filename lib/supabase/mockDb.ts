@@ -581,7 +581,9 @@ class MockQueryBuilder {
                 codigo_venta: v.codigo_venta,
                 total_soles: v.total_soles,
                 cliente: c,
-                asesora: a ? { id: a.id, nombre: a.nombre } : null
+                asesora: a ? { id: a.id, nombre: a.nombre } : null,
+                items_venta: (db.items_venta || []).filter((i: { venta_id: string }) => i.venta_id === v.id)
+                  .map((i: { catalogo_media_id: string }) => ({ ...i, catalogo_media: db.catalogo_medias.find((m: { id: string }) => m.id === i.catalogo_media_id) || null }))
               }
             };
           });

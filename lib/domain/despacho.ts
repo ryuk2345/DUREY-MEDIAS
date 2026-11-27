@@ -59,3 +59,17 @@ export function kardexConSaldo<T extends Movimiento>(movs: T[], ubicacionId: str
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .map(m => { saldo = r2(saldo + signoMovimiento(m.tipo) * Number(m.docenas ?? 0)); return { ...m, saldo } })
 }
+
+// ── Orden de despacho (6B, decisión 6B-1-B) ──────────────────────────────────
+export type SacoEnSalon = { codigo_paquete: string; catalogo_media_id: string | null; docenas: number; salon: string }
+export type LineaOrden = { catalogo_media_id: string; pedidas: number; sacos: SacoEnSalon[]; disponibles: number; falta: number }
+
+/** Por SKU pedido: lo pedido y todos los sacos disponibles de ese SKU con su salón (almacén elige). */
+export function armarOrdenDespacho(pedido: LineaPedido[], sacos: SacoEnSalon[]): LineaOrden[] {
+  return compararDespacho(pedido, []).map(({ catalogo_media_id, pedidas }) => {
+    const propios = sacos.filter(s => s.catalogo_media_id === catalogo_media_id)
+      .sort((a, b) => a.salon.localeCompare(b.salon) || a.codigo_paquete.localeCompare(b.codigo_paquete))
+    const disponibles = r2(propios.reduce((t, s) => t + Number(s.docenas), 0))
+    return { catalogo_media_id, pedidas, sacos: propios, disponibles, falta: r2(Math.max(0, pedidas - disponibles)) }
+  })
+}
