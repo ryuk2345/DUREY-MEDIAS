@@ -22,7 +22,8 @@ Fuera: anular ventas pendientes; las ventas ya sobrevendidas antes de la 035 dej
 - [x] T2 Dominio y mock (`stockVendible`, `motivoNoVendible`, vista en el mock, `registrar_venta` del mock) — prueba: `tests/e2e/23-stock-venta.test.ts`; test 09 con stock donde vende.
 - [x] T3 Ventas: catálogo sin crudos, stock para vender, aviso antes de enviar — prueba: Playwright «Ventas no ofrece crudos y marca sin stock…».
 - [x] T4 Controles: `npm test` 301/301, Playwright 59/59, build y `tsc` en verde, ESLint sin errores nuevos.
-- [ ] T5 `rsc risk` y revisión según nivel; PR, fusión y 035 en la base real.
+- [x] T5 `rsc risk` nivel 2: panel de 3 revisores, ronda 1 (L113-L117). Corregidos: prueba del orden del cerrojo, aviso previo en pantalla con lo vendible (no lo físico), orden del aviso con dos SKU y decimales. Aparcados: L116 formato 10.00 en la base frente a 10 en pantalla (igual que en la 6A); L117 el despacho con sobrante no toma el cerrojo (ventana mínima: una sobreventa por el sobrante, visible como saldo negativo).
+- [ ] T6 PR, fusión y 035 en la base real.
 
 ## Next
 Panel de revisión y PR.

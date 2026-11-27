@@ -39,6 +39,12 @@ SELECT pg_temp.verificar(pg_temp.permisos('vista_stock_vendible', 'authenticated
 SELECT pg_temp.verificar((SELECT reloptions @> ARRAY['security_invoker=true'] FROM pg_class WHERE oid = 'public.vista_stock_vendible'::regclass),
   'la vista consulta con los permisos de quien pregunta');
 
+-- ── Ventas simultáneas: el cerrojo se toma antes de leer el stock ────────────
+-- (una prueba con dos sesiones no cabe en este archivo; se comprueba el orden en el código)
+SELECT pg_temp.verificar((SELECT position('pg_advisory_xact_lock(hashtext(''durey_stock_venta''))' IN prosrc) BETWEEN 1 AND position('vista_stock_vendible' IN prosrc)
+  FROM pg_proc WHERE oid = 'public.registrar_venta(jsonb, uuid, text, numeric, jsonb, jsonb, text)'::regprocedure),
+  'registrar_venta toma el cerrojo de stock antes de leer lo que hay para vender');
+
 -- ── Datos ──────────────────────────────────────────────────────────────────
 INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
   ('00000000-0000-0000-0000-0000000035a1', 'Vende 035', 've035@test', 'vendedora', true, 'disponible');
@@ -71,6 +77,10 @@ SELECT pg_temp.debe_fallar($$SELECT pg_temp.vender('00000000-0000-0000-0000-0000
 SELECT pg_temp.debe_fallar($$SELECT registrar_venta('{"nombre":"C","numero_documento":"35353536"}'::jsonb, '00000000-0000-0000-0000-0000000035a1', 'directo', 0,
   '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000035c1","docenas":6,"precio_docena":1},{"catalogo_media_id":"00000000-0000-0000-0000-0000000035c1","docenas":5,"precio_docena":1}]'::jsonb, NULL, 'efectivo')$$,
   'pides 11 docenas');
+-- Con dos productos sin stock, avisa del primero por código
+SELECT pg_temp.debe_fallar($$SELECT registrar_venta('{"nombre":"C","numero_documento":"35353537"}'::jsonb, '00000000-0000-0000-0000-0000000035a1', 'directo', 0,
+  '[{"catalogo_media_id":"00000000-0000-0000-0000-0000000035c2","docenas":1,"precio_docena":1},{"catalogo_media_id":"00000000-0000-0000-0000-0000000035c1","docenas":99,"precio_docena":1}]'::jsonb, NULL, 'efectivo')$$,
+  'No hay stock suficiente de T35-A');
 -- Exactamente lo que hay sí se vende
 SELECT pg_temp.vender('00000000-0000-0000-0000-0000000035c1', 8);
 RESET ROLE;

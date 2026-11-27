@@ -43,6 +43,12 @@ describe('stock para vender', () => {
     expect(db.ventas).toHaveLength(0)
     expect(db.clientes).toHaveLength(0)
   })
+  it('con dos productos sin stock avisa del primero por código; sin errores de decimales', () => {
+    expect(vender('B', 1, { p_items: [{ catalogo_media_id: 'B', docenas: 1, precio_docena: 1 }, { catalogo_media_id: 'A', docenas: 99, precio_docena: 1 }] }).error?.message)
+      .toContain('No hay stock suficiente de T35-A')
+    const stock = [{ catalogo_media_id: 'A', fisico: 0.3, comprometidas: 0, vendibles: 0.3 }]
+    expect(motivoNoVendible([{ catalogo_media_id: 'A', docenas: 0.1 }, { catalogo_media_id: 'A', docenas: 0.2 }], stock, db.catalogo_medias)).toBeNull()
+  })
   it('lo vendido sin despachar queda comprometido; al entregar se libera', () => {
     expect(vender('A', 8).error).toBeNull()
     expect(fila('A')).toMatchObject({ fisico: 10, comprometidas: 8, vendibles: 2 })
