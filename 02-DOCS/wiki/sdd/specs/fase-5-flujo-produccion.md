@@ -7,12 +7,12 @@ timestamp: 2026-11-26T21:00:00Z
 topic: sdd
 slug: fase-5-flujo-produccion
 branch: fase-5/flujo-produccion
-status: draft
+status: approved
 ---
 
 # Spec — Fase 5, nuevo flujo de producción
 
-> Slug: `fase-5-flujo-produccion` · Status: draft · Created: 2026-11-26
+> Slug: `fase-5-flujo-produccion` · Status: approved · Created: 2026-11-26
 > Inherits: [constitución v1.0.0](../constitution.md) y AGENTS.md. Plan: [plan-fases](../../plan-fases.md).
 
 ## Problem & why
@@ -91,7 +91,7 @@ Quién: usuarios con sesión y acceso al módulo (MODULOS_POR_ROL). Nadie sin se
 - **decidido (dueño, 2026-11-26)** — C1. Stock de fuera = medias que no salieron de las máquinas registradas: las ya producidas antes de usar el sistema y las traídas de otro lugar. Al ingresarlas se elige la etapa en la que están y el producto (crudo o SKU de color); entran como pendientes de esa etapa y siguen el flujo normal.
 - **decidido (dueño, 2026-11-26)** — C2. Sin control de stock entre tejido y remallado: el dueño junta lo que sacan las máquinas y asigna cada lote a mano a la remalladora, como hoy. El control de stock por etapa empieza al terminar el remallado.
 - **supuesto** — Stock de fuera en remallado: como remallado se asigna a mano, el lote se marca con origen "de fuera" (para separarlo de lo producido en la planta). *Riesgo:* bajo.
-- **por decidir** — C3. Hilo: hoy se descuenta un estimado de 15 docenas por máquina al abrir el turno. Recomendado: descontar según las docenas reales registradas en cada turno.
+- **decidido (dueño, 2026-11-26)** — C3. El hilo se descuenta por las docenas reales registradas en cada turno (peso por docena del producto), no por el estimado de 15 docenas al abrir el turno.
 - **supuesto** — La media cruda es un producto del catálogo con color "crudo" (mismo modelo, talla y público que sus SKU de color). Tintorería solo puede convertirla a un SKU de color con el mismo modelo, talla y público. *Riesgo:* si un modelo crudo da medias de otro modelo, cambia la regla.
 - **supuesto** — Un lote de tintorería lleva un solo color y vuelve en una sola entrega. *Riesgo:* si un lote se divide en varios colores, se envían como lotes separados.
 - **supuesto** — Planchado y preparado se asignan por SKU (uno o varios por persona y día); se dejan los criterios por talla o público. *Riesgo:* si se siguen usando, se mantienen como atajo para elegir varios SKU.
@@ -103,4 +103,4 @@ Dos PRs en esta rama de trabajo:
 - **5B** (migración 033): catálogo crudo, remallado → volteado → tintorería → planchado, tintorería con merma.
 
 ## Approval
-Respuestas del dueño a C1 y C2 (2026-11-26). Pendiente: C3 y aprobación del dueño.
+Decisiones del dueño (2026-11-26): 1-A (todo se teje crudo; en tintorería pasa a su SKU de color), 2-A (por turno), 3-B (todas pasan por tintorería), 4 (tintorería interna sin costo), 5-A (stock de fuera sin egreso), 6 (se sigue volteando, entre remallado y tintorería), 7-A (merma con motivo), C1 (stock de fuera: se elige la etapa), C2 (remallado sigue manual), C3-A (hilo por docenas reales). Supuestos mostrados y no objetados. Especificación aprobada el 2026-11-26.
