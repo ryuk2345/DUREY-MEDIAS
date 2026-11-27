@@ -15,8 +15,21 @@ status: approved
 > Slug: `ventas-stock-crudos` · Status: approved · Created: 2026-11-27
 > Inherits: [constitución v1.0.0](../constitution.md) y AGENTS.md. Trabajo: [FTD](../../ftd/ventas-stock-crudos.md).
 
-## Problem
+## Problem & why
 En las pruebas de la Fase 6B, la fila nueva de una venta tomó el crudo `CRU-1` y la venta se registró sin stock. Se podía vender lo que no existe o vender dos veces lo mismo.
+
+## Cost of not building it
+Ventas promete mercadería que no hay; el despacho no puede cumplir y el cliente espera. Un crudo vendido sale sin teñir.
+
+## The cheapest alternative
+Solo filtrar en la pantalla. No basta: la base seguiría aceptando la venta por otra vía y dos vendedoras a la vez podrían vender el mismo stock.
+
+## Goals
+- Ninguna venta de crudos.
+- Ninguna venta por encima de lo que hay para vender.
+
+## Users & context
+Vendedoras, supervisor y administrador (roles con el módulo ventas), al registrar una venta en la pantalla de Ventas.
 
 ## What the user can do
 - Vendedora (rol con el módulo ventas): elegir solo productos que no son crudos; ver cuánto hay para vender de cada uno; recibir un aviso claro si pide más.
@@ -41,7 +54,11 @@ En las pruebas de la Fase 6B, la fila nueva de una venta tomó el crudo `CRU-1` 
 - Given 10 docenas en sacos, When se venden exactamente 10, Then se registra.
 - Given una venta pendiente que se entrega, When se mira el stock para vender, Then ya no cuenta como comprometida.
 
-## Out of scope
+## Behaviour
+- Edge cases: dos líneas del mismo producto se suman; vender exactamente lo que hay se permite; un saldo negativo de antes (sobreventa) bloquea nuevas ventas de ese producto y se muestra como 0.
+- Error paths: el mensaje de la base sale en pantalla y no queda nada a medias (ni cliente ni venta).
+
+## Non-goals / out of scope
 - Anular ventas pendientes.
 - Tope de consultas a Decolecta (decidido 1-A: sin tope por ahora).
 
@@ -49,3 +66,6 @@ En las pruebas de la Fase 6B, la fila nueva de una venta tomó el crudo `CRU-1` 
 - **decidido (dueño, 2026-11-27)** — 2-A: Ventas no ofrece crudos y no deja vender sin stock.
 - **decidido (dueño, 2026-11-27)** — A: el stock para vender resta lo vendido sin despachar.
 - **supuesto** — Los sacos «por almacenar» cuentan como stock para vender (igual que `vista_stock_medias`).
+
+## Approval
+Decisiones del dueño del 2026-11-27 («2-a» y «1-A,2-a»). Escrita después del trabajo FTD porque el cambio resultó de nivel 2 (dinero y migración).
