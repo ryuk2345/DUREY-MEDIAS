@@ -180,3 +180,11 @@ export function cierreDeCaja(caja: CajaEfectivo, declaradoEfectivo: number): { e
   const diferencia = Math.round((Number(declaradoEfectivo) - esperado) * 100) / 100
   return { esperado, diferencia, estado: diferencia === 0 ? 'cerrada_cuadrada' : diferencia < 0 ? 'cerrada_faltante' : 'cerrada_sobrante' }
 }
+
+/** Roles que abren y cierran la caja de cualquier vendedora (decisión 2-B); las demás, solo la suya. */
+export const ROLES_TODAS_LAS_CAJAS = ['admin', 'supervisor'] as const
+
+export function puedeManejarCaja(rol: string | null | undefined, usuarioId: string | null | undefined, asesoraId: string | null | undefined): boolean {
+  if (rol && (ROLES_TODAS_LAS_CAJAS as readonly string[]).includes(rol)) return true
+  return !!usuarioId && usuarioId === asesoraId
+}

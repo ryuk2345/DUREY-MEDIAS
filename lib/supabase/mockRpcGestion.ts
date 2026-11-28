@@ -7,7 +7,7 @@
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
 import { exigirModulo } from './mockRpcTintoreria'
 import { tieneModulo } from '@/lib/domain/tintoreria'
-import { cierreDeCaja } from '@/lib/domain/finance'
+import { cierreDeCaja, puedeManejarCaja } from '@/lib/domain/finance'
 import { hoyLocal } from '@/lib/domain/mantenimiento'
 
 export const RPC_GESTION = [
@@ -99,9 +99,12 @@ function crearModeloMedia(db: Db, p: any) {
   return id
 }
 
+const rolDe = (db: Db, uid: string | null) => tabla(db, 'usuarios').find(u => u.id === uid)?.rol ?? null
+
 function abrirCaja(db: Db, p: any) {
-  exigirModulo(db, p.__uid, 'ventas')
+  const uid = exigirModulo(db, p.__uid, 'ventas')
   if (!p.p_asesora_id || !tabla(db, 'usuarios').some(u => u.id === p.p_asesora_id && u.activo !== false)) throw new ErrorNegocio('Elige la vendedora de la caja')
+  if (p.__uid !== undefined && !puedeManejarCaja(rolDe(db, uid), uid, p.p_asesora_id)) throw new ErrorNegocio('Solo puedes abrir tu propia caja')
   const saldo = p.p_saldo_inicial == null ? -1 : Number(p.p_saldo_inicial)
   if (!(saldo >= 0)) throw new ErrorNegocio('El saldo inicial no puede ser negativo')
   const hoy = hoyLocal()
@@ -114,9 +117,10 @@ function abrirCaja(db: Db, p: any) {
 }
 
 function cerrarCaja(db: Db, p: any) {
-  exigirModulo(db, p.__uid, 'ventas')
+  const uid = exigirModulo(db, p.__uid, 'ventas')
   const caja = tabla(db, 'cajas_diarias').find(c => c.id === p.p_caja_id)
   if (!caja) throw new ErrorNegocio('Caja no encontrada')
+  if (p.__uid !== undefined && !puedeManejarCaja(rolDe(db, uid), uid, caja.asesora_id)) throw new ErrorNegocio('Solo puedes cerrar tu propia caja')
   if (caja.estado !== 'abierta') throw new ErrorNegocio('La caja ya está cerrada')
   const declarado = p.p_declarado_efectivo == null ? -1 : Number(p.p_declarado_efectivo)
   if (!(declarado >= 0)) throw new ErrorNegocio('El efectivo contado no puede ser negativo')

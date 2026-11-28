@@ -80,6 +80,8 @@ Todos los roles en sus búsquedas; los roles con el módulo catálogo (hoy admin
 - **decidido (dueño, 2026-11-27)** — P1-A: una compra al contado cuenta el día de la compra si se recibió; las devueltas no cuentan; las cuotas cuentan cuando se pagan.
 - **decidido (dueño, 2026-11-27)** — P2-A: el código interno queda fijo igual que el SKU.
 - **decidido (dueño, 2026-11-27)** — P3-A: egresos adicionales solo por funciones con el módulo egresos.
+- **decidido (dueño, 2026-11-28)** — 1-A: el supervisor tiene el módulo Mantenimiento (menú, rutas y base).
+- **decidido (dueño, 2026-11-28)** — 2-B: cada vendedora solo abre y cierra su caja; el administrador y el supervisor, cualquiera.
 - **supuesto** — La lista de sugerencias muestra hasta 8 coincidencias.
 - **supuesto (al construir)** — P3-A alcanza también a `compras_materia_prima`, `cuotas_compras` y `pagos_proveedores`: son dinero, el cálculo de gastos lee de ellas, ninguna pantalla las escribe directo y ya tienen sus funciones (024 y 027).
 

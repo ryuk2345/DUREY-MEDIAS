@@ -12,7 +12,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
-import { generarCronogramaCuotas, calcularEfectivoEsperadoCaja, cierreDeCaja } from '@/lib/domain/finance'
+import { generarCronogramaCuotas, calcularEfectivoEsperadoCaja, cierreDeCaja, puedeManejarCaja } from '@/lib/domain/finance'
+import { obtenerUsuarioActual, type UsuarioActual } from '@/lib/auth/usuarioActual'
 import { hoyLocal } from '@/lib/domain/mantenimiento'
 import CustomSelect from '@/components/ui/CustomSelect'
 import SelectorMedia from '@/components/ui/SelectorMedia'
@@ -73,6 +74,9 @@ export default function VentasPage() {
   const [cajasHoy, setCajasHoy] = useState<CajaDiaria[]>([])
   // Vendedora cuya caja se mira y se abre/cierra (aparte de la vendedora de la venta nueva)
   const [cajaVendedoraId, setCajaVendedoraId] = useState('')
+  // 2-B: una vendedora solo ve, abre y cierra su caja; el administrador y el supervisor, cualquiera
+  const [usuario, setUsuario] = useState<UsuarioActual | null>(null)
+  useEffect(() => { let vigente = true; obtenerUsuarioActual().then(u => { if (vigente) setUsuario(u) }); return () => { vigente = false } }, [])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'ventas' | 'deudas' | 'caja'>('ventas')
 
@@ -133,7 +137,8 @@ export default function VentasPage() {
   const [saldoInicial, setSaldoInicial] = useState('')
   const [cierreForm, setCierreForm] = useState({ efectivo: '', digital: '', justificacion: '' })
 
-  const cajaDe = cajaVendedoraId || vendedoraSeleccionadaId
+  const todasLasCajas = puedeManejarCaja(usuario?.rol, usuario?.id, null)
+  const cajaDe = todasLasCajas ? (cajaVendedoraId || vendedoraSeleccionadaId) : (usuario?.id ?? '')
   const caja = useMemo(() => cajasHoy.find(c => c.asesora_id === cajaDe) ?? null, [cajasHoy, cajaDe])
 
   const supabase = createClient()
@@ -619,7 +624,7 @@ export default function VentasPage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="w-48" aria-label="Caja de la vendedora">
-            <CustomSelect value={cajaDe} onChange={val => setCajaVendedoraId(val)}
+            <CustomSelect value={cajaDe} onChange={val => setCajaVendedoraId(val)} disabled={!todasLasCajas}
               options={[{ value: '', label: 'Caja de…' }, ...vendedoras.map(v => ({ value: v.id, label: `Caja de ${v.nombre}` }))]} placeholder="Caja de…" />
           </div>
           {!caja ? (
@@ -1475,7 +1480,7 @@ export default function VentasPage() {
           <div className="space-y-4">
             {/* 036: cada caja es de una vendedora (sus ventas y cobros entran a su caja) */}
             <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Vendedora de la caja</label>
-            <CustomSelect value={cajaDe} onChange={val => setCajaVendedoraId(val)}
+            <CustomSelect value={cajaDe} onChange={val => setCajaVendedoraId(val)} disabled={!todasLasCajas}
               options={[{ value: '', label: 'Seleccionar Vendedora...' }, ...vendedoras.map(v => ({ value: v.id, label: v.nombre }))]} placeholder="Seleccionar Vendedora..." />
             <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Saldo Inicial en Efectivo (S/)</label>
             <input type="number" min="0" step="0.50" placeholder="0.00" value={saldoInicial} onChange={e => setSaldoInicial(e.target.value)} className="input-dark w-full font-mono text-center font-bold text-lg mb-6" />

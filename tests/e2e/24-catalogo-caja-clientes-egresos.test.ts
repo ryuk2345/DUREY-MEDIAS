@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ejecutarRpcGestion } from '@/lib/supabase/mockRpcGestion'
-import { gastosMateriaPrima, totalGastos, cierreDeCaja } from '@/lib/domain/finance'
+import { gastosMateriaPrima, totalGastos, cierreDeCaja, puedeManejarCaja } from '@/lib/domain/finance'
 import { cambiaIdentidad, sugerirProductos } from '@/lib/domain/catalogo'
 import { hoyLocal } from '@/lib/domain/mantenimiento'
 import type { Db } from '@/lib/supabase/mockRpcComun'
@@ -174,5 +174,23 @@ describe('panel ronda 1: casos que faltaban', () => {
   it('identidad: un SKU vacío se puede poner; la talla también sugiere', () => {
     expect(cambiaIdentidad({ sku: '', codigo: 'c' }, { sku: 'NUEVO', codigo: 'c' })).toBe(false)
     expect(sugerirProductos([{ id: 'a', codigo: 'x', talla: '10-13' }, { id: 'b', codigo: 'y', talla: 'XL' }], '10 13').map(s => s.id)).toEqual(['a'])
+  })
+})
+
+describe('2-B: cada vendedora solo su caja; administrador y supervisor, todas', () => {
+  it('la vendedora no abre ni cierra la caja de otra; el administrador sí', () => {
+    db.usuarios.push({ id: 'ven2', rol: 'vendedora', activo: true })
+    expect(rpc('abrir_caja', VEN, { p_asesora_id: 'ven2', p_saldo_inicial: 1 }).error?.message).toBe('Solo puedes abrir tu propia caja')
+    const id = rpc('abrir_caja', ADM, { p_asesora_id: 'ven2', p_saldo_inicial: 1 }).data
+    expect(rpc('cerrar_caja', VEN, { p_caja_id: id, p_declarado_efectivo: 1 }).error?.message).toBe('Solo puedes cerrar tu propia caja')
+    expect(rpc('cerrar_caja', 'ven2', { p_caja_id: id, p_declarado_efectivo: 1 }).error).toBeNull()
+  })
+  it('la regla', () => {
+    expect(puedeManejarCaja('admin', 'a', 'otra')).toBe(true)
+    expect(puedeManejarCaja('supervisor', 's', null)).toBe(true)
+    expect(puedeManejarCaja('vendedora', 'v', 'v')).toBe(true)
+    expect(puedeManejarCaja('vendedora', 'v', 'otra')).toBe(false)
+    expect(puedeManejarCaja('vendedora', 'v', null)).toBe(false)
+    expect(puedeManejarCaja(null, null, null)).toBe(false)
   })
 })

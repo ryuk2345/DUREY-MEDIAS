@@ -16,6 +16,11 @@
 BEGIN;
 
 -- ------------------------------------------------------------------------------
+-- 0. EL SUPERVISOR TIENE MANTENIMIENTO (decisión del dueño 2026-11-28, 1-A); igual en MODULOS_POR_ROL
+-- ------------------------------------------------------------------------------
+INSERT INTO public.modulos_por_rol (rol, modulo) VALUES ('supervisor', 'mantenimiento') ON CONFLICT DO NOTHING;
+
+-- ------------------------------------------------------------------------------
 -- 1. COLUMNA QUE FALTABA
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.egresos_adicionales ADD COLUMN IF NOT EXISTS comprobante_url TEXT;
@@ -155,10 +160,15 @@ RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp
 DECLARE
   v_hoy DATE := (NOW() AT TIME ZONE 'America/Lima')::date;
   v_id  UUID;
+  v_uid UUID;
 BEGIN
-  PERFORM exigir_modulo('ventas');
+  v_uid := exigir_modulo('ventas');
   IF p_asesora_id IS NULL OR NOT EXISTS (SELECT 1 FROM usuarios WHERE id = p_asesora_id AND activo) THEN
     RAISE EXCEPTION 'Elige la vendedora de la caja';
+  END IF;
+  -- 2-B: cada vendedora abre solo su caja; el administrador y el supervisor, cualquiera
+  IF p_asesora_id <> v_uid AND NOT EXISTS (SELECT 1 FROM usuarios WHERE id = v_uid AND rol IN ('admin', 'supervisor')) THEN
+    RAISE EXCEPTION 'Solo puedes abrir tu propia caja';
   END IF;
   IF COALESCE(p_saldo_inicial, -1) < 0 THEN RAISE EXCEPTION 'El saldo inicial no puede ser negativo'; END IF;
   PERFORM pg_advisory_xact_lock(hashtext('durey_caja_' || p_asesora_id::text));
@@ -179,10 +189,15 @@ DECLARE
   v_esperado   NUMERIC;
   v_diferencia NUMERIC;
   v_estado     TEXT;
+  v_uid        UUID;
 BEGIN
-  PERFORM exigir_modulo('ventas');
+  v_uid := exigir_modulo('ventas');
   SELECT * INTO v_caja FROM cajas_diarias WHERE id = p_caja_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Caja no encontrada'; END IF;
+  -- 2-B: cada vendedora cierra solo su caja; el administrador y el supervisor, cualquiera
+  IF v_caja.asesora_id IS DISTINCT FROM v_uid AND NOT EXISTS (SELECT 1 FROM usuarios WHERE id = v_uid AND rol IN ('admin', 'supervisor')) THEN
+    RAISE EXCEPTION 'Solo puedes cerrar tu propia caja';
+  END IF;
   IF v_caja.estado <> 'abierta' THEN RAISE EXCEPTION 'La caja ya está cerrada'; END IF;
   IF COALESCE(p_declarado_efectivo, -1) < 0 THEN RAISE EXCEPTION 'El efectivo contado no puede ser negativo'; END IF;
   v_esperado := round(COALESCE(v_caja.saldo_inicial, 0) + COALESCE(v_caja.ventas_efectivo, 0) + COALESCE(v_caja.cobros_efectivo, 0)

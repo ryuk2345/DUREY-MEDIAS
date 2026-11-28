@@ -47,11 +47,11 @@ spec: ../specs/fase-7-transversal.md
 | T5 | hecha | `tests/e2e/25` (sugerencias) y Playwright «Sugerencias al escribir» en Catálogo, Planchado, Clientes y Máquinas |
 | T6 | en curso | panel ronda 1 (L120-L130): 7 corregidos (caja del día de Lima en las funciones de caja, caja por vendedora en pantalla, panel del administrador por pagos reales, comprobante solo http/https, pruebas que faltaban en SQL, mock y pantalla de Balance); 4 aparcados (L124 dueño de la caja, pregunta al dueño; L125 asimetría deliberada; L129 Ventas; L130 a investigar); ronda 2 (L131-L136): 5 corregidos (cobros con el día de Lima, caja que se mira aparte de la vendedora de la venta, prueba con dos cajas, prueba del día de Lima sin depender del reloj); L136 aparcado (comprobante de pagos a proveedores, fuera de esta fase) |
 
-Batería: `npm test` 322/322 · Playwright 66/66 · build y `tsc` en verde · ESLint sin errores nuevos.
+Batería: `npm test` 324/324 · Playwright 67/67 · build y `tsc` en verde · ESLint sin errores nuevos.
 
 ## Anotado
 - Encontrado al planear: registrar un gasto en Egresos fallaba en la base real (faltaba `comprobante_url`). Lo arregla la 036.
 - El bloqueo también alcanza `compras_materia_prima`, `cuotas_compras` y `pagos_proveedores` (supuesto en la spec).
-- Pregunta al dueño: el supervisor podía abrir Mantenimiento por URL aunque no está en su menú (`MODULOS_POR_ROL`). Con la lista única ya no puede.
+- Decidido (dueño, 2026-11-28): 1-A, el supervisor tiene Mantenimiento (la 036 lo añade a `modulos_por_rol` y a `MODULOS_POR_ROL`); 2-B, cada vendedora solo su caja (abrir_caja y cerrar_caja lo exigen; la pantalla fija la caja de la vendedora).
 - La caja ahora pide la vendedora al abrirla (cada caja es de una vendedora).
 - Encontrado al corregir: Materia prima y Egresos proponían «hoy» en UTC; de noche la base (ahora en Lima) rechazaba el pago como futuro. Ahora usan el día de Lima. Otras pantallas (calendario, reportes, volteado, preparado, remallado, usuarios, planchado) aún usan UTC: revisar aparte.

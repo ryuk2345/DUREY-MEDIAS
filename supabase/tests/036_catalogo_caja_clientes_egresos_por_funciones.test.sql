@@ -27,6 +27,9 @@ CREATE FUNCTION pg_temp.sesion(p_uid TEXT) RETURNS VOID LANGUAGE sql AS $$
   SELECT set_config('request.jwt.claim.sub', COALESCE(p_uid, ''), true)
 $$;
 
+-- ── 1-A: el supervisor tiene Mantenimiento ─────────────────────────────────
+SELECT pg_temp.verificar(EXISTS (SELECT 1 FROM modulos_por_rol WHERE rol = 'supervisor' AND modulo = 'mantenimiento'), 'el supervisor tiene el módulo mantenimiento');
+
 -- ── Permisos exactos ───────────────────────────────────────────────────────
 SELECT pg_temp.verificar(NOT has_table_privilege('authenticated', 'public.' || t, p), t || ': con sesión no se hace ' || p)
   FROM unnest(ARRAY['cajas_diarias', 'clientes', 'egresos_adicionales', 'catalogo_medias', 'modelos_media', 'compras_materia_prima', 'cuotas_compras', 'pagos_proveedores']) t,
@@ -180,11 +183,19 @@ RESET ROLE;
 SELECT pg_temp.verificar((SELECT r->>'estado' = 'cerrada_faltante' AND (r->>'diferencia')::numeric = -10 AND (r->>'esperado')::numeric = 200 FROM t_cierre), 'cierre: esperado 200, faltan 10');
 SELECT pg_temp.verificar((SELECT saldo_esperado_efectivo = 200 AND saldo_declarado_efectivo = 190 AND diferencia = -10 AND justificacion = 'Faltó cambio'
   FROM cajas_diarias WHERE id = (SELECT id FROM t_caja)), 'la caja guarda lo esperado, lo contado y la diferencia');
--- Cuadrada sin justificación y sobrante con ella; otra vendedora abre su propia caja el mismo día
+-- 2-B: la vendedora no abre ni cierra la caja de otra; el administrador sí
 SET LOCAL ROLE authenticated;
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000036a2');  -- vendedora
+SELECT pg_temp.debe_fallar($$SELECT abrir_caja('00000000-0000-0000-0000-0000000036a6', 30)$$, 'Solo puedes abrir tu propia caja');
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000036a1');  -- admin
+-- Cuadrada sin justificación y sobrante con ella; el administrador abre las cajas de otras vendedoras
 CREATE TEMP TABLE t_caja_b ON COMMIT DROP AS SELECT abrir_caja('00000000-0000-0000-0000-0000000036a6', 30) AS id;
 CREATE TEMP TABLE t_caja_c ON COMMIT DROP AS SELECT abrir_caja('00000000-0000-0000-0000-0000000036a7', 30) AS id;
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000036a2');  -- vendedora: no cierra la de otra
+SELECT pg_temp.debe_fallar(format('SELECT cerrar_caja(%L, 30, NULL)', (SELECT id FROM t_caja_b)), 'Solo puedes cerrar tu propia caja');
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000036a6');  -- la dueña sí
 CREATE TEMP TABLE t_cierre_b ON COMMIT DROP AS SELECT cerrar_caja((SELECT id FROM t_caja_b), 30, NULL) AS r;
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000036a1');  -- admin cierra la de otra
 SELECT pg_temp.debe_fallar(format('SELECT cerrar_caja(%L, 35, NULL)', (SELECT id FROM t_caja_c)), 'justificación');
 CREATE TEMP TABLE t_cierre_c ON COMMIT DROP AS SELECT cerrar_caja((SELECT id FROM t_caja_c), 35, 'Sobró') AS r;
 RESET ROLE;

@@ -337,6 +337,8 @@ BEGIN
 END;
 $function$;
 
+DELETE FROM public.modulos_por_rol WHERE rol = 'supervisor' AND modulo = 'mantenimiento';
+
 DROP VIEW IF EXISTS public.vista_gastos_materia_prima;
 
 DROP FUNCTION IF EXISTS public.eliminar_egreso(uuid);

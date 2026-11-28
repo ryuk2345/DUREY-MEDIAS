@@ -3,7 +3,7 @@
  * registrar un egreso con comprobante (antes fallaba) y abrir y cerrar la caja por sus funciones.
  */
 import { test, expect, type Page } from '@playwright/test'
-import { iniciarSesionAdmin } from './sesion'
+import { iniciarSesionAdmin, iniciarSesionComo } from './sesion'
 
 test.describe.configure({ mode: 'serial' })
 test.beforeEach(async ({ context, baseURL }) => { await iniciarSesionAdmin(context, baseURL!) })
@@ -169,4 +169,17 @@ test('Caja: con dos cajas abiertas, se ve la de la vendedora elegida (no la últ
     (base.cajas_diarias ?? []).filter((c: { fecha: string; asesora_id: string }) => c.fecha === hoy && ['vend1', 'vend2'].includes(c.asesora_id)))
   fin.usuarios = fin.usuarios.filter((u: { id: string }) => u.id !== 'vend2')
   await page.request.post('/api/mock-db', { data: fin })
+})
+
+test.describe('como vendedora', () => {
+  test.beforeEach(async ({ context, baseURL }) => {
+    await context.clearCookies()
+    await iniciarSesionComo(context, baseURL!, { id: 'vend1', email: 'vend@durey.com', rol: 'vendedora', nombre: 'Vendedora Prueba' })
+  })
+  test('2-B: la vendedora ve solo su caja y no puede elegir la de otra', async ({ page }) => {
+    await page.goto('/dashboard/ventas')
+    const selector = page.getByLabel('Caja de la vendedora').getByRole('combobox')
+    await expect(selector).toContainText('Caja de Vendedora Prueba')
+    await expect(selector).toBeDisabled()
+  })
 })
