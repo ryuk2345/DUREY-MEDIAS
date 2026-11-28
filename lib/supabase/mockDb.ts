@@ -11,6 +11,8 @@ import { ejecutarRpcMantenimiento, RPC_MANTENIMIENTO } from './mockRpcMantenimie
 import { ejecutarRpcTejido, RPC_TEJIDO } from './mockRpcTejido'
 import { ejecutarRpcTintoreria, RPC_TINTORERIA } from './mockRpcTintoreria'
 import { ejecutarRpcAlmacen, RPC_ALMACEN } from './mockRpcAlmacen'
+import { ejecutarRpcGestion, RPC_GESTION } from './mockRpcGestion'
+import { gastosMateriaPrima } from '@/lib/domain/finance'
 import { construirHistoriaMock } from './mockHistoria'
 
 const SEMILLAS = {
@@ -343,6 +345,7 @@ class MockQueryBuilder {
     }
     if (this.tableName === 'vista_historia_maquina') return construirHistoriaMock(db);
     if (this.tableName === 'vista_stock_vendible') return stockVendible(db);
+    if (this.tableName === 'vista_gastos_materia_prima') return gastosMateriaPrima(db.compras_materia_prima || [], db.pagos_proveedores || [], db.cuotas_compras || []);
     return db[this.tableName] || [];
   }
 
@@ -883,12 +886,13 @@ export function createMockClient() {
       return new MockQueryBuilder(tableName);
     },
     async rpc(fnName: string, params: any) {
-      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO, ...RPC_TEJIDO, ...RPC_TINTORERIA, ...RPC_ALMACEN].includes(fnName as never)) {
+      if ([...RPC_PRODUCCION, ...RPC_PROCESOS, ...RPC_MATERIA_PRIMA, ...RPC_LOGISTICA, ...RPC_MANTENIMIENTO, ...RPC_TEJIDO, ...RPC_TINTORERIA, ...RPC_ALMACEN, ...RPC_GESTION].includes(fnName as never)) {
         const db = await getMockDb();
         const conSesion = { ...params, __uid: idSesionMock() };
         const resultado = (ejecutarRpcTejido(db, fnName, conSesion)
           ?? ejecutarRpcTintoreria(db, fnName, conSesion)
           ?? ejecutarRpcAlmacen(db, fnName, conSesion)
+          ?? ejecutarRpcGestion(db, fnName, conSesion)
           ?? ejecutarRpcProduccion(db, fnName, params)
           ?? ejecutarRpcProcesos(db, fnName, conSesion)
           ?? ejecutarRpcMateriaPrima(db, fnName, params)

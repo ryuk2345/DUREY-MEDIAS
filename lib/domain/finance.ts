@@ -142,3 +142,49 @@ export function gastoMantenimiento(
   // Fase 4: la mano de obra de los mantenimientos preventivos también es gasto de mantenimiento
   return Math.round([...reparaciones, ...preventivosTerminados].reduce((s, r) => s + (Number(r.costo_mano_obra) || 0), 0) * 100) / 100
 }
+
+// ── Fase 7 (migración 036): gastos de materia prima por pagos reales y cierre de caja ──
+
+export type FilaGastoMateriaPrima = { fecha: string; monto: number; origen: 'contado' | 'cuota'; compra_id: string | null }
+
+/**
+ * Lo realmente pagado en materia prima (decisión P1-A): las compras al contado recibidas
+ * cuentan el día de la compra; las de pago diferido, cada pago a proveedor el día que se paga.
+ * Las devueltas y pendientes no cuentan. En la base: vista_gastos_materia_prima.
+ */
+export function gastosMateriaPrima(
+  compras: { id: string; fecha: string; costo_total: number; estado: string; condicion_pago?: string | null }[],
+  pagos: { fecha: string; monto: number; cuota_compra_id?: string | null }[],
+  cuotas: { id: string; compra_id: string }[] = [],
+): FilaGastoMateriaPrima[] {
+  const contado = compras.filter(c => (c.condicion_pago ?? 'contado') === 'contado' && c.estado === 'recibida')
+    .map(c => ({ fecha: c.fecha, monto: Number(c.costo_total) || 0, origen: 'contado' as const, compra_id: c.id }))
+  const porCuota = pagos.map(p => ({
+    fecha: p.fecha, monto: Number(p.monto) || 0, origen: 'cuota' as const,
+    compra_id: cuotas.find(q => q.id === p.cuota_compra_id)?.compra_id ?? null,
+  }))
+  return [...contado, ...porCuota]
+}
+
+/** Suma de lo pagado (opcionalmente entre dos fechas AAAA-MM-DD, ambas incluidas). */
+export function totalGastos(filas: { fecha: string; monto: number }[], desde?: string, hasta?: string): number {
+  return Math.round(filas.filter(f => (!desde || f.fecha >= desde) && (!hasta || f.fecha <= hasta))
+    .reduce((t, f) => t + (Number(f.monto) || 0), 0) * 100) / 100
+}
+
+export type EstadoCierreCaja = 'cerrada_cuadrada' | 'cerrada_faltante' | 'cerrada_sobrante'
+
+/** Diferencia y estado al cerrar la caja (misma regla que cerrar_caja en la base). */
+export function cierreDeCaja(caja: CajaEfectivo, declaradoEfectivo: number): { esperado: number; diferencia: number; estado: EstadoCierreCaja } {
+  const esperado = calcularEfectivoEsperadoCaja(caja)
+  const diferencia = Math.round((Number(declaradoEfectivo) - esperado) * 100) / 100
+  return { esperado, diferencia, estado: diferencia === 0 ? 'cerrada_cuadrada' : diferencia < 0 ? 'cerrada_faltante' : 'cerrada_sobrante' }
+}
+
+/** Roles que abren y cierran la caja de cualquier vendedora (decisión 2-B); las demás, solo la suya. */
+export const ROLES_TODAS_LAS_CAJAS = ['admin', 'supervisor'] as const
+
+export function puedeManejarCaja(rol: string | null | undefined, usuarioId: string | null | undefined, asesoraId: string | null | undefined): boolean {
+  if (rol && (ROLES_TODAS_LAS_CAJAS as readonly string[]).includes(rol)) return true
+  return !!usuarioId && usuarioId === asesoraId
+}

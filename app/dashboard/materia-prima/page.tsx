@@ -1,5 +1,6 @@
 'use client'
 
+import { hoyLocal } from '@/lib/domain/mantenimiento'  // 036: «hoy» es el día de Lima, como la base
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { esStockBajoMateriaPrima, cantidadEnCaminoPorInsumo } from '@/lib/domain/inventario'
@@ -150,7 +151,7 @@ export default function MateriaPrimaPage() {
   })
   const [repuestoForm, setRepuestoForm] = useState({ nombre: '', stock_actual: '', costo_unitario: '' })
   const [egresoForm, setEgresoForm] = useState({ concepto: '', monto: '', categoria: 'planilla' })
-  const hoyISO = () => new Date().toISOString().split('T')[0]
+  const hoyISO = () => hoyLocal()
   const [payCuotaForm, setPayCuotaForm] = useState<{ metodo_pago: MetodoPagoProveedor; fecha: string; comprobante_url: string }>({ metodo_pago: 'transferencia', fecha: hoyISO(), comprobante_url: '' })
   // Reprogramar la fecha de vencimiento de una cuota pendiente
   const [cuotaAReprogramar, setCuotaAReprogramar] = useState<CuotaCompra | null>(null)
@@ -604,16 +605,14 @@ export default function MateriaPrimaPage() {
       concepto: egresoForm.concepto.trim(),
       monto: parseFloat(egresoForm.monto),
       categoria: egresoForm.categoria,
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: hoyLocal(),
       created_at: new Date().toISOString()
     }
 
     try {
-      const { error } = await supabase.from('egresos_adicionales').insert({
-        concepto: newEgreso.concepto,
-        monto: newEgreso.monto,
-        categoria: newEgreso.categoria,
-        fecha: newEgreso.fecha
+      // 036: por su función (módulo egresos o materia prima)
+      const { error } = await supabase.rpc('registrar_egreso', {
+        p_concepto: newEgreso.concepto, p_monto: newEgreso.monto, p_categoria: newEgreso.categoria, p_fecha: null, p_comprobante_url: null,
       })
       if (error) throw error
     
@@ -647,7 +646,7 @@ export default function MateriaPrimaPage() {
       metodo_pago: compraForm.metodo_pago,
       estado: 'pendiente' as 'pendiente',
       motivo_devolucion: null,
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: hoyLocal(),
       created_at: new Date().toISOString()
     }
 

@@ -1,5 +1,7 @@
 'use client'
 
+import BuscadorConSugerencias from '@/components/ui/BuscadorConSugerencias'
+import { sugerirProductos } from '@/lib/domain/catalogo'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { generarCodigoMedia, generarSkuMedia, formatearMoneda } from '@/lib/utils'
@@ -108,13 +110,14 @@ export default function CatalogoPage() {
   const abrirEditar = (item: CatalogoMedia) => {
     setEditando(item)
     setForm({
-      sku: item.sku || generarSkuMedia(item.modelo, item.publico, item.diseno_color, item.talla),
+      // 036: el SKU y el código no cambian; un producto sin SKU (crudo) puede recibirlo una vez
+      sku: item.sku || '',
       codigo: item.codigo,
       modelo: item.modelo,
       publico: item.publico,
       diseno_color: item.diseno_color,
       talla: item.talla,
-      costo_produccion_docena: String(item.costo_produccion_docena),
+      costo_produccion_docena: item.costo_produccion_docena == null ? '' : String(item.costo_produccion_docena),
       precio_venta_sugerido: String(item.precio_venta_sugerido ?? 0),
       es_crudo: !!item.es_crudo
     })
@@ -124,9 +127,9 @@ export default function CatalogoPage() {
   const guardarNuevoModelo = async () => {
     if (!modeloNombreForm.trim()) { toast.error('Escribe el nombre del modelo'); return }
     setSavingModelo(true)
-    const { error } = await supabase.from('modelos_media').insert({ nombre: modeloNombreForm.trim() })
+    const { error } = await supabase.rpc('crear_modelo_media', { p_nombre: modeloNombreForm.trim() })
     if (error) {
-      toast.error(error.message.includes('unique') ? 'Ya existe un modelo con ese nombre' : `Error: ${error.message}`)
+      toast.error(/unique|duplicate/i.test(error.message) ? 'Ya existe un modelo con ese nombre' : `Error: ${error.message}`)
       setSavingModelo(false)
       return
     }
@@ -180,7 +183,9 @@ export default function CatalogoPage() {
     }
 
     if (editando) {
-      const { error } = await supabase.from('catalogo_medias').update(payload).eq('id', editando.id)
+      // 036: la base no deja cambiar el código ni un SKU ya puesto; a un crudo no se le inventa SKU
+      const datos = { ...payload, codigo: editando.codigo, sku: editando.sku || (form.es_crudo ? null : skuFinal) }
+      const { error } = await supabase.rpc('editar_producto', { p_id: editando.id, p_datos: datos })
       if (error) { 
         toast.error(`Error al actualizar: ${error.message}`)
         console.error('Error al actualizar catálogo:', error)
@@ -188,7 +193,7 @@ export default function CatalogoPage() {
       }
       toast.success('Producto actualizado con su SKU escaneable')
     } else {
-      const { error } = await supabase.from('catalogo_medias').insert({ ...payload, estado: 'activo' })
+      const { error } = await supabase.rpc('crear_producto', { p_datos: { ...payload, sku: form.es_crudo && !form.sku.trim() ? null : skuFinal } })
       if (error) { 
         toast.error(`Error al guardar: ${error.message}`)
         console.error('Error al insertar catálogo:', error)
@@ -202,8 +207,8 @@ export default function CatalogoPage() {
 
   const toggleEstado = async (item: CatalogoMedia) => {
     const nuevoEstado = item.estado === 'activo' ? 'inactivo' : 'activo'
-    const { error } = await supabase.from('catalogo_medias').update({ estado: nuevoEstado }).eq('id', item.id)
-    if (error) { toast.error('Error al cambiar estado'); return }
+    const { error } = await supabase.rpc('cambiar_estado_producto', { p_id: item.id, p_estado: nuevoEstado })
+    if (error) { toast.error(`Error al cambiar estado: ${error.message}`); return }
     toast.success(nuevoEstado === 'activo' ? 'Producto reactivado' : 'Producto dado de baja (baja lógica)')
     cargarCatalogo()
   }
@@ -216,15 +221,8 @@ export default function CatalogoPage() {
     if (!productoAEliminar) return
     setEliminando(true)
     try {
-      const { error } = await supabase.from('catalogo_medias').delete().eq('id', productoAEliminar.id)
-      if (error) {
-        if (error.code === '23503' || error.message?.includes('foreign key') || error.message?.includes('violates')) {
-          toast.error('No se puede eliminar este producto porque ya tiene movimientos de producción, paquetes o ventas vinculadas. Puedes usar el botón de dar de baja para inactivarlo sin romper el historial.')
-        } else {
-          toast.error(`Error al eliminar: ${error.message}`)
-        }
-        return
-      }
+      const { error } = await supabase.rpc('eliminar_producto', { p_id: productoAEliminar.id })
+      if (error) { toast.error(error.message); return }
       toast.success(`Producto "${productoAEliminar.codigo}" eliminado del catálogo`)
       setProductoAEliminar(null)
       cargarCatalogo()
@@ -321,16 +319,8 @@ export default function CatalogoPage() {
 
       {/* Filtros */}
       <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Buscar por SKU, código o modelo..."
-            value={filtro}
-            onChange={e => setFiltro(e.target.value)}
-            className="input-dark pl-10 text-xs font-semibold"
-          />
-        </div>
+        <BuscadorConSugerencias className="flex-1" placeholder="Buscar por SKU, código o modelo..." value={filtro} onChange={setFiltro}
+          sugerencias={sugerirProductos(catalogo, filtro)} inputClassName="text-xs font-semibold" />
         <CustomSelect
           value={filtroEstado}
           onChange={val => setFiltroEstado(val as any)}
@@ -442,18 +432,22 @@ export default function CatalogoPage() {
                   <label className="block text-[10px] font-bold text-cyan-300 uppercase tracking-wider">
                     Código Interno / Personalizado del Producto
                   </label>
+                  {!editando && (
                   <button type="button" onClick={autoGenerarCodigo} className="text-[10px] text-cyan-400 font-bold hover:underline flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> Auto-Generar Código
                   </button>
+                  )}
                 </div>
                 <input
                   type="text"
                   placeholder="Ej. tobillera_dama_diseno_unica o DEP-HOM-BLA-10"
                   value={form.codigo}
                   onChange={e => setForm({ ...form, codigo: e.target.value })}
-                  className="input-dark text-xs font-mono font-bold text-cyan-300 border-cyan-500/40 w-full"
+                  readOnly={Boolean(editando)}
+                  aria-label="Código del producto"
+                  className={`input-dark text-xs font-mono font-bold text-cyan-300 border-cyan-500/40 w-full ${editando ? 'opacity-60 cursor-not-allowed' : ''}`}
                 />
-                <p className="text-[10px] text-slate-400">Puedes escribir un código variable personalizado o usar Auto-Generar según el modelo y talla.</p>
+                <p className="text-[10px] text-slate-400">{editando ? 'El código no se cambia: va en sacos y ventas.' : 'Puedes escribir un código variable personalizado o usar Auto-Generar según el modelo y talla.'}</p>
               </div>
 
               {/* SKU Escaneable por Pistola */}
@@ -462,9 +456,11 @@ export default function CatalogoPage() {
                   <label className="block text-[10px] font-bold text-emerald-300 uppercase tracking-wider">
                     SKU Escaneable para Pistola de Código de Barras
                   </label>
+                  {!editando?.sku && (
                   <button type="button" onClick={autoGenerarSku} className="text-[10px] text-cyan-400 font-bold hover:underline flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> Auto-Generar SKU
                   </button>
+                  )}
                 </div>
                 <div className="relative">
                   <Barcode className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400" />
@@ -473,10 +469,12 @@ export default function CatalogoPage() {
                     placeholder="Ej. SKU-TOB-DAM-DIS-UNI"
                     value={form.sku}
                     onChange={e => setForm({ ...form, sku: e.target.value.toUpperCase() })}
-                    className="input-dark pl-9 text-xs font-mono font-bold text-emerald-300 border-emerald-500/40 w-full"
+                    readOnly={Boolean(editando?.sku)}
+                    aria-label="SKU del producto"
+                    className={`input-dark pl-9 text-xs font-mono font-bold text-emerald-300 border-emerald-500/40 w-full ${editando?.sku ? 'opacity-60 cursor-not-allowed' : ''}`}
                   />
                 </div>
-                <p className="text-[10px] text-slate-400">Este SKU es el código único que leerá la pistola de código de barras en empaque y salones.</p>
+                <p className="text-[10px] text-slate-400">{editando?.sku ? 'El SKU no se cambia: está impreso en los sacos y en las ventas.' : 'Este SKU es el código único que leerá la pistola de código de barras en empaque y salones.'}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

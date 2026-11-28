@@ -126,7 +126,9 @@
       "peso_docena_g": 400,
       "materia_prima_id": "mp1",
       "sku": "SKU-TST-1",
-      "es_crudo": false
+      "es_crudo": false,
+      "costo_produccion_docena": 10,
+      "precio_venta_sugerido": 15
     },
     {
       "id": "media2",
@@ -138,7 +140,9 @@
       "peso_docena_g": 400,
       "materia_prima_id": "mp1",
       "sku": "SKU-TST-2",
-      "es_crudo": false
+      "es_crudo": false,
+      "costo_produccion_docena": 10,
+      "precio_venta_sugerido": 15
     },
     {
       "id": "cru1",
@@ -151,7 +155,9 @@
       "materia_prima_id": "mp1",
       "sku": null,
       "es_crudo": true,
-      "diseno_color": "CRUDO"
+      "diseno_color": "CRUDO",
+      "costo_produccion_docena": 10,
+      "precio_venta_sugerido": 15
     }
   ],
   "materia_prima": [
@@ -321,6 +327,16 @@
       "desde": "2026-01-01T00:00:00.000Z",
       "hasta": null,
       "asignado_por": null
+    }
+  ],
+  "clientes": [
+    {
+      "id": "cli1",
+      "tipo_documento": "ruc",
+      "numero_documento": "20111222333",
+      "nombre": "Ñandú Textil SAC",
+      "telefono": null,
+      "direccion": null
     }
   ]
 }

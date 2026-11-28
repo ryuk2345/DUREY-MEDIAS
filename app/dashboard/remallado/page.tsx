@@ -1,5 +1,7 @@
 'use client'
 
+import BuscadorConSugerencias from '@/components/ui/BuscadorConSugerencias'
+import { sugerir, sugerirProductos, MAX_SUGERENCIAS } from '@/lib/domain/catalogo'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { listarUsuarios } from '@/lib/api/usuarios'
@@ -358,14 +360,9 @@ export default function RemalladoMonitorPage() {
       {/* ── FILTROS Y BÚSQUEDA ──────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Buscar máquina remalladora o media..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="input-dark pl-10 text-xs rounded-xl w-full"
-          />
+          <BuscadorConSugerencias placeholder="Buscar máquina remalladora o media..." value={searchQuery} onChange={setSearchQuery} inputClassName="text-xs rounded-xl"
+            sugerencias={[...sugerir(maquinasRem, searchQuery, m => ({ id: m.id, etiqueta: m.codigo, detalle: m.marca?.nombre }), m => [m.codigo, m.marca?.nombre]),
+              ...sugerirProductos(catalogo, searchQuery)].slice(0, MAX_SUGERENCIAS)} />
         </div>
 
         <div className="flex items-center gap-2 bg-slate-900/60 p-1 rounded-2xl border border-white/[0.06] text-xs">

@@ -25,6 +25,8 @@ const docenasDe = (filas: Fila[] | undefined, id: string) => filas?.find(f => f.
 
 test('Planchado: stock de fuera entra por planchar, sin egreso, con origen y quién', async ({ page }) => {
   await page.goto('/dashboard/planchado')
+  // La base mock se comparte entre archivos: se compara con lo que había antes
+  const egresosAntes = ((await mockDb(page)).egresos_adicionales ?? []).length
   await page.getByRole('button', { name: 'Ingresar stock de fuera' }).click()
   await elegir(page, 'Elegir producto…', 'TST-1')
   await page.getByLabel('Docenas').fill('10')
@@ -35,7 +37,7 @@ test('Planchado: stock de fuera entra por planchar, sin egreso, con origen y qui
   expect(docenasDe(db.stock_listo_planchar, 'media1')).toBe(10)
   expect(db.ingresos_stock_fuera).toEqual([expect.objectContaining({ etapa: 'planchado', docenas: 10, origen: 'Producción antes del sistema' })])
   expect(db.ingresos_stock_fuera[0].registrado_por).toBe('65a2de1b-03f2-4b95-82c2-cc2e3ffc30bb')
-  expect(db.egresos_adicionales ?? []).toHaveLength(0)
+  expect(db.egresos_adicionales ?? []).toHaveLength(egresosAntes)
 })
 
 test('Planchado: asignar dos SKU de una vez a un planchador el lunes', async ({ page }) => {

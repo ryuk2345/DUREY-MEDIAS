@@ -12,7 +12,9 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
-import { generarCronogramaCuotas, calcularEfectivoEsperadoCaja } from '@/lib/domain/finance'
+import { generarCronogramaCuotas, calcularEfectivoEsperadoCaja, cierreDeCaja, puedeManejarCaja } from '@/lib/domain/finance'
+import { obtenerUsuarioActual, type UsuarioActual } from '@/lib/auth/usuarioActual'
+import { hoyLocal } from '@/lib/domain/mantenimiento'
 import CustomSelect from '@/components/ui/CustomSelect'
 import SelectorMedia from '@/components/ui/SelectorMedia'
 import { Modal } from '@/components/ui/Modal'
@@ -49,7 +51,7 @@ interface Deuda {
     items_venta?: { docenas: number; precio_docena: number; catalogo_media: { codigo: string; sku: string | null } | null }[] }
 }
 interface CajaDiaria {
-  id: string; saldo_inicial: number; ventas_efectivo: number; cobros_efectivo: number; pagos_efectivo?: number; estado: string
+  id: string; asesora_id?: string | null; saldo_inicial: number; ventas_efectivo: number; cobros_efectivo: number; pagos_efectivo?: number; estado: string
 }
 
 interface CarritoItem { catalogo_media_id: string; codigo: string; docenas: number; precio_docena: number }
@@ -68,7 +70,13 @@ export default function VentasPage() {
   const [stockPorMedia, setStockPorMedia] = useState<Record<string, number>>({})
   const [ventas, setVentas] = useState<Venta[]>([])
   const [deudas, setDeudas] = useState<Deuda[]>([])
-  const [caja, setCaja] = useState<CajaDiaria | null>(null)
+  // 036: una caja por vendedora y día; se muestra la de la vendedora elegida
+  const [cajasHoy, setCajasHoy] = useState<CajaDiaria[]>([])
+  // Vendedora cuya caja se mira y se abre/cierra (aparte de la vendedora de la venta nueva)
+  const [cajaVendedoraId, setCajaVendedoraId] = useState('')
+  // 2-B: una vendedora solo ve, abre y cierra su caja; el administrador y el supervisor, cualquiera
+  const [usuario, setUsuario] = useState<UsuarioActual | null>(null)
+  useEffect(() => { let vigente = true; obtenerUsuarioActual().then(u => { if (vigente) setUsuario(u) }); return () => { vigente = false } }, [])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'ventas' | 'deudas' | 'caja'>('ventas')
 
@@ -129,12 +137,16 @@ export default function VentasPage() {
   const [saldoInicial, setSaldoInicial] = useState('')
   const [cierreForm, setCierreForm] = useState({ efectivo: '', digital: '', justificacion: '' })
 
+  const todasLasCajas = puedeManejarCaja(usuario?.rol, usuario?.id, null)
+  const cajaDe = todasLasCajas ? (cajaVendedoraId || vendedoraSeleccionadaId) : (usuario?.id ?? '')
+  const caja = useMemo(() => cajasHoy.find(c => c.asesora_id === cajaDe) ?? null, [cajasHoy, cajaDe])
+
   const supabase = createClient()
 
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    const hoy = new Date().toISOString().split('T')[0]
+    const hoy = hoyLocal()  // día de Lima (antes UTC: después de las 7 p. m. buscaba la caja de mañana)
     const [cli, vend, cat, ven, deu, caj, paq] = await Promise.all([
       supabase.from('clientes').select('*').order('nombre'),
       listarUsuarios({ rol: 'vendedora', campos: 'id,nombre' }),
@@ -150,7 +162,7 @@ export default function VentasPage() {
         venta:ventas(id, codigo_venta, total_soles, cliente:clientes(id, nombre, numero_documento, telefono, direccion), asesora:usuarios(id, nombre),
           items_venta(docenas, precio_docena, catalogo_media:catalogo_medias(codigo, sku)))
       `).order('fecha_vencimiento'),
-      supabase.from('cajas_diarias').select('*').eq('fecha', hoy).single(),
+      supabase.from('cajas_diarias').select('*').eq('fecha', hoy).order('created_at', { ascending: false }),
       supabase.from('vista_stock_vendible').select('catalogo_media_id, vendibles')
     ])
 
@@ -166,7 +178,7 @@ export default function VentasPage() {
     setCatalogo(cat.data ?? [])
     setVentas((ven.data ?? []) as unknown as Venta[])
     setDeudas((deu.data ?? []) as unknown as Deuda[])
-    setCaja(caj.data ?? null)
+    setCajasHoy((caj.data ?? []) as CajaDiaria[])
 
     // Calcular stock total por tipo de media
     const stockMap: Record<string, number> = {}
@@ -563,13 +575,10 @@ export default function VentasPage() {
   }
 
   const abrirCaja = async () => {
-    const { error } = await supabase.from('cajas_diarias').insert({
-      asesora_id: vendedoraSeleccionadaId || null,
-      fecha: new Date().toISOString().split('T')[0],
-      saldo_inicial: parseFloat(saldoInicial || '0'),
-      estado: 'abierta',
-    })
-    if (error) { toast.error('Error al abrir caja'); return }
+    if (!cajaDe) { toast.error('Elige la vendedora de la caja'); return }
+    // 036: la base abre la caja con la fecha de Lima y una sola por vendedora y día
+    const { error } = await supabase.rpc('abrir_caja', { p_asesora_id: cajaDe, p_saldo_inicial: parseFloat(saldoInicial || '0') })
+    if (error) { toast.error(`Error al abrir caja: ${error.message}`); return }
     toast.success('Caja abierta exitosamente')
     setShowAperturaModal(false)
     cargarDatos()
@@ -581,22 +590,15 @@ export default function VentasPage() {
     // Se relee la caja: un pago o cobro hecho en otra pantalla cambia el esperado.
     const { data: cajaActual, error: errCaja } = await supabase.from('cajas_diarias').select('*').eq('id', caja.id).single()
     if (errCaja || !cajaActual) { toast.error('No se pudo leer la caja actualizada'); return }
-    const esperadoEfectivo = calcularEfectivoEsperadoCaja(cajaActual)
     const declaradoEfectivo = parseFloat(cierreForm.efectivo || '0')
-    const diferencia = declaradoEfectivo - esperadoEfectivo
-    const estado = diferencia === 0 ? 'cerrada_cuadrada' : diferencia < 0 ? 'cerrada_faltante' : 'cerrada_sobrante'
-
-    if (estado !== 'cerrada_cuadrada' && !cierreForm.justificacion) {
+    // Aviso previo con la misma regla; la base calcula y guarda el cierre (036)
+    if (cierreDeCaja(cajaActual, declaradoEfectivo).estado !== 'cerrada_cuadrada' && !cierreForm.justificacion.trim()) {
       toast.error('Debes ingresar una justificación para el faltante/sobrante'); return
     }
-
-    const { error } = await supabase.from('cajas_diarias').update({
-      saldo_declarado_efectivo: declaradoEfectivo,
-      diferencia, estado,
-      justificacion: cierreForm.justificacion,
-    }).eq('id', caja.id)
-    if (error) { toast.error('Error al cerrar caja'); return }
-    toast.success(`Caja ${estado.replace('_', ' ')} · Diferencia: ${formatearMoneda(diferencia)}`)
+    const { data, error } = await supabase.rpc('cerrar_caja', { p_caja_id: caja.id, p_declarado_efectivo: declaradoEfectivo, p_justificacion: cierreForm.justificacion })
+    if (error) { toast.error(`Error al cerrar caja: ${error.message}`); return }
+    const cierre = data as { estado: string; diferencia: number }
+    toast.success(`Caja ${cierre.estado.replace('_', ' ')} · Diferencia: ${formatearMoneda(cierre.diferencia)}`)
     setShowCierreModal(false)
     cargarDatos()
   }
@@ -621,6 +623,10 @@ export default function VentasPage() {
           <p className="text-slate-400 text-xs font-medium ml-11">Ventas con inicial/adelanto, liquidación total de deuda, adjunto de billetes/vouchers y auditoría administradora</p>
         </div>
         <div className="flex items-center gap-3">
+          <div className="w-48" aria-label="Caja de la vendedora">
+            <CustomSelect value={cajaDe} onChange={val => setCajaVendedoraId(val)} disabled={!todasLasCajas}
+              options={[{ value: '', label: 'Caja de…' }, ...vendedoras.map(v => ({ value: v.id, label: `Caja de ${v.nombre}` }))]} placeholder="Caja de…" />
+          </div>
           {!caja ? (
             <button onClick={() => setShowAperturaModal(true)} className="btn-secondary text-xs py-2 rounded-2xl">
               <DollarSign className="w-4 h-4 text-emerald-400" /> Abrir Caja
@@ -1472,6 +1478,10 @@ export default function VentasPage() {
         title="Apertura de Caja Diaria"
       >
           <div className="space-y-4">
+            {/* 036: cada caja es de una vendedora (sus ventas y cobros entran a su caja) */}
+            <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Vendedora de la caja</label>
+            <CustomSelect value={cajaDe} onChange={val => setCajaVendedoraId(val)} disabled={!todasLasCajas}
+              options={[{ value: '', label: 'Seleccionar Vendedora...' }, ...vendedoras.map(v => ({ value: v.id, label: v.nombre }))]} placeholder="Seleccionar Vendedora..." />
             <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Saldo Inicial en Efectivo (S/)</label>
             <input type="number" min="0" step="0.50" placeholder="0.00" value={saldoInicial} onChange={e => setSaldoInicial(e.target.value)} className="input-dark w-full font-mono text-center font-bold text-lg mb-6" />
             <div className="flex gap-3">

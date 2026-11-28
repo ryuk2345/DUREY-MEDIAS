@@ -9,7 +9,7 @@ import {
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import { toast } from 'sonner'
-import { gastoMantenimiento } from '@/lib/domain/finance'
+import { gastoMantenimiento, totalGastos } from '@/lib/domain/finance'
 
 interface KPI {
   ingresos_recaudados: number
@@ -42,7 +42,8 @@ export default function AdminPage() {
       supabase.from('cobros').select('monto').gte('fecha', inicioMes).eq('estado_validacion', 'validado'),
       supabase.from('cuotas').select('monto').neq('estado', 'pagada'),
       supabase.from('reparaciones').select('costo_mano_obra').gte('fecha_reparacion', inicioMes),
-      supabase.from('compras_materia_prima').select('costo_total').eq('estado', 'recibida').gte('fecha', inicioMes),
+      // 036 (P1-A): lo pagado de verdad, como Balance y Egresos
+      supabase.from('vista_gastos_materia_prima').select('fecha, monto').gte('fecha', inicioMes),
       supabase.from('egresos_adicionales').select('monto').gte('fecha', inicioMes),
       supabase.from('mantenimientos_preventivos').select('costo_mano_obra').eq('estado', 'terminado').gte('fecha_fin', inicioMes),
     ])
@@ -58,7 +59,7 @@ export default function AdminPage() {
     const cuentasCobrar = (cuotasPend.data ?? []).reduce((s, c) => s + Number(c.monto ?? 0), 0)
     if (preventivosMes.error) toast.error(`Error al cargar mantenimientos preventivos: ${preventivosMes.error.message}`)
     const gastosMantenimiento = gastoMantenimiento(reparaciones.data ?? [], preventivosMes.data ?? [])
-    const comprasMateriaPrima = (comprasMes.data ?? []).reduce((s, c) => s + Number(c.costo_total ?? 0), 0)
+    const comprasMateriaPrima = totalGastos(comprasMes.data ?? [])
     const egresosAdicionales = (egresosMes.data ?? []).reduce((s, e) => s + Number(e.monto ?? 0), 0)
 
     // Costos de producción del mes

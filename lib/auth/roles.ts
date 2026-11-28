@@ -20,3 +20,17 @@ export function normalizarRol(rawRole: string | undefined | null): string | null
   if (r.includes('almac')) return 'almacenero'
   return r in MODULOS_POR_ROL ? r : null
 }
+
+/** Ruta del panel de un módulo: 'materia_prima' → '/materia-prima'. */
+export function rutaDeModulo(modulo: string): string {
+  return '/' + modulo.replace(/_/g, '-')
+}
+
+/**
+ * Rutas del panel que puede abrir un rol (Fase 7). Salen de MODULOS_POR_ROL, la misma lista
+ * que el menú y la base (tabla modulos_por_rol): antes proxy.ts tenía su propia copia.
+ * La primera es a donde se redirige si el rol pide una ruta que no tiene.
+ */
+export function rutasPorRol(rol: string | null | undefined): string[] {
+  return rol ? (MODULOS_POR_ROL[rol] ?? []).map(rutaDeModulo) : []
+}

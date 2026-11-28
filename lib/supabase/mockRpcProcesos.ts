@@ -5,6 +5,7 @@
  * SQL: validan todo primero y solo después escriben, así un error no deja
  * cambios a medias. mockDb.ts guarda la base solo si no hubo error.
  */
+import { hoyLocal } from '@/lib/domain/mantenimiento'
 import { generarCodigoVenta, generarCodigoGuia } from '@/lib/utils'
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, type Db, type ResultadoRpc } from './mockRpcComun'
 import { sumarStockEtapa } from './mockRpcTejido'
@@ -20,7 +21,8 @@ export const RPC_PROCESOS = [
   'registrar_produccion_planchado',
 ] as const
 
-const hoy = () => new Date().toISOString().split('T')[0]
+// Día de Lima, igual que la base desde la 036 (antes UTC)
+const hoy = () => hoyLocal()
 const num = (v: unknown) => Number(v ?? 0) || 0
 const METODOS_PAGO = ['efectivo', 'yape', 'plin', 'transferencia']
 

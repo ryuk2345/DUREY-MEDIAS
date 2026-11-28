@@ -4,6 +4,8 @@
 // solo cambian administrador y supervisor; cada turno (día o noche) se registran,
 // por máquina, las docenas producidas y el operario. El hilo se descuenta por las
 // docenas reales. Las reglas viven en lib/domain/tejido.ts y en las funciones SQL.
+import BuscadorConSugerencias from '@/components/ui/BuscadorConSugerencias'
+import { sugerir, sugerirProductos, MAX_SUGERENCIAS } from '@/lib/domain/catalogo'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatearFecha } from '@/lib/utils'
@@ -232,8 +234,9 @@ export default function ProduccionTejidoPage() {
 
       <div className="flex flex-col md:flex-row gap-3">
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-500" />
-          <input type="text" placeholder="Buscar máquina, producto o marca..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="input-dark pl-10 text-xs rounded-xl w-full" />
+          <BuscadorConSugerencias placeholder="Buscar máquina, producto o marca..." value={busqueda} onChange={setBusqueda} inputClassName="text-xs rounded-xl"
+            sugerencias={[...sugerir(maquinas, busqueda, m => ({ id: m.id, etiqueta: m.codigo, detalle: m.marca?.nombre ?? undefined }), m => [m.codigo, m.marca?.nombre]),
+              ...sugerirProductos(catalogo, busqueda)].slice(0, MAX_SUGERENCIAS)} />
         </div>
         <select aria-label="Marca" value={marcaFiltro} onChange={e => setMarcaFiltro(e.target.value)} className="input-dark text-xs md:w-64">
           <option value="todas">Todas las marcas ({marcas.length})</option>

@@ -59,10 +59,11 @@ SELECT pg_temp.verificar((SELECT count(*) >= 0 FROM maquinas), 'lee máquinas');
 SELECT pg_temp.verificar((SELECT count(*) >= 0 FROM vista_stock_medias), 'lee la vista de stock');
 SELECT pg_temp.verificar((SELECT count(*) >= 0 FROM (SELECT id, nombre, rol, activo FROM usuarios) u), 'lee columnas públicas de usuarios');
 SELECT pg_temp.debe_fallar('SELECT password_hash FROM usuarios', 'permission denied');
-INSERT INTO egresos_adicionales (concepto, monto, categoria, fecha) VALUES ('Prueba 026', 1, 'otros', CURRENT_DATE);
-SELECT pg_temp.verificar((SELECT count(*) = 1 FROM egresos_adicionales WHERE concepto = 'Prueba 026'), 'inserta y lee con RLS activo');
-UPDATE egresos_adicionales SET monto = 2 WHERE concepto = 'Prueba 026';
-DELETE FROM egresos_adicionales WHERE concepto = 'Prueba 026';
+-- 036: egresos ya solo por funciones; la escritura con RLS se prueba en proveedores
+INSERT INTO proveedores (nombre) VALUES ('Prueba 026');
+SELECT pg_temp.verificar((SELECT count(*) = 1 FROM proveedores WHERE nombre = 'Prueba 026'), 'inserta y lee con RLS activo');
+UPDATE proveedores SET telefono = '2' WHERE nombre = 'Prueba 026';
+DELETE FROM proveedores WHERE nombre = 'Prueba 026';
 SELECT pg_temp.verificar((SELECT ajustar_stock_repuesto('00000000-0000-0000-0000-0000000026c1', 'salida', 2, 'x') = 3), 'RPC atómica funciona con sesión');
 SELECT pg_temp.debe_fallar($$SELECT _sumar_a_caja(gen_random_uuid(), 'efectivo', 1, false)$$, 'permission denied');
 SELECT pg_temp.debe_fallar($$SELECT _siguiente_codigo('VTA', 0, 1, 99)$$, 'permission denied');

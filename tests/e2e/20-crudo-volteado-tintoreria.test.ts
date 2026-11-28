@@ -4,7 +4,7 @@
  * El mock debe comportarse igual que el SQL (supabase/tests/033_*.test.sql).
  */
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { MODULOS_POR_ROL } from '@/lib/utils'
 import {
   esColorDe, coloresPara, mermaTintoreria, destinoTrasRemallado, destinoTrasVolteado, tieneModulo, ETAPA_EN_CRUDO,
@@ -17,9 +17,12 @@ const rpc = (db: Db, fn: string, p: Record<string, unknown>) => (ejecutarRpcTint
 
 describe('MODULOS_POR_ROL = modulos_por_rol de la base (migración 033)', () => {
   it('las dos tablas tienen exactamente los mismos pares rol–módulo', () => {
-    const sql = readFileSync('supabase/migrations/033_crudo_volteado_tintoreria_roles.sql', 'utf8')
-    const bloque = sql.slice(sql.indexOf('INSERT INTO public.modulos_por_rol'), sql.indexOf('ON CONFLICT DO NOTHING'))
-    const enBase = [...bloque.matchAll(/\('([a-z_]+)', '([a-z_]+)'\)/g)].map(m => `${m[1]}:${m[2]}`).sort()
+    // Todas las migraciones que añaden pares (033 y las siguientes, p. ej. la 036 da Mantenimiento al supervisor)
+    const enBase = readdirSync('supabase/migrations').filter(f => f.endsWith('.sql')).sort().flatMap(f => {
+      const sql = readFileSync(`supabase/migrations/${f}`, 'utf8')
+      return [...sql.matchAll(/INSERT INTO public\.modulos_por_rol[^;]*?ON CONFLICT DO NOTHING/g)]
+        .flatMap(b => [...b[0].matchAll(/\('([a-z_]+)', '([a-z_]+)'\)/g)].map(m => `${m[1]}:${m[2]}`))
+    }).sort()
     const enApp = Object.entries(MODULOS_POR_ROL).flatMap(([r, ms]) => ms.map(m => `${r}:${m}`)).sort()
     expect(enBase.length).toBeGreaterThan(50)
     expect(enBase).toEqual(enApp)

@@ -1,3 +1,4 @@
+import { hoyLocal } from '@/lib/domain/mantenimiento'
 /* eslint-disable @typescript-eslint/no-explicit-any -- las filas de la base mock no tienen tipos, igual que en mockDb.ts */
 /** Utilidades compartidas por las emulaciones locales de funciones RPC (mockRpc*.ts). */
 
@@ -34,7 +35,8 @@ export function ejecutarHandler(
   }
 }
 
-const hoyIso = () => new Date().toISOString().split('T')[0]
+// Día de Lima, igual que la base desde la 036 (antes UTC)
+const hoyIso = () => hoyLocal()
 
 /**
  * Caja abierta de hoy para quien paga: la suya; si no tiene, la general (sin asesora);

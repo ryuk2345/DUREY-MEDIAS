@@ -12,6 +12,7 @@
  *   - Las tarjetas de Máquinas filtran estados que no les corresponden
  *   - Copiar la asignación del día anterior carga máquinas que hoy no están activas
  */
+import { hoyLocal } from '@/lib/domain/mantenimiento'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -23,7 +24,7 @@ import { cantidadEnCaminoPorInsumo } from '@/lib/domain/inventario'
 import { filtrarMaquinasPorGrupo, GRUPOS_ESTADO_MAQUINA } from '@/lib/domain/machines'
 import { construirCopiaAsignacion, type TurnoPrevio } from '@/lib/domain/tejido'
 
-const hoy = () => new Date().toISOString().split('T')[0]
+const hoy = () => hoyLocal()  // día de Lima, como la base desde la 036
 let db: Db
 
 const rpc = (fn: string, params: Record<string, unknown>) =>
