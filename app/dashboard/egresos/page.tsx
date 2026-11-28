@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
 import CustomSelect from '@/components/ui/CustomSelect'
 import { Modal } from '@/components/ui/Modal'
-import { gastoMantenimiento } from '@/lib/domain/finance'
+import { gastoMantenimiento, totalGastos } from '@/lib/domain/finance'
 import {
   DollarSign, Plus, Search, Filter, Trash2, Calendar, FileText,
   TrendingDown, Building2, Package, Wrench, AlertTriangle, Loader2,
@@ -81,7 +81,8 @@ export default function EgresosPage() {
     try {
       const [egrRes, comprasRes, repRes] = await Promise.all([
         supabase.from('egresos_adicionales').select('*').order('fecha', { ascending: false }),
-        supabase.from('compras_materia_prima').select('costo_total, estado'),
+        // 036 (P1-A): lo pagado de verdad — contado recibido y cada cuota pagada
+        supabase.from('vista_gastos_materia_prima').select('fecha, monto'),
         supabase.from('reparaciones').select('costo_mano_obra')
       ])
 
@@ -92,10 +93,7 @@ export default function EgresosPage() {
       if (repRes.error) toast.error(`Error al cargar reparaciones: ${repRes.error.message}`)
       setEgresos(egrRes.data ?? [])
 
-      const comprasCosto = (comprasRes.data ?? [])
-        .filter(c => c.estado === 'recibida')
-        .reduce((s, c) => s + (Number(c.costo_total) || 0), 0)
-      setTotalComprasRecibidas(comprasCosto)
+      setTotalComprasRecibidas(totalGastos(comprasRes.data ?? []))
 
       // Fase 4: la mano de obra de los preventivos terminados también es gasto de mantenimiento
       const prevRes = await supabase.from('mantenimientos_preventivos').select('costo_mano_obra').eq('estado', 'terminado')
@@ -134,12 +132,10 @@ export default function EgresosPage() {
     }
 
     try {
-      const { error } = await supabase.from('egresos_adicionales').insert({
-        concepto: nuevoEgreso.concepto,
-        monto: nuevoEgreso.monto,
-        fecha: nuevoEgreso.fecha,
-        categoria: nuevoEgreso.categoria,
-        comprobante_url: nuevoEgreso.comprobante_url
+      // 036: por su función (antes fallaba: la tabla no tenía comprobante_url)
+      const { error } = await supabase.rpc('registrar_egreso', {
+        p_concepto: nuevoEgreso.concepto, p_monto: nuevoEgreso.monto, p_categoria: nuevoEgreso.categoria,
+        p_fecha: nuevoEgreso.fecha, p_comprobante_url: nuevoEgreso.comprobante_url,
       })
 
       // Antes un error se ignoraba y el gasto quedaba solo en este navegador como "registrado"
@@ -167,7 +163,7 @@ export default function EgresosPage() {
     if (!confirm('¿Estás seguro de eliminar este registro de egreso?')) return
 
     try {
-      const { error } = await supabase.from('egresos_adicionales').delete().eq('id', id)
+      const { error } = await supabase.rpc('eliminar_egreso', { p_id: id })
       if (error) throw error
       setEgresos(egresos.filter(e => e.id !== id))
       toast.success('Egreso eliminado')
@@ -282,7 +278,7 @@ export default function EgresosPage() {
           <div className="text-2xl font-black text-white font-mono">
             {formatearMoneda(totalComprasRecibidas)}
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Hilos y compras cerradas</p>
+          <p className="text-[11px] text-slate-400 mt-1">Hilos: contado recibido y cuotas pagadas</p>
         </div>
 
         <div className="glass rounded-3xl p-5 border border-white/[0.08] relative overflow-hidden">

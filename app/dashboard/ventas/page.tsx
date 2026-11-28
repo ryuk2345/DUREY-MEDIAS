@@ -12,7 +12,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
-import { generarCronogramaCuotas, calcularEfectivoEsperadoCaja } from '@/lib/domain/finance'
+import { generarCronogramaCuotas, calcularEfectivoEsperadoCaja, cierreDeCaja } from '@/lib/domain/finance'
+import { hoyLocal } from '@/lib/domain/mantenimiento'
 import CustomSelect from '@/components/ui/CustomSelect'
 import SelectorMedia from '@/components/ui/SelectorMedia'
 import { Modal } from '@/components/ui/Modal'
@@ -134,7 +135,7 @@ export default function VentasPage() {
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true)
-    const hoy = new Date().toISOString().split('T')[0]
+    const hoy = hoyLocal()  // día de Lima (antes UTC: después de las 7 p. m. buscaba la caja de mañana)
     const [cli, vend, cat, ven, deu, caj, paq] = await Promise.all([
       supabase.from('clientes').select('*').order('nombre'),
       listarUsuarios({ rol: 'vendedora', campos: 'id,nombre' }),
@@ -150,7 +151,7 @@ export default function VentasPage() {
         venta:ventas(id, codigo_venta, total_soles, cliente:clientes(id, nombre, numero_documento, telefono, direccion), asesora:usuarios(id, nombre),
           items_venta(docenas, precio_docena, catalogo_media:catalogo_medias(codigo, sku)))
       `).order('fecha_vencimiento'),
-      supabase.from('cajas_diarias').select('*').eq('fecha', hoy).single(),
+      supabase.from('cajas_diarias').select('*').eq('fecha', hoy).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('vista_stock_vendible').select('catalogo_media_id, vendibles')
     ])
 
@@ -563,13 +564,10 @@ export default function VentasPage() {
   }
 
   const abrirCaja = async () => {
-    const { error } = await supabase.from('cajas_diarias').insert({
-      asesora_id: vendedoraSeleccionadaId || null,
-      fecha: new Date().toISOString().split('T')[0],
-      saldo_inicial: parseFloat(saldoInicial || '0'),
-      estado: 'abierta',
-    })
-    if (error) { toast.error('Error al abrir caja'); return }
+    if (!vendedoraSeleccionadaId) { toast.error('Elige la vendedora de la caja'); return }
+    // 036: la base abre la caja con la fecha de Lima y una sola por vendedora y día
+    const { error } = await supabase.rpc('abrir_caja', { p_asesora_id: vendedoraSeleccionadaId || null, p_saldo_inicial: parseFloat(saldoInicial || '0') })
+    if (error) { toast.error(`Error al abrir caja: ${error.message}`); return }
     toast.success('Caja abierta exitosamente')
     setShowAperturaModal(false)
     cargarDatos()
@@ -581,22 +579,15 @@ export default function VentasPage() {
     // Se relee la caja: un pago o cobro hecho en otra pantalla cambia el esperado.
     const { data: cajaActual, error: errCaja } = await supabase.from('cajas_diarias').select('*').eq('id', caja.id).single()
     if (errCaja || !cajaActual) { toast.error('No se pudo leer la caja actualizada'); return }
-    const esperadoEfectivo = calcularEfectivoEsperadoCaja(cajaActual)
     const declaradoEfectivo = parseFloat(cierreForm.efectivo || '0')
-    const diferencia = declaradoEfectivo - esperadoEfectivo
-    const estado = diferencia === 0 ? 'cerrada_cuadrada' : diferencia < 0 ? 'cerrada_faltante' : 'cerrada_sobrante'
-
-    if (estado !== 'cerrada_cuadrada' && !cierreForm.justificacion) {
+    // Aviso previo con la misma regla; la base calcula y guarda el cierre (036)
+    if (cierreDeCaja(cajaActual, declaradoEfectivo).estado !== 'cerrada_cuadrada' && !cierreForm.justificacion.trim()) {
       toast.error('Debes ingresar una justificación para el faltante/sobrante'); return
     }
-
-    const { error } = await supabase.from('cajas_diarias').update({
-      saldo_declarado_efectivo: declaradoEfectivo,
-      diferencia, estado,
-      justificacion: cierreForm.justificacion,
-    }).eq('id', caja.id)
-    if (error) { toast.error('Error al cerrar caja'); return }
-    toast.success(`Caja ${estado.replace('_', ' ')} · Diferencia: ${formatearMoneda(diferencia)}`)
+    const { data, error } = await supabase.rpc('cerrar_caja', { p_caja_id: caja.id, p_declarado_efectivo: declaradoEfectivo, p_justificacion: cierreForm.justificacion })
+    if (error) { toast.error(`Error al cerrar caja: ${error.message}`); return }
+    const cierre = data as { estado: string; diferencia: number }
+    toast.success(`Caja ${cierre.estado.replace('_', ' ')} · Diferencia: ${formatearMoneda(cierre.diferencia)}`)
     setShowCierreModal(false)
     cargarDatos()
   }
@@ -1472,6 +1463,10 @@ export default function VentasPage() {
         title="Apertura de Caja Diaria"
       >
           <div className="space-y-4">
+            {/* 036: cada caja es de una vendedora (sus ventas y cobros entran a su caja) */}
+            <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Vendedora de la caja</label>
+            <CustomSelect value={vendedoraSeleccionadaId} onChange={val => setVendedoraSeleccionadaId(val)}
+              options={[{ value: '', label: 'Seleccionar Vendedora...' }, ...vendedoras.map(v => ({ value: v.id, label: v.nombre }))]} placeholder="Seleccionar Vendedora..." />
             <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Saldo Inicial en Efectivo (S/)</label>
             <input type="number" min="0" step="0.50" placeholder="0.00" value={saldoInicial} onChange={e => setSaldoInicial(e.target.value)} className="input-dark w-full font-mono text-center font-bold text-lg mb-6" />
             <div className="flex gap-3">

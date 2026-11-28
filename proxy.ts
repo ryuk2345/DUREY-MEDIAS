@@ -1,37 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { verifySupabaseJWT, generateSupabaseJWT } from '@/lib/auth/jwt'
-import { normalizarRol } from '@/lib/auth/roles'
+import { normalizarRol, rutasPorRol } from '@/lib/auth/roles'
 import { COOKIE_TOKEN_DB, OPCIONES_COOKIE_TOKEN_DB, tokenAceptadoPorSupabase } from '@/lib/auth/tokenDb'
 
-// Rutas accesibles por rol (en el dashboard)
-const ROLE_ROUTES: Record<string, string[]> = {
-  admin: [
-    '/admin', '/usuarios', '/catalogo', '/maquinas', '/disenos', '/produccion', 
-    '/remallado', '/planchado', '/preparado', '/almacen', '/ventas', '/clientes',
-    '/despacho', '/mantenimiento', '/reportes', '/materia-prima',
-    '/egresos', '/balance', '/calendario'
-  ],
-  supervisor: [
-    '/usuarios', '/catalogo', '/maquinas', '/disenos', '/produccion', '/remallado', '/volteado', '/tintoreria',
-    '/planchado', '/preparado', '/almacen', '/ventas', '/clientes', '/despacho', 
-    '/mantenimiento', '/reportes', '/materia-prima', '/calendario'
-  ],
-  operador: [
-    '/produccion', '/remallado', '/tintoreria', '/disenos', '/planchado', '/preparado', '/almacen',
-    '/mantenimiento'
-  ],
-  disenador: ['/disenos', '/catalogo', '/maquinas'],
-  tejedor: ['/produccion', '/disenos', '/mantenimiento'],
-  remalladora: ['/remallado', '/mantenimiento'],
-  remallador: ['/remallado', '/mantenimiento'],
-  planchador: ['/planchado', '/mantenimiento'],
-  preparador: ['/preparado'],
-  almacenero: ['/almacen', '/despacho', '/materia-prima'],
-  vendedora: ['/ventas', '/clientes', '/catalogo', '/despacho'],
-  volteador: ['/volteado'],
-  tintorero: ['/tintoreria'],
-}
+// Rutas accesibles por rol: salen de MODULOS_POR_ROL (lib/auth/roles.ts, Fase 7)
 
 
 export async function proxy(request: NextRequest) {
@@ -174,7 +147,7 @@ export async function proxy(request: NextRequest) {
 
   // 3. Control de acceso estricto por rol en las subrutas del dashboard
   if (user && cleanRole !== 'admin' && pathname.startsWith('/dashboard') && pathname !== '/dashboard') {
-    const allowedRoutes = ROLE_ROUTES[cleanRole!] || []
+    const allowedRoutes = rutasPorRol(cleanRole)
 
     const segments = pathname.split('/')
     const moduleName = '/' + segments[2]

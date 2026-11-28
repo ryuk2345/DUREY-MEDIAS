@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { obtenerUsuarioActual } from '@/lib/auth/usuarioActual'
 import { toast } from 'sonner'
 import { formatearMoneda, formatearFecha } from '@/lib/utils'
-import { gastoMantenimiento } from '@/lib/domain/finance'
+import { gastoMantenimiento, totalGastos } from '@/lib/domain/finance'
 import {
   TrendingUp, TrendingDown, DollarSign, BarChart3, Scale,
   Building2, Package, Wrench, AlertTriangle, Loader2, RefreshCw,
@@ -52,7 +52,8 @@ export default function BalancePage() {
     try {
       const [ventasRes, comprasRes, repRes, egrRes] = await Promise.all([
         supabase.from('cobros').select('monto').eq('estado_validacion', 'validado'),
-        supabase.from('compras_materia_prima').select('costo_total, estado, fecha'),
+        // 036 (P1-A): lo pagado de verdad — contado recibido y cada cuota pagada
+        supabase.from('vista_gastos_materia_prima').select('fecha, monto'),
         supabase.from('reparaciones').select('costo_mano_obra'),
         supabase.from('egresos_adicionales').select('*').order('fecha', { ascending: false })
       ])
@@ -60,10 +61,7 @@ export default function BalancePage() {
       const totalVentas = (ventasRes.data ?? []).reduce((s, c) => s + (Number(c.monto) || 0), 0)
       setVentasTotal(totalVentas)
 
-      const totalCompras = (comprasRes.data ?? [])
-        .filter(c => c.estado === 'recibida')
-        .reduce((s, c) => s + (Number(c.costo_total) || 0), 0)
-      setComprasTotal(totalCompras)
+      setComprasTotal(totalGastos(comprasRes.data ?? []))
 
       // Fase 4: la mano de obra de los preventivos terminados también es gasto de mantenimiento
       const prevRes = await supabase.from('mantenimientos_preventivos').select('costo_mano_obra').eq('estado', 'terminado')
@@ -352,7 +350,7 @@ export default function BalancePage() {
                 <td className="font-bold text-rose-400 flex items-center gap-2">
                   <Package className="w-4 h-4" /> Compras Materia Prima
                 </td>
-                <td className="text-slate-300 text-xs">Hilos, insumos y compras recibidas</td>
+                <td className="text-slate-300 text-xs">Hilos e insumos pagados (contado recibido y cuotas pagadas)</td>
                 <td className="text-right font-mono font-bold text-rose-400">
                   {formatearMoneda(comprasTotal)}
                 </td>

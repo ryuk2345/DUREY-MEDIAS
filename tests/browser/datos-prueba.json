@@ -126,7 +126,10 @@
       "peso_docena_g": 400,
       "materia_prima_id": "mp1",
       "sku": "SKU-TST-1",
-      "es_crudo": false
+      "es_crudo": false,
+      "costo_produccion_docena": 10,
+      "precio_venta_sugerido": 15,
+      "diseno_color": "Liso"
     },
     {
       "id": "media2",
@@ -138,7 +141,10 @@
       "peso_docena_g": 400,
       "materia_prima_id": "mp1",
       "sku": "SKU-TST-2",
-      "es_crudo": false
+      "es_crudo": false,
+      "costo_produccion_docena": 10,
+      "precio_venta_sugerido": 15,
+      "diseno_color": "Liso"
     },
     {
       "id": "cru1",
@@ -151,7 +157,9 @@
       "materia_prima_id": "mp1",
       "sku": null,
       "es_crudo": true,
-      "diseno_color": "CRUDO"
+      "diseno_color": "CRUDO",
+      "costo_produccion_docena": 10,
+      "precio_venta_sugerido": 15
     }
   ],
   "materia_prima": [

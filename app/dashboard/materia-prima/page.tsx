@@ -609,11 +609,9 @@ export default function MateriaPrimaPage() {
     }
 
     try {
-      const { error } = await supabase.from('egresos_adicionales').insert({
-        concepto: newEgreso.concepto,
-        monto: newEgreso.monto,
-        categoria: newEgreso.categoria,
-        fecha: newEgreso.fecha
+      // 036: por su función (módulo egresos o materia prima)
+      const { error } = await supabase.rpc('registrar_egreso', {
+        p_concepto: newEgreso.concepto, p_monto: newEgreso.monto, p_categoria: newEgreso.categoria, p_fecha: null, p_comprobante_url: null,
       })
       if (error) throw error
     

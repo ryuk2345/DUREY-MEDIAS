@@ -208,29 +208,13 @@ export default function ClientesPage() {
     const tipo = clienteForm.tipo_documento || (doc.length === 11 ? 'ruc' : 'dni')
 
     try {
-      if (editingCliente) {
-        // Actualización
-        const { error } = await supabase.from('clientes').update({
-          tipo_documento: tipo,
-          numero_documento: doc,
-          nombre: clienteForm.nombre.trim(),
-          telefono: clienteForm.telefono.trim() || null,
-          direccion: clienteForm.direccion.trim() || null
-        }).eq('id', editingCliente.id)
-        if (error) throw error
-        toast.success(`Cliente "${clienteForm.nombre}" actualizado`)
-      } else {
-        // Nuevo Cliente
-        const { data: newCli, error } = await supabase.from('clientes').insert({
-          tipo_documento: tipo,
-          numero_documento: doc,
-          nombre: clienteForm.nombre.trim(),
-          telefono: clienteForm.telefono.trim() || null,
-          direccion: clienteForm.direccion.trim() || null
-        }).select().single()
-        if (error) throw error
-        toast.success(`Cliente "${newCli.nombre}" registrado exitosamente`)
-      }
+      // 036: los clientes se guardan por su función (módulo clientes)
+      const { error } = await supabase.rpc('guardar_cliente', {
+        p_id: editingCliente?.id ?? null,
+        p_datos: { tipo_documento: tipo, numero_documento: doc, nombre: clienteForm.nombre.trim(), telefono: clienteForm.telefono.trim(), direccion: clienteForm.direccion.trim() },
+      })
+      if (error) throw error
+      toast.success(editingCliente ? `Cliente "${clienteForm.nombre.trim()}" actualizado` : `Cliente "${clienteForm.nombre.trim()}" registrado exitosamente`)
 
       setShowAddEditModal(false)
       cargarDatos()
@@ -243,19 +227,15 @@ export default function ClientesPage() {
 
   // ── ELIMINAR CLIENTE ──────────────────────────────────────────────────────
   const handleEliminarCliente = async (c: Cliente) => {
-    const tieneVentas = ventas.some(v => v.cliente_id === c.id)
-    if (tieneVentas) {
-      if (!confirm(`El cliente "${c.nombre}" tiene ventas registradas en el historial. ¿Deseas eliminarlo de todos modos?`)) {
-        return
-      }
-    } else {
-      if (!confirm(`¿Eliminar definitivamente al cliente "${c.nombre}"?`)) {
-        return
-      }
+    // 036: un cliente con ventas no se elimina (la base lo rechaza y explica por qué)
+    if (ventas.some(v => v.cliente_id === c.id)) {
+      toast.error(`No se puede eliminar a ${c.nombre}: tiene ventas registradas`)
+      return
     }
+    if (!confirm(`¿Eliminar definitivamente al cliente "${c.nombre}"?`)) return
 
     try {
-      const { error } = await supabase.from('clientes').delete().eq('id', c.id)
+      const { error } = await supabase.rpc('eliminar_cliente', { p_id: c.id })
       if (error) throw error
       toast.success(`Cliente "${c.nombre}" eliminado`)
       cargarDatos()
