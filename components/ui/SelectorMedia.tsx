@@ -1,9 +1,9 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Search } from 'lucide-react'
 import CustomSelect, { SelectOption } from '@/components/ui/CustomSelect'
-import { filtrarCatalogo, ProductoBuscable } from '@/lib/domain/catalogo'
+import { filtrarCatalogo, sugerirProductos, ProductoBuscable } from '@/lib/domain/catalogo'
+import BuscadorConSugerencias from '@/components/ui/BuscadorConSugerencias'
 
 // Selector de media del catálogo con buscador encima: al escribir (modelo, talla, color, SKU...)
 // la lista solo muestra los productos que coinciden.
@@ -46,16 +46,11 @@ export function SelectorMedia<T extends ProductoBuscable & { id: string }>({
 
   return (
     <div className={className}>
-      <div className="relative mb-1.5">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
-        <input
-          type="text"
-          value={texto}
-          onChange={e => setTexto(e.target.value)}
-          placeholder="Filtrar: modelo, talla, color, SKU..."
-          className="input-dark text-xs w-full py-1.5 pl-8"
-        />
-      </div>
+      {/* Fase 7 (1-A): sugerencias al escribir; elegir una selecciona la media (no se sugieren las deshabilitadas) */}
+      <BuscadorConSugerencias className="mb-1.5" value={texto} onChange={setTexto} placeholder="Filtrar: modelo, talla, color, SKU..."
+        inputClassName="text-xs py-1.5"
+        sugerencias={sugerirProductos(items.filter(i => !toOption(i).disabled), texto)}
+        onElegir={sg => { const item = items.find(i => i.id === sg.id); if (item) { onChange(valorDe(item)); setTexto('') } }} />
       <CustomSelect
         value={value}
         onChange={onChange}

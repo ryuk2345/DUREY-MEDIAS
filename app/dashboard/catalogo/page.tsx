@@ -1,5 +1,7 @@
 'use client'
 
+import BuscadorConSugerencias from '@/components/ui/BuscadorConSugerencias'
+import { sugerirProductos } from '@/lib/domain/catalogo'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { generarCodigoMedia, generarSkuMedia, formatearMoneda } from '@/lib/utils'
@@ -317,16 +319,8 @@ export default function CatalogoPage() {
 
       {/* Filtros */}
       <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Buscar por SKU, código o modelo..."
-            value={filtro}
-            onChange={e => setFiltro(e.target.value)}
-            className="input-dark pl-10 text-xs font-semibold"
-          />
-        </div>
+        <BuscadorConSugerencias className="flex-1" placeholder="Buscar por SKU, código o modelo..." value={filtro} onChange={setFiltro}
+          sugerencias={sugerirProductos(catalogo, filtro)} inputClassName="text-xs font-semibold" />
         <CustomSelect
           value={filtroEstado}
           onChange={val => setFiltroEstado(val as any)}

@@ -26,3 +26,20 @@ describe('rutas por rol', () => {
     expect(proxy).toMatch(/rutasPorRol\(cleanRole\)/)
   })
 })
+
+import { sugerir, sugerirProductos, MAX_SUGERENCIAS } from '@/lib/domain/catalogo'
+
+describe('sugerencias al escribir (1-A)', () => {
+  const productos = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, codigo: `tobillera_niña_${i}`, sku: `SKU-TOB-${i}`, modelo: 'Tobillera', publico: 'niña', diseno_color: i % 2 ? 'Azul' : 'Rosado', talla: '10-13' }))
+  it('sin tildes ni mayúsculas, todas las palabras, como mucho 8', () => {
+    expect(sugerirProductos(productos, 'TOB nina')).toHaveLength(MAX_SUGERENCIAS)
+    expect(sugerirProductos(productos, 'tob niñ azul').every(s => s.detalle?.includes('Azul'))).toBe(true)
+    expect(sugerirProductos(productos, '   ')).toEqual([])
+    expect(sugerirProductos(productos, 'zapato')).toEqual([])
+    expect(sugerirProductos(productos, 'SKU-TOB-7')).toEqual([{ id: 'p7', etiqueta: 'SKU-TOB-7', detalle: 'Tobillera · niña · Azul · 10-13' }])
+  })
+  it('primero lo que empieza por lo escrito', () => {
+    const clientes = [{ id: 'a', nombre: 'Banana SAC' }, { id: 'b', nombre: 'Comercial Ana' }, { id: 'c', nombre: 'Ana Ruiz' }]
+    expect(sugerir(clientes, 'ana', c => ({ id: c.id, etiqueta: c.nombre }), c => [c.nombre]).map(s => s.id)).toEqual(['c', 'b', 'a'])
+  })
+})

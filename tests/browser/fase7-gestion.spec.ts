@@ -64,3 +64,37 @@ test('Caja: se abre y al cerrar con faltante pide justificación y guarda la dif
   expect(caja).toMatchObject({ saldo_inicial: 50, saldo_declarado_efectivo: 40, estado: 'cerrada_faltante', justificacion: 'Prueba de cierre' })
   expect(caja.diferencia).toBe(Math.round((40 - caja.saldo_esperado_efectivo) * 100) / 100)
 })
+
+test('Sugerencias al escribir: productos, clientes y máquinas, sin importar tildes', async ({ page }) => {
+  // Productos (Catálogo)
+  await page.goto('/dashboard/catalogo')
+  const buscaProducto = page.getByRole('combobox', { name: 'Buscar por SKU, código o modelo...' })
+  await buscaProducto.fill('tst 2')
+  const lista = page.getByRole('listbox', { name: 'Sugerencias' })
+  await expect(lista.getByRole('option')).toHaveCount(1)
+  await lista.getByRole('option', { name: /SKU-TST-2/ }).click()
+  await expect(buscaProducto).toHaveValue('SKU-TST-2')
+
+  // Productos en un selector de media (Planchado): elegir la sugerencia selecciona la media
+  await page.goto('/dashboard/planchado')
+  await page.getByLabel('Asignar a Planchador Prueba el lunes').click()
+  const dialogo = page.getByRole('dialog')
+  await dialogo.getByRole('combobox', { name: 'Filtrar: modelo, talla, color, SKU...' }).first().fill('sku-tst-2')
+  await dialogo.getByRole('listbox', { name: 'Sugerencias' }).getByRole('option', { name: /SKU-TST-2/ }).click()
+  await expect(dialogo.getByRole('combobox').filter({ hasText: /^TST-2/ }).first()).toBeVisible()
+
+  // Clientes: sin tildes ni mayúsculas («nandu» encuentra «Ñandú Textil SAC»)
+  await page.goto('/dashboard/clientes')
+  const buscaCliente = page.getByRole('combobox', { name: /Buscar por nombre, DNI, RUC/ })
+  await buscaCliente.fill('NANDU tex')
+  await page.getByRole('listbox', { name: 'Sugerencias' }).getByRole('option', { name: /Ñandú Textil SAC/ }).click()
+  await expect(buscaCliente).toHaveValue('Ñandú Textil SAC')
+
+  const db = await mockDb(page)
+  // Máquinas
+  await page.goto('/dashboard/maquinas')
+  const maquina = db.maquinas[0]
+  const buscaMaquina = page.getByRole('combobox', { name: 'Buscar máquina o reporte...' })
+  await buscaMaquina.fill(maquina.codigo.toLowerCase())
+  await expect(page.getByRole('listbox', { name: 'Sugerencias' }).getByRole('option', { name: new RegExp(maquina.codigo) }).first()).toBeVisible()
+})

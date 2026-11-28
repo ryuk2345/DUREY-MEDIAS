@@ -1,5 +1,7 @@
 'use client'
 
+import BuscadorConSugerencias from '@/components/ui/BuscadorConSugerencias'
+import { sugerir } from '@/lib/domain/catalogo'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -781,14 +783,9 @@ export default function AlmacenPage() {
           <div>
             {/* BUSCADOR DENTRO DEL MODAL */}
             <div className="relative mb-4">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-cyan-400" />
-              <input
-                type="text"
-                placeholder="Buscar por SKU o tipo de media..."
-                value={busquedaProductoModal}
-                onChange={e => setBusquedaProductoModal(e.target.value)}
-                className="input-dark pl-10 text-xs py-2.5 w-full font-semibold text-white"
-              />
+              <BuscadorConSugerencias placeholder="Buscar por SKU o tipo de media..." value={busquedaProductoModal} onChange={setBusquedaProductoModal}
+                inputClassName="text-xs py-2.5 font-semibold text-white"
+                sugerencias={sugerir(salonModalProductos.skusDesglose as { sku: string; codigo: string }[], busquedaProductoModal, i => ({ id: i.sku, etiqueta: i.sku, detalle: i.codigo }), i => [i.sku, i.codigo])} />
             </div>
 
             {/* TABLA DE PRODUCTOS EN ESTE SALÓN */}

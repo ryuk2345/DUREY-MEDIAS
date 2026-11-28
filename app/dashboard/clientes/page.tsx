@@ -1,5 +1,7 @@
 'use client'
 
+import BuscadorConSugerencias from '@/components/ui/BuscadorConSugerencias'
+import { sugerir } from '@/lib/domain/catalogo'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -337,14 +339,9 @@ export default function ClientesPage() {
       <div className="glass p-4 rounded-3xl border border-white/[0.08] flex flex-col md:flex-row items-center justify-between gap-4 shadow-md">
         {/* Search Input */}
         <div className="relative w-full md:w-96">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre, DNI, RUC, teléfono o dirección..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="input-dark w-full pl-10 text-xs py-2 rounded-2xl"
-          />
+          <BuscadorConSugerencias placeholder="Buscar por nombre, DNI, RUC, teléfono o dirección..." value={searchQuery} onChange={setSearchQuery}
+            sugerencias={sugerir(clientes, searchQuery, c => ({ id: c.id, etiqueta: c.nombre, detalle: c.numero_documento }), c => [c.nombre, c.numero_documento, c.telefono, c.direccion])}
+            inputClassName="text-xs py-2 rounded-2xl" />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
