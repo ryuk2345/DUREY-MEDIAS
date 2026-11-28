@@ -24,7 +24,9 @@ SELECT pg_temp.verificar(NOT EXISTS (
 
 -- Permisos exactos de las tablas creadas después de la 026
 SELECT pg_temp.verificar(pg_temp.permisos(t) = 'DELETE,INSERT,SELECT,UPDATE', t || ': leer, crear, cambiar y borrar (' || pg_temp.permisos(t) || ')')
-  FROM unnest(ARRAY['pagos_proveedores', 'mecanicos']) AS t;
+  FROM unnest(ARRAY['mecanicos']) AS t;
+-- 036: los pagos a proveedores se escriben solo por registrar_pago_proveedor
+SELECT pg_temp.verificar(pg_temp.permisos('pagos_proveedores') = 'SELECT', 'pagos_proveedores: solo lectura desde la 036 (' || pg_temp.permisos('pagos_proveedores') || ')');
 -- 034: agencias se escriben solo por registrar_agencia (bloqueo por rol de despacho)
 SELECT pg_temp.verificar(pg_temp.permisos('agencias') = 'SELECT', 'agencias: solo lectura desde la 034 (' || pg_temp.permisos('agencias') || ')');
 SELECT pg_temp.verificar(pg_temp.permisos(t) = 'SELECT', t || ': solo lectura, se escribe por su función (' || pg_temp.permisos(t) || ')')
