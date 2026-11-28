@@ -31,3 +31,11 @@ export function filtrarCatalogo<T extends ProductoBuscable>(items: T[], texto: s
     return palabras.every(p => campos.includes(p))
   })
 }
+
+/**
+ * SKU y código fijos (Fase 7, decisiones 2-A y P2-A): el código nunca cambia y el SKU solo
+ * se pone si estaba vacío. En la base: disparador catalogo_medias_identidad_fija (036).
+ */
+export function cambiaIdentidad(antes: { sku?: string | null; codigo: string }, despues: { sku?: string | null; codigo: string }): boolean {
+  return despues.codigo !== antes.codigo || (antes.sku != null && antes.sku !== '' && (despues.sku ?? null) !== antes.sku)
+}
