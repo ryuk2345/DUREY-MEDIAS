@@ -45,9 +45,9 @@ spec: ../specs/fase-7-transversal.md
 | T3 | hecha | Playwright `fase7-gestion.spec.ts`: catálogo con SKU y código fijos, egreso con comprobante, caja con vendedora y cierre con faltante |
 | T4 | hecha | `tests/e2e/25-rutas-por-rol.test.ts`: rutas = módulos; el administrador ya abre Volteado y Tintorería |
 | T5 | hecha | `tests/e2e/25` (sugerencias) y Playwright «Sugerencias al escribir» en Catálogo, Planchado, Clientes y Máquinas |
-| T6 | en curso | panel ronda 1 (L120-L130): 7 corregidos (caja del día de Lima en las funciones de caja, caja por vendedora en pantalla, panel del administrador por pagos reales, comprobante solo http/https, pruebas que faltaban en SQL, mock y pantalla de Balance); 4 aparcados (L124 dueño de la caja, pregunta al dueño; L125 asimetría deliberada; L129 Ventas; L130 a investigar) |
+| T6 | en curso | panel ronda 1 (L120-L130): 7 corregidos (caja del día de Lima en las funciones de caja, caja por vendedora en pantalla, panel del administrador por pagos reales, comprobante solo http/https, pruebas que faltaban en SQL, mock y pantalla de Balance); 4 aparcados (L124 dueño de la caja, pregunta al dueño; L125 asimetría deliberada; L129 Ventas; L130 a investigar); ronda 2 (L131-L136): 5 corregidos (cobros con el día de Lima, caja que se mira aparte de la vendedora de la venta, prueba con dos cajas, prueba del día de Lima sin depender del reloj); L136 aparcado (comprobante de pagos a proveedores, fuera de esta fase) |
 
-Batería: `npm test` 322/322 · Playwright 65/65 · build y `tsc` en verde · ESLint sin errores nuevos.
+Batería: `npm test` 322/322 · Playwright 66/66 · build y `tsc` en verde · ESLint sin errores nuevos.
 
 ## Anotado
 - Encontrado al planear: registrar un gasto en Egresos fallaba en la base real (faltaba `comprobante_url`). Lo arregla la 036.
