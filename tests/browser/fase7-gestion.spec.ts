@@ -98,3 +98,45 @@ test('Sugerencias al escribir: productos, clientes y máquinas, sin importar til
   await buscaMaquina.fill(maquina.codigo.toLowerCase())
   await expect(page.getByRole('listbox', { name: 'Sugerencias' }).getByRole('option', { name: new RegExp(maquina.codigo) }).first()).toBeVisible()
 })
+
+test('Balance: una compra a plazos cuenta solo lo pagado (no su costo total)', async ({ page }) => {
+  // Compras propias de esta prueba (se quitan al final: la base mock se comparte entre archivos)
+  const base = await mockDb(page)
+  const propias = {
+    compras_materia_prima: [
+      { id: 'f7c1', proveedor_id: 'prov1', materia_prima_id: 'mp1', cantidad_kg: 10, costo_total: 120, estado: 'recibida', fecha: '2026-11-02', condicion_pago: 'contado' },
+      { id: 'f7c2', proveedor_id: 'prov1', materia_prima_id: 'mp1', cantidad_kg: 10, costo_total: 999, estado: 'devuelta', fecha: '2026-11-02', condicion_pago: 'contado' },
+      { id: 'f7c3', proveedor_id: 'prov1', materia_prima_id: 'mp1', cantidad_kg: 30, costo_total: 300, estado: 'recibida', fecha: '2026-11-03', condicion_pago: 'pago_diferido' },
+    ],
+    cuotas_compras: [
+      { id: 'f7q1', compra_id: 'f7c3', monto: 100, fecha_vencimiento: '2026-11-10', estado: 'pagada', fecha_pago: '2026-11-12' },
+      { id: 'f7q2', compra_id: 'f7c3', monto: 100, fecha_vencimiento: '2026-12-10', estado: 'pendiente' },
+      { id: 'f7q3', compra_id: 'f7c3', monto: 100, fecha_vencimiento: '2027-01-10', estado: 'pendiente' },
+    ],
+    pagos_proveedores: [{ id: 'f7p1', cuota_compra_id: 'f7q1', proveedor_id: 'prov1', monto: 100, metodo_pago: 'transferencia', fecha: '2026-11-12' }],
+  }
+  const conPropias = { ...base }
+  for (const [t, filas] of Object.entries(propias)) conPropias[t] = [...(base[t] ?? []), ...filas]
+  await page.request.post('/api/mock-db', { data: conPropias })
+  const db = await mockDb(page)
+  // Regla P1-A escrita aquí a mano (no se importa la del código): contado recibido + pagos de cuotas
+  const compras = db.compras_materia_prima as { id: string; costo_total: number; estado: string; condicion_pago: string | null }[]
+  const pagado = compras.filter(c => (c.condicion_pago ?? 'contado') === 'contado' && c.estado === 'recibida').reduce((t, c) => t + Number(c.costo_total), 0)
+    + (db.pagos_proveedores as { monto: number }[]).reduce((t, p) => t + Number(p.monto), 0)
+  const recibidoTotal = compras.filter(c => c.estado === 'recibida').reduce((t, c) => t + Number(c.costo_total), 0)
+  expect(compras.some(c => c.id === 'f7c3')).toBe(true)
+  expect(pagado).not.toBe(recibidoTotal)
+  const soles = (n: number) => n.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  await page.goto('/dashboard/balance')
+  const fila = page.getByRole('row').filter({ hasText: 'Compras Materia Prima' })
+  await expect(fila).toContainText(soles(pagado))
+  await expect(fila).not.toContainText(soles(recibidoTotal))
+
+  await page.goto('/dashboard/egresos')
+  await expect(page.getByText('Hilos: contado recibido y cuotas pagadas').locator('..')).toContainText(soles(pagado))
+
+  const fin = await mockDb(page)
+  for (const t of Object.keys(propias)) fin[t] = (fin[t] ?? []).filter((f: { id: string }) => !f.id.startsWith('f7'))
+  await page.request.post('/api/mock-db', { data: fin })
+})

@@ -8,6 +8,7 @@
  *     al cerrar, costo de repuestos = suma de lo usado.
  *   - El rol técnico ya no existe.
  */
+import { hoyLocal } from '@/lib/domain/mantenimiento'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { filtrarRepuestos, totalCompraRepuesto, costoRepuestosUsados, nombreMecanico, redondearCentimos } from '@/lib/domain/repuestos'
 import { ejecutarRpcMantenimiento } from '@/lib/supabase/mockRpcMantenimiento'
@@ -66,7 +67,7 @@ describe('lib/domain/repuestos', () => {
 
 // ── RPC del mock (mismas reglas que la migración 029) ───────────────────────
 type Db = Record<string, any[]> // eslint-disable-line @typescript-eslint/no-explicit-any
-const hoy = () => new Date().toISOString().split('T')[0]
+const hoy = () => hoyLocal()  // día de Lima, como la base desde la 036
 const rpcMant = (db: Db, fn: string, p: object) => ejecutarRpcMantenimiento(db, fn, p)!
 const rpcMp = (db: Db, fn: string, p: object) => ejecutarRpcMateriaPrima(db, fn, p)!
 

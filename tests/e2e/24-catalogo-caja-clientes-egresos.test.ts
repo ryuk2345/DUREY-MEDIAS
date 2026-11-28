@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ejecutarRpcGestion } from '@/lib/supabase/mockRpcGestion'
 import { gastosMateriaPrima, totalGastos, cierreDeCaja } from '@/lib/domain/finance'
-import { cambiaIdentidad } from '@/lib/domain/catalogo'
+import { cambiaIdentidad, sugerirProductos } from '@/lib/domain/catalogo'
 import { hoyLocal } from '@/lib/domain/mantenimiento'
 import type { Db } from '@/lib/supabase/mockRpcComun'
 
@@ -141,5 +141,38 @@ describe('gastos de materia prima por pagos reales (P1-A)', () => {
     ])
     expect(totalGastos(filas)).toBe(260)
     expect(totalGastos(filas, '2026-11-03', '2026-11-30')).toBe(140)
+  })
+})
+
+describe('panel ronda 1: casos que faltaban', () => {
+  it('las otras cinco funciones también exigen su módulo', () => {
+    expect(rpc('editar_producto', TEJ, { p_id: 'x', p_datos: {} }).error?.message).toBe('Tu rol no tiene acceso al módulo catalogo')
+    expect(rpc('cambiar_estado_producto', TEJ, { p_id: 'x', p_estado: 'activo' }).error?.message).toContain('módulo catalogo')
+    expect(rpc('eliminar_producto', TEJ, { p_id: 'x' }).error?.message).toContain('módulo catalogo')
+    expect(rpc('cerrar_caja', TEJ, { p_caja_id: 'x', p_declarado_efectivo: 0 }).error?.message).toContain('módulo ventas')
+    expect(rpc('eliminar_cliente', TEJ, { p_id: 'x' }).error?.message).toContain('módulo clientes')
+    expect(rpc('eliminar_egreso', TEJ, { p_id: 'x' }).error?.message).toContain('módulo egresos')
+  })
+  it('el comprobante solo puede ser un enlace web', () => {
+    expect(rpc('registrar_egreso', ADM, { p_concepto: 'Luz', p_monto: 5, p_categoria: 'servicios', p_comprobante_url: 'javascript:alert(1)' }).error?.message).toContain('http:// o https://')
+    expect(rpc('registrar_egreso', ADM, { p_concepto: 'Luz', p_monto: 5, p_categoria: 'servicios', p_comprobante_url: 'HTTPS://x/y.pdf' }).error).toBeNull()
+  })
+  it('caja: vendedora inactiva no abre; cuadrada sin justificación; montos con decimales', () => {
+    db.usuarios.push({ id: 'off', rol: 'vendedora', activo: false })
+    expect(rpc('abrir_caja', ADM, { p_asesora_id: 'off', p_saldo_inicial: 1 }).error?.message).toContain('Elige la vendedora')
+    const id = rpc('abrir_caja', ADM, { p_asesora_id: VEN, p_saldo_inicial: 0.1 }).data
+    Object.assign(db.cajas_diarias[0], { ventas_efectivo: 0.2 })
+    expect(rpc('cerrar_caja', ADM, { p_caja_id: id, p_declarado_efectivo: 0.3 }).data).toEqual({ esperado: 0.3, diferencia: 0, estado: 'cerrada_cuadrada' })
+    expect(cierreDeCaja({ saldo_inicial: 0.1, ventas_efectivo: 0.2, cobros_efectivo: 0, pagos_efectivo: 0 }, 0.31)).toEqual({ esperado: 0.3, diferencia: 0.01, estado: 'cerrada_sobrante' })
+  })
+  it('totales de gastos: límites incluidos y redondeo a céntimos', () => {
+    const filas = [{ fecha: '2026-11-01', monto: 0.1 }, { fecha: '2026-11-15', monto: 0.2 }, { fecha: '2026-11-30', monto: 10 }]
+    expect(totalGastos(filas, '2026-11-01', '2026-11-15')).toBe(0.3)
+    expect(totalGastos(filas, '2026-11-15', '2026-11-30')).toBe(10.2)
+    expect(totalGastos(filas, '2026-11-16', '2026-11-29')).toBe(0)
+  })
+  it('identidad: un SKU vacío se puede poner; la talla también sugiere', () => {
+    expect(cambiaIdentidad({ sku: '', codigo: 'c' }, { sku: 'NUEVO', codigo: 'c' })).toBe(false)
+    expect(sugerirProductos([{ id: 'a', codigo: 'x', talla: '10-13' }, { id: 'b', codigo: 'y', talla: 'XL' }], '10 13').map(s => s.id)).toEqual(['a'])
   })
 })

@@ -1,5 +1,6 @@
 'use client'
 
+import { hoyLocal } from '@/lib/domain/mantenimiento'  // 036: «hoy» es el día de Lima, como la base
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -54,7 +55,7 @@ export default function EgresosPage() {
   const [form, setForm] = useState({
     concepto: '',
     monto: '',
-    fecha: new Date().toISOString().split('T')[0],
+    fecha: hoyLocal(),
     categoria: 'otros',
     comprobante_url: ''
   })
@@ -147,7 +148,7 @@ export default function EgresosPage() {
       setForm({
         concepto: '',
         monto: '',
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: hoyLocal(),
         categoria: 'otros',
         comprobante_url: ''
       })
@@ -369,7 +370,8 @@ export default function EgresosPage() {
                         {formatearMoneda(Number(eg.monto))}
                       </td>
                       <td>
-                        {eg.comprobante_url ? (
+                        {/* Solo enlaces web (036): un «javascript:» no se convierte en enlace */}
+                        {eg.comprobante_url && /^https?:\/\//i.test(eg.comprobante_url) ? (
                           <a
                             href={eg.comprobante_url}
                             target="_blank"

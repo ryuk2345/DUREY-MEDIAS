@@ -47,6 +47,9 @@ SELECT pg_temp.verificar(NOT has_function_privilege('authenticated', 'public.exi
 
 -- ── Datos ──────────────────────────────────────────────────────────────────
 INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
+  ('00000000-0000-0000-0000-0000000036a5', 'Vende inactiva 036', 'vi036@test', 'vendedora', false, 'disponible'),
+  ('00000000-0000-0000-0000-0000000036a6', 'Vende B 036', 'vb036@test', 'vendedora', true, 'disponible'),
+  ('00000000-0000-0000-0000-0000000036a7', 'Vende C 036', 'vc036@test', 'vendedora', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000036a1', 'Admin 036', 'ad036@test', 'admin', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000036a2', 'Vende 036', 've036@test', 'vendedora', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000036a3', 'Teje 036', 'te036@test', 'tejedor', true, 'disponible'),
@@ -61,6 +64,12 @@ SELECT pg_temp.debe_fallar($$SELECT crear_modelo_media('M36')$$, 'módulo catalo
 SELECT pg_temp.debe_fallar($$SELECT abrir_caja('00000000-0000-0000-0000-0000000036a2', 10)$$, 'módulo ventas');
 SELECT pg_temp.debe_fallar($$SELECT guardar_cliente(NULL, '{"nombre":"X","numero_documento":"36363636"}')$$, 'módulo clientes');
 SELECT pg_temp.debe_fallar($$SELECT registrar_egreso('Luz', 10, 'servicios', NULL, NULL)$$, 'módulo egresos ni al módulo materia_prima');
+SELECT pg_temp.debe_fallar($$SELECT editar_producto(gen_random_uuid(), '{}')$$, 'módulo catalogo');
+SELECT pg_temp.debe_fallar($$SELECT cambiar_estado_producto(gen_random_uuid(), 'activo')$$, 'módulo catalogo');
+SELECT pg_temp.debe_fallar($$SELECT eliminar_producto(gen_random_uuid())$$, 'módulo catalogo');
+SELECT pg_temp.debe_fallar($$SELECT cerrar_caja(gen_random_uuid(), 0, NULL)$$, 'módulo ventas');
+SELECT pg_temp.debe_fallar($$SELECT eliminar_cliente(gen_random_uuid())$$, 'módulo clientes');
+SELECT pg_temp.debe_fallar($$SELECT eliminar_egreso(gen_random_uuid())$$, 'módulo egresos');
 DO $$
 BEGIN
   BEGIN
@@ -94,11 +103,18 @@ END $$;
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000036a2');  -- vendedora (tiene catálogo)
 SELECT pg_temp.debe_fallar($$SELECT crear_producto('{"modelo":"M36","publico":"adulto","diseno_color":"","talla":"L","codigo":"t36","costo_produccion_docena":1}')$$, 'Completa modelo');
 SELECT pg_temp.debe_fallar($$SELECT crear_producto('{"modelo":"M36","publico":"adulto","diseno_color":"Azul","talla":"L","codigo":"t36","costo_produccion_docena":-1}')$$, 'no pueden ser negativos');
+SELECT pg_temp.debe_fallar($$SELECT crear_producto('{"modelo":"M36","publico":"adulto","diseno_color":"Azul","talla":"L","codigo":" ","costo_produccion_docena":1}')$$, 'Falta el código');
+SELECT pg_temp.debe_fallar($$SELECT crear_producto('{"modelo":"M36","publico":"adulto","diseno_color":"Azul","talla":"L","codigo":"t36_x","costo_produccion_docena":1,"precio_venta_sugerido":-1}')$$, 'no pueden ser negativos');
+SELECT pg_temp.debe_fallar($$SELECT editar_producto(gen_random_uuid(), '{"modelo":"M","publico":"a","diseno_color":"c","talla":"t","costo_produccion_docena":1}')$$, 'Producto no encontrado');
+SELECT pg_temp.debe_fallar($$SELECT cambiar_estado_producto(gen_random_uuid(), 'activo')$$, 'Producto no encontrado');
+SELECT pg_temp.debe_fallar($$SELECT crear_modelo_media('  ')$$, 'nombre del modelo');
 CREATE TEMP TABLE t_prod ON COMMIT DROP AS SELECT crear_producto('{"sku":"SKU-36A","codigo":"t36_a","modelo":"M36","publico":"adulto","diseno_color":"Azul","talla":"L","costo_produccion_docena":5,"precio_venta_sugerido":12}') AS id;
+SELECT pg_temp.debe_fallar(format('SELECT editar_producto(%L, %L)', (SELECT id FROM t_prod), '{"modelo":"M36","publico":"adulto","diseno_color":"Rojo","talla":"XL","costo_produccion_docena":-2}'), 'no pueden ser negativos');
 SELECT editar_producto((SELECT id FROM t_prod), '{"sku":"OTRO","codigo":"otro","modelo":"M36","publico":"adulto","diseno_color":"Rojo","talla":"XL","costo_produccion_docena":6,"precio_venta_sugerido":14}');
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT sku = 'SKU-36A' AND codigo = 't36_a' AND diseno_color = 'Rojo' AND talla = 'XL' AND costo_produccion_docena = 6 AND precio_venta_sugerido = 14
   FROM catalogo_medias WHERE id = (SELECT id FROM t_prod)), 'se edita todo menos el SKU y el código');
+SELECT pg_temp.verificar((SELECT NOT es_crudo FROM catalogo_medias WHERE id = (SELECT id FROM t_prod)), 'sin es_crudo en los datos se mantiene el que tenía');
 SELECT pg_temp.debe_fallar($$UPDATE catalogo_medias SET sku = 'CAMBIO' WHERE codigo = 't36_a'$$, 'no se cambian');
 SELECT pg_temp.debe_fallar($$UPDATE catalogo_medias SET codigo = 'cambio' WHERE codigo = 't36_a'$$, 'no se cambian');
 -- Un producto sin SKU (crudo) puede recibir su SKU una vez
@@ -121,7 +137,9 @@ SELECT pg_temp.verificar(EXISTS (SELECT 1 FROM modelos_media WHERE nombre = 'Mod
 SET LOCAL ROLE authenticated;
 CREATE TEMP TABLE t_cli ON COMMIT DROP AS SELECT guardar_cliente(NULL, '{"nombre":" Cliente 36 ","numero_documento":"20360360361","telefono":"","direccion":"Jr. 36"}') AS id;
 SELECT pg_temp.debe_fallar($$SELECT guardar_cliente(NULL, '{"nombre":"Otro","numero_documento":"20360360361"}')$$, 'Ya hay un cliente con el documento');
-SELECT pg_temp.debe_fallar($$SELECT guardar_cliente(NULL, '{"nombre":"","numero_documento":"1"}')$$, 'obligatorio');
+SELECT pg_temp.debe_fallar($$SELECT guardar_cliente(NULL, '{"nombre":"","numero_documento":"1"}')$$, 'nombre o razón social es obligatorio');
+SELECT pg_temp.debe_fallar($$SELECT guardar_cliente(NULL, '{"nombre":"X","numero_documento":" "}')$$, 'DNI o RUC es obligatorio');
+SELECT pg_temp.debe_fallar($$SELECT guardar_cliente(gen_random_uuid(), '{"nombre":"X","numero_documento":"36999999"}')$$, 'Cliente no encontrado');
 SELECT guardar_cliente((SELECT id FROM t_cli), '{"nombre":"Cliente 36 SAC","numero_documento":"20360360361","telefono":"999"}');
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT tipo_documento = 'ruc' AND nombre = 'Cliente 36 SAC' AND telefono = '999' AND direccion IS NULL FROM clientes WHERE id = (SELECT id FROM t_cli)),
@@ -146,6 +164,8 @@ SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM catalogo_medias WHERE id = '0
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.debe_fallar($$SELECT abrir_caja('00000000-0000-0000-0000-0000000036a2', -1)$$, 'no puede ser negativo');
 SELECT pg_temp.debe_fallar($$SELECT abrir_caja(NULL, 10)$$, 'Elige la vendedora');
+SELECT pg_temp.debe_fallar($$SELECT abrir_caja('00000000-0000-0000-0000-0000000036a5', 10)$$, 'Elige la vendedora');  -- inactiva
+SELECT pg_temp.debe_fallar($$SELECT cerrar_caja(gen_random_uuid(), 0, NULL)$$, 'Caja no encontrada');
 CREATE TEMP TABLE t_caja ON COMMIT DROP AS SELECT abrir_caja('00000000-0000-0000-0000-0000000036a2', 100) AS id;
 SELECT pg_temp.debe_fallar($$SELECT abrir_caja('00000000-0000-0000-0000-0000000036a2', 50)$$, 'ya abrió su caja de hoy');
 RESET ROLE;
@@ -153,24 +173,48 @@ SELECT pg_temp.verificar((SELECT fecha = (NOW() AT TIME ZONE 'America/Lima')::da
 UPDATE cajas_diarias SET ventas_efectivo = 80, cobros_efectivo = 30, pagos_efectivo = 10 WHERE id = (SELECT id FROM t_caja);  -- esperado 200
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.debe_fallar(format('SELECT cerrar_caja(%L, 190, %L)', (SELECT id FROM t_caja), ' '), 'justificación');
+SELECT pg_temp.debe_fallar(format('SELECT cerrar_caja(%L, -1, %L)', (SELECT id FROM t_caja), 'x'), 'no puede ser negativo');
 CREATE TEMP TABLE t_cierre ON COMMIT DROP AS SELECT cerrar_caja((SELECT id FROM t_caja), 190, 'Faltó cambio') AS r;
 SELECT pg_temp.debe_fallar(format('SELECT cerrar_caja(%L, 200, NULL)', (SELECT id FROM t_caja)), 'ya está cerrada');
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT r->>'estado' = 'cerrada_faltante' AND (r->>'diferencia')::numeric = -10 AND (r->>'esperado')::numeric = 200 FROM t_cierre), 'cierre: esperado 200, faltan 10');
 SELECT pg_temp.verificar((SELECT saldo_esperado_efectivo = 200 AND saldo_declarado_efectivo = 190 AND diferencia = -10 AND justificacion = 'Faltó cambio'
   FROM cajas_diarias WHERE id = (SELECT id FROM t_caja)), 'la caja guarda lo esperado, lo contado y la diferencia');
+-- Cuadrada sin justificación y sobrante con ella; otra vendedora abre su propia caja el mismo día
+SET LOCAL ROLE authenticated;
+CREATE TEMP TABLE t_caja_b ON COMMIT DROP AS SELECT abrir_caja('00000000-0000-0000-0000-0000000036a6', 30) AS id;
+CREATE TEMP TABLE t_caja_c ON COMMIT DROP AS SELECT abrir_caja('00000000-0000-0000-0000-0000000036a7', 30) AS id;
+CREATE TEMP TABLE t_cierre_b ON COMMIT DROP AS SELECT cerrar_caja((SELECT id FROM t_caja_b), 30, NULL) AS r;
+SELECT pg_temp.debe_fallar(format('SELECT cerrar_caja(%L, 35, NULL)', (SELECT id FROM t_caja_c)), 'justificación');
+CREATE TEMP TABLE t_cierre_c ON COMMIT DROP AS SELECT cerrar_caja((SELECT id FROM t_caja_c), 35, 'Sobró') AS r;
+RESET ROLE;
+SELECT pg_temp.verificar((SELECT r->>'estado' = 'cerrada_cuadrada' AND (r->>'diferencia')::numeric = 0 FROM t_cierre_b), 'cuadrada sin justificación');
+SELECT pg_temp.verificar((SELECT r->>'estado' = 'cerrada_sobrante' AND (r->>'diferencia')::numeric = 5 FROM t_cierre_c), 'sobrante de 5 con justificación');
+
+-- La caja del día es la de Lima: lo que suma a la caja la encuentra aunque en UTC ya sea otro día
+SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid IN ('public._sumar_a_caja(uuid,text,numeric,boolean)'::regprocedure,
+    'public.registrar_pago_proveedor(uuid,text,date,text,uuid)'::regprocedure, 'public.registrar_compra_repuesto(uuid,integer,numeric,text,date,uuid,boolean,uuid)'::regprocedure,
+    'public._caja_abierta_hoy(uuid)'::regprocedure) AND prosrc ~* '\mcurrent_date\M'), 'ninguna función de caja usa CURRENT_DATE (UTC)');
+INSERT INTO cajas_diarias (id, asesora_id, fecha, saldo_inicial, estado) VALUES
+  ('00000000-0000-0000-0000-0000000036b9', '00000000-0000-0000-0000-0000000036a1', (NOW() AT TIME ZONE 'America/Lima')::date, 0, 'abierta');
+SELECT _sumar_a_caja('00000000-0000-0000-0000-0000000036a1', 'efectivo', 15, true);
+SELECT pg_temp.verificar((SELECT ventas_efectivo = 15 FROM cajas_diarias WHERE id = '00000000-0000-0000-0000-0000000036b9'), 'la venta en efectivo entra a la caja abierta del día de Lima');
 
 -- ── Egresos ────────────────────────────────────────────────────────────────
 SET LOCAL ROLE authenticated;
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000036a4');  -- almacenero: materia prima sí, egresos no
 CREATE TEMP TABLE t_egr ON COMMIT DROP AS SELECT registrar_egreso(' Planilla ', 500, 'planilla', NULL, ' https://x/c.jpg ') AS id;
 SELECT pg_temp.debe_fallar($$SELECT registrar_egreso('Luz', 0, 'servicios', NULL, NULL)$$, 'mayor a 0');
+SELECT pg_temp.debe_fallar($$SELECT registrar_egreso(' ', 5, 'servicios', NULL, NULL)$$, 'concepto');
+SELECT pg_temp.debe_fallar($$SELECT registrar_egreso('Luz', 5, ' ', NULL, NULL)$$, 'categoría');
+SELECT pg_temp.debe_fallar($$SELECT registrar_egreso('Luz', 5, 'servicios', NULL, 'javascript:alert(1)')$$, 'http:// o https://');
 SELECT pg_temp.debe_fallar(format('SELECT eliminar_egreso(%L)', (SELECT id FROM t_egr)), 'módulo egresos');
 SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000036a1');  -- admin
 CREATE TEMP TABLE t_egr2 ON COMMIT DROP AS SELECT registrar_egreso('Luz', 80, 'servicios', '2026-11-01', NULL) AS id;
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT concepto = 'Planilla' AND comprobante_url = 'https://x/c.jpg' AND fecha = (NOW() AT TIME ZONE 'America/Lima')::date
   FROM egresos_adicionales WHERE id = (SELECT id FROM t_egr)), 'egreso con comprobante y fecha de Lima');
+SELECT pg_temp.verificar((SELECT fecha = '2026-11-01' FROM egresos_adicionales WHERE id = (SELECT id FROM t_egr2)), 'egreso con la fecha que se indica');
 INSERT INTO repuestos (id, nombre) VALUES ('00000000-0000-0000-0000-0000000036d1', 'Aguja 36');
 INSERT INTO compras_repuestos (repuesto_id, cantidad, precio_unitario, total, metodo_pago, egreso_id)
   VALUES ('00000000-0000-0000-0000-0000000036d1', 1, 80, 80, 'efectivo', (SELECT id FROM t_egr2));

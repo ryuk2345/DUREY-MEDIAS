@@ -50,7 +50,7 @@ interface Deuda {
     items_venta?: { docenas: number; precio_docena: number; catalogo_media: { codigo: string; sku: string | null } | null }[] }
 }
 interface CajaDiaria {
-  id: string; saldo_inicial: number; ventas_efectivo: number; cobros_efectivo: number; pagos_efectivo?: number; estado: string
+  id: string; asesora_id?: string | null; saldo_inicial: number; ventas_efectivo: number; cobros_efectivo: number; pagos_efectivo?: number; estado: string
 }
 
 interface CarritoItem { catalogo_media_id: string; codigo: string; docenas: number; precio_docena: number }
@@ -69,7 +69,8 @@ export default function VentasPage() {
   const [stockPorMedia, setStockPorMedia] = useState<Record<string, number>>({})
   const [ventas, setVentas] = useState<Venta[]>([])
   const [deudas, setDeudas] = useState<Deuda[]>([])
-  const [caja, setCaja] = useState<CajaDiaria | null>(null)
+  // 036: una caja por vendedora y día; se muestra la de la vendedora elegida
+  const [cajasHoy, setCajasHoy] = useState<CajaDiaria[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'ventas' | 'deudas' | 'caja'>('ventas')
 
@@ -130,6 +131,8 @@ export default function VentasPage() {
   const [saldoInicial, setSaldoInicial] = useState('')
   const [cierreForm, setCierreForm] = useState({ efectivo: '', digital: '', justificacion: '' })
 
+  const caja = useMemo(() => cajasHoy.find(c => c.asesora_id === vendedoraSeleccionadaId) ?? null, [cajasHoy, vendedoraSeleccionadaId])
+
   const supabase = createClient()
 
   // ── CARGAR DATOS ──────────────────────────────────────────────────────────
@@ -151,7 +154,7 @@ export default function VentasPage() {
         venta:ventas(id, codigo_venta, total_soles, cliente:clientes(id, nombre, numero_documento, telefono, direccion), asesora:usuarios(id, nombre),
           items_venta(docenas, precio_docena, catalogo_media:catalogo_medias(codigo, sku)))
       `).order('fecha_vencimiento'),
-      supabase.from('cajas_diarias').select('*').eq('fecha', hoy).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('cajas_diarias').select('*').eq('fecha', hoy).order('created_at', { ascending: false }),
       supabase.from('vista_stock_vendible').select('catalogo_media_id, vendibles')
     ])
 
@@ -167,7 +170,7 @@ export default function VentasPage() {
     setCatalogo(cat.data ?? [])
     setVentas((ven.data ?? []) as unknown as Venta[])
     setDeudas((deu.data ?? []) as unknown as Deuda[])
-    setCaja(caj.data ?? null)
+    setCajasHoy((caj.data ?? []) as CajaDiaria[])
 
     // Calcular stock total por tipo de media
     const stockMap: Record<string, number> = {}
@@ -612,6 +615,10 @@ export default function VentasPage() {
           <p className="text-slate-400 text-xs font-medium ml-11">Ventas con inicial/adelanto, liquidación total de deuda, adjunto de billetes/vouchers y auditoría administradora</p>
         </div>
         <div className="flex items-center gap-3">
+          <div className="w-48" aria-label="Caja de la vendedora">
+            <CustomSelect value={vendedoraSeleccionadaId} onChange={val => setVendedoraSeleccionadaId(val)}
+              options={[{ value: '', label: 'Caja de…' }, ...vendedoras.map(v => ({ value: v.id, label: `Caja de ${v.nombre}` }))]} placeholder="Caja de…" />
+          </div>
           {!caja ? (
             <button onClick={() => setShowAperturaModal(true)} className="btn-secondary text-xs py-2 rounded-2xl">
               <DollarSign className="w-4 h-4 text-emerald-400" /> Abrir Caja

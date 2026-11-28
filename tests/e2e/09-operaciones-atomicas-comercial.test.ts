@@ -11,6 +11,7 @@
  *   - Se despacha o se plancha más de lo que hay en stock
  *   - Dos ventas reciben el mismo código
  */
+import { hoyLocal } from '@/lib/domain/mantenimiento'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ejecutarRpcProcesos } from '@/lib/supabase/mockRpcProcesos'
 import { ejecutarRpcAlmacen } from '@/lib/supabase/mockRpcAlmacen'
@@ -170,7 +171,7 @@ describe('registrar_produccion_planchado', () => {
 })
 
 describe('cobros reales y caja diaria (migración 023)', () => {
-  const hoy = new Date().toISOString().split('T')[0]
+  const hoy = hoyLocal()  // día de Lima, como la base desde la 036
 
   beforeEach(() => {
     darStockParaVender()

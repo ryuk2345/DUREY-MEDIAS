@@ -24,7 +24,8 @@ export const RPC_MANTENIMIENTO = [
 const METODOS_PAGO = ['efectivo', 'transferencia', 'yape_plin', 'otro']
 const num = (v: unknown) => Number(v ?? 0) || 0
 const ahora = () => new Date().toISOString()
-const hoy = () => ahora().split('T')[0]
+// Día de Lima, igual que la base desde la 036 (antes UTC)
+const hoy = () => hoyLocal()
 
 function registrarCompraRepuesto(db: Db, p: any) {
   const cantidad = Math.trunc(num(p.p_cantidad))

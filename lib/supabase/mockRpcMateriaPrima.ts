@@ -4,6 +4,7 @@
  * 024_rpc_materia_prima.sql. Validan todo antes de escribir; mockDb.ts guarda
  * la base solo si no hubo error.
  */
+import { hoyLocal } from '@/lib/domain/mantenimiento'
 import { ErrorNegocio, nuevoId, tabla, ejecutarHandler, cajaAbiertaHoy, nombreCaja, type Db, type ResultadoRpc } from './mockRpcComun'
 
 export const RPC_MATERIA_PRIMA = [
@@ -20,7 +21,8 @@ const ETIQUETA_METODO: Record<string, string> = { efectivo: 'Efectivo', transfer
 
 const num = (v: unknown) => Number(v ?? 0) || 0
 const ahora = () => new Date().toISOString()
-const hoy = () => ahora().split('T')[0]
+// Día de Lima, igual que la base desde la 036 (antes UTC)
+const hoy = () => hoyLocal()
 
 function movimiento(db: Db, materiaPrimaId: string, tipo: string, cantidad: number, referenciaId: string | null) {
   tabla(db, 'movimientos_materia_prima').push({

@@ -45,12 +45,13 @@ spec: ../specs/fase-7-transversal.md
 | T3 | hecha | Playwright `fase7-gestion.spec.ts`: catálogo con SKU y código fijos, egreso con comprobante, caja con vendedora y cierre con faltante |
 | T4 | hecha | `tests/e2e/25-rutas-por-rol.test.ts`: rutas = módulos; el administrador ya abre Volteado y Tintorería |
 | T5 | hecha | `tests/e2e/25` (sugerencias) y Playwright «Sugerencias al escribir» en Catálogo, Planchado, Clientes y Máquinas |
-| T6 | en curso | panel |
+| T6 | en curso | panel ronda 1 (L120-L130): 7 corregidos (caja del día de Lima en las funciones de caja, caja por vendedora en pantalla, panel del administrador por pagos reales, comprobante solo http/https, pruebas que faltaban en SQL, mock y pantalla de Balance); 4 aparcados (L124 dueño de la caja, pregunta al dueño; L125 asimetría deliberada; L129 Ventas; L130 a investigar) |
 
-Batería: `npm test` 317/317 · Playwright 64/64 · build y `tsc` en verde · ESLint sin errores nuevos.
+Batería: `npm test` 322/322 · Playwright 65/65 · build y `tsc` en verde · ESLint sin errores nuevos.
 
 ## Anotado
 - Encontrado al planear: registrar un gasto en Egresos fallaba en la base real (faltaba `comprobante_url`). Lo arregla la 036.
 - El bloqueo también alcanza `compras_materia_prima`, `cuotas_compras` y `pagos_proveedores` (supuesto en la spec).
 - Pregunta al dueño: el supervisor podía abrir Mantenimiento por URL aunque no está en su menú (`MODULOS_POR_ROL`). Con la lista única ya no puede.
 - La caja ahora pide la vendedora al abrirla (cada caja es de una vendedora).
+- Encontrado al corregir: Materia prima y Egresos proponían «hoy» en UTC; de noche la base (ahora en Lima) rechazaba el pago como futuro. Ahora usan el día de Lima. Otras pantallas (calendario, reportes, volteado, preparado, remallado, usuarios, planchado) aún usan UTC: revisar aparte.

@@ -164,6 +164,7 @@ function registrarEgreso(db: Db, p: any) {
   if (!texto(p.p_concepto)) throw new ErrorNegocio('Escribe el concepto del gasto')
   if (!(num(p.p_monto) > 0)) throw new ErrorNegocio('El monto debe ser mayor a 0')
   if (!texto(p.p_categoria)) throw new ErrorNegocio('Elige la categoría del gasto')
+  if (texto(p.p_comprobante_url) && !/^https?:\/\//i.test(texto(p.p_comprobante_url))) throw new ErrorNegocio('El comprobante debe ser un enlace que empiece con http:// o https://')
   const id = nuevoId()
   tabla(db, 'egresos_adicionales').push({ id, concepto: texto(p.p_concepto), monto: num(p.p_monto), categoria: texto(p.p_categoria),
     fecha: p.p_fecha || hoyLocal(), comprobante_url: texto(p.p_comprobante_url) || null, created_at: ahora() })
