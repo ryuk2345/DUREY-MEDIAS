@@ -53,6 +53,8 @@ INSERT INTO usuarios (id, nombre, email, rol, activo, estado) VALUES
   ('00000000-0000-0000-0000-0000000036a5', 'Vende inactiva 036', 'vi036@test', 'vendedora', false, 'disponible'),
   ('00000000-0000-0000-0000-0000000036a6', 'Vende B 036', 'vb036@test', 'vendedora', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000036a7', 'Vende C 036', 'vc036@test', 'vendedora', true, 'disponible'),
+  ('00000000-0000-0000-0000-0000000036a8', 'Super 036', 'su036@test', 'supervisor', true, 'disponible'),
+  ('00000000-0000-0000-0000-0000000036a9', 'Vende D 036', 'vd036@test', 'vendedora', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000036a1', 'Admin 036', 'ad036@test', 'admin', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000036a2', 'Vende 036', 've036@test', 'vendedora', true, 'disponible'),
   ('00000000-0000-0000-0000-0000000036a3', 'Teje 036', 'te036@test', 'tejedor', true, 'disponible'),
@@ -201,6 +203,14 @@ CREATE TEMP TABLE t_cierre_c ON COMMIT DROP AS SELECT cerrar_caja((SELECT id FRO
 RESET ROLE;
 SELECT pg_temp.verificar((SELECT r->>'estado' = 'cerrada_cuadrada' AND (r->>'diferencia')::numeric = 0 FROM t_cierre_b), 'cuadrada sin justificación');
 SELECT pg_temp.verificar((SELECT r->>'estado' = 'cerrada_sobrante' AND (r->>'diferencia')::numeric = 5 FROM t_cierre_c), 'sobrante de 5 con justificación');
+-- 2-B: el supervisor también abre y cierra la caja de otra vendedora
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.sesion('00000000-0000-0000-0000-0000000036a8');
+CREATE TEMP TABLE t_caja_d ON COMMIT DROP AS SELECT abrir_caja('00000000-0000-0000-0000-0000000036a9', 10) AS id;
+SELECT cerrar_caja((SELECT id FROM t_caja_d), 10, NULL);
+RESET ROLE;
+SELECT pg_temp.verificar((SELECT estado = 'cerrada_cuadrada' AND asesora_id = '00000000-0000-0000-0000-0000000036a9' FROM cajas_diarias WHERE id = (SELECT id FROM t_caja_d)),
+  'el supervisor abre y cierra la caja de otra vendedora');
 
 -- La caja del día es la de Lima: lo que suma a la caja la encuentra aunque en UTC ya sea otro día
 SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid IN ('public._sumar_a_caja(uuid,text,numeric,boolean)'::regprocedure,
