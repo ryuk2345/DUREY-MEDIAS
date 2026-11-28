@@ -36,3 +36,21 @@ spec: ../specs/fase-7-transversal.md
 | T4 | `proxy.ts` desde `MODULOS_POR_ROL` | 2 | `npm test` |
 | T5 | Sugerencias al escribir | 1 | Playwright |
 | T6 | Panel, PR, fusión, 036 en la base real | 2 | permisos y advisors |
+
+## Evidencia (2026-11-27)
+| # | Estado | Prueba observada |
+|---|---|---|
+| T1 | hecha (a58e4e1) | `probar_migraciones.sh`: PASA 036 y su reversión; 026 y 030 adaptadas |
+| T2 | hecha (8780d75) | `tests/e2e/24-catalogo-caja-clientes-egresos.test.ts` (10) |
+| T3 | hecha | Playwright `fase7-gestion.spec.ts`: catálogo con SKU y código fijos, egreso con comprobante, caja con vendedora y cierre con faltante |
+| T4 | hecha | `tests/e2e/25-rutas-por-rol.test.ts`: rutas = módulos; el administrador ya abre Volteado y Tintorería |
+| T5 | hecha | `tests/e2e/25` (sugerencias) y Playwright «Sugerencias al escribir» en Catálogo, Planchado, Clientes y Máquinas |
+| T6 | en curso | panel |
+
+Batería: `npm test` 317/317 · Playwright 64/64 · build y `tsc` en verde · ESLint sin errores nuevos.
+
+## Anotado
+- Encontrado al planear: registrar un gasto en Egresos fallaba en la base real (faltaba `comprobante_url`). Lo arregla la 036.
+- El bloqueo también alcanza `compras_materia_prima`, `cuotas_compras` y `pagos_proveedores` (supuesto en la spec).
+- Pregunta al dueño: el supervisor podía abrir Mantenimiento por URL aunque no está en su menú (`MODULOS_POR_ROL`). Con la lista única ya no puede.
+- La caja ahora pide la vendedora al abrirla (cada caja es de una vendedora).
