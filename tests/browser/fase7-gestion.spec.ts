@@ -44,10 +44,8 @@ test('Caja: se abre y al cerrar con faltante pide justificación y guarda la dif
   await page.getByRole('button', { name: /Abrir Caja/ }).click()
   const dialogo = page.getByRole('dialog')
   await page.waitForTimeout(500)
-  if (await dialogo.getByRole('combobox').filter({ hasText: 'Seleccionar Vendedora...' }).count()) {
-    await dialogo.getByRole('combobox').filter({ hasText: 'Seleccionar Vendedora...' }).click()
-    await page.getByRole('option', { name: /Vendedora Prueba/ }).click()
-  }
+  await dialogo.getByRole('combobox').first().click()
+  await page.getByRole('option', { name: 'Vendedora Prueba', exact: true }).click()
   await expect(dialogo.getByRole('combobox').filter({ hasText: 'Vendedora Prueba' })).toBeVisible()
   await page.getByPlaceholder('0.00').first().fill('50')
   await page.getByRole('button', { name: /Abrir Caja/ }).last().click()
@@ -138,5 +136,37 @@ test('Balance: una compra a plazos cuenta solo lo pagado (no su costo total)', a
 
   const fin = await mockDb(page)
   for (const t of Object.keys(propias)) fin[t] = (fin[t] ?? []).filter((f: { id: string }) => !f.id.startsWith('f7'))
+  await page.request.post('/api/mock-db', { data: fin })
+})
+
+test('Caja: con dos cajas abiertas, se ve la de la vendedora elegida (no la última abierta)', async ({ page }) => {
+  const base = await mockDb(page)
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date())
+  const propias = [
+    { id: 'f7cajaA', asesora_id: 'vend1', fecha: hoy, saldo_inicial: 11, ventas_efectivo: 0, cobros_efectivo: 0, pagos_efectivo: 0, estado: 'abierta', created_at: '2026-01-01T08:00:00Z' },
+    { id: 'f7cajaB', asesora_id: 'vend2', fecha: hoy, saldo_inicial: 22, ventas_efectivo: 0, cobros_efectivo: 0, pagos_efectivo: 0, estado: 'abierta', created_at: '2026-01-01T09:00:00Z' },
+  ]
+  // Sin otras cajas de hoy de estas vendedoras, para que se vea exactamente la de la prueba
+  const otras = (base.cajas_diarias ?? []).filter((c: { fecha: string; asesora_id: string }) => !(c.fecha === hoy && ['vend1', 'vend2'].includes(c.asesora_id)))
+  const vend2 = { id: 'vend2', nombre: 'Vendedora Dos', email: 'vend2@durey.com', rol: 'vendedora', activo: true, estado: 'disponible' }
+  await page.request.post('/api/mock-db', { data: { ...base, usuarios: [...base.usuarios.filter((u: { id: string }) => u.id !== 'vend2'), vend2], cajas_diarias: [...otras, ...propias] } })
+
+  await page.goto('/dashboard/ventas')
+  await page.getByRole('button', { name: /Caja Diaria/ }).click()
+  const elegirCaja = async (nombre: string) => {
+    await page.getByLabel('Caja de la vendedora').getByRole('combobox').click()
+    await page.getByRole('option', { name: `Caja de ${nombre}` }).click()
+  }
+  const esperado = page.getByText('Total Esperado en Caja').locator('..')
+  await elegirCaja('Vendedora Prueba')
+  await expect(esperado).toContainText('11.00')
+  await elegirCaja('Vendedora Dos')
+  await expect(esperado).toContainText('22.00')
+  await expect(page.getByRole('button', { name: /Cerrar Caja/ })).toBeVisible()
+
+  const fin = await mockDb(page)
+  fin.cajas_diarias = (fin.cajas_diarias ?? []).filter((c: { id: string }) => !c.id.startsWith('f7caja')).concat(
+    (base.cajas_diarias ?? []).filter((c: { fecha: string; asesora_id: string }) => c.fecha === hoy && ['vend1', 'vend2'].includes(c.asesora_id)))
+  fin.usuarios = fin.usuarios.filter((u: { id: string }) => u.id !== 'vend2')
   await page.request.post('/api/mock-db', { data: fin })
 })

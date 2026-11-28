@@ -71,6 +71,8 @@ export default function VentasPage() {
   const [deudas, setDeudas] = useState<Deuda[]>([])
   // 036: una caja por vendedora y día; se muestra la de la vendedora elegida
   const [cajasHoy, setCajasHoy] = useState<CajaDiaria[]>([])
+  // Vendedora cuya caja se mira y se abre/cierra (aparte de la vendedora de la venta nueva)
+  const [cajaVendedoraId, setCajaVendedoraId] = useState('')
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'ventas' | 'deudas' | 'caja'>('ventas')
 
@@ -131,7 +133,8 @@ export default function VentasPage() {
   const [saldoInicial, setSaldoInicial] = useState('')
   const [cierreForm, setCierreForm] = useState({ efectivo: '', digital: '', justificacion: '' })
 
-  const caja = useMemo(() => cajasHoy.find(c => c.asesora_id === vendedoraSeleccionadaId) ?? null, [cajasHoy, vendedoraSeleccionadaId])
+  const cajaDe = cajaVendedoraId || vendedoraSeleccionadaId
+  const caja = useMemo(() => cajasHoy.find(c => c.asesora_id === cajaDe) ?? null, [cajasHoy, cajaDe])
 
   const supabase = createClient()
 
@@ -567,9 +570,9 @@ export default function VentasPage() {
   }
 
   const abrirCaja = async () => {
-    if (!vendedoraSeleccionadaId) { toast.error('Elige la vendedora de la caja'); return }
+    if (!cajaDe) { toast.error('Elige la vendedora de la caja'); return }
     // 036: la base abre la caja con la fecha de Lima y una sola por vendedora y día
-    const { error } = await supabase.rpc('abrir_caja', { p_asesora_id: vendedoraSeleccionadaId || null, p_saldo_inicial: parseFloat(saldoInicial || '0') })
+    const { error } = await supabase.rpc('abrir_caja', { p_asesora_id: cajaDe, p_saldo_inicial: parseFloat(saldoInicial || '0') })
     if (error) { toast.error(`Error al abrir caja: ${error.message}`); return }
     toast.success('Caja abierta exitosamente')
     setShowAperturaModal(false)
@@ -616,7 +619,7 @@ export default function VentasPage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="w-48" aria-label="Caja de la vendedora">
-            <CustomSelect value={vendedoraSeleccionadaId} onChange={val => setVendedoraSeleccionadaId(val)}
+            <CustomSelect value={cajaDe} onChange={val => setCajaVendedoraId(val)}
               options={[{ value: '', label: 'Caja de…' }, ...vendedoras.map(v => ({ value: v.id, label: `Caja de ${v.nombre}` }))]} placeholder="Caja de…" />
           </div>
           {!caja ? (
@@ -1472,7 +1475,7 @@ export default function VentasPage() {
           <div className="space-y-4">
             {/* 036: cada caja es de una vendedora (sus ventas y cobros entran a su caja) */}
             <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Vendedora de la caja</label>
-            <CustomSelect value={vendedoraSeleccionadaId} onChange={val => setVendedoraSeleccionadaId(val)}
+            <CustomSelect value={cajaDe} onChange={val => setCajaVendedoraId(val)}
               options={[{ value: '', label: 'Seleccionar Vendedora...' }, ...vendedoras.map(v => ({ value: v.id, label: v.nombre }))]} placeholder="Seleccionar Vendedora..." />
             <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Saldo Inicial en Efectivo (S/)</label>
             <input type="number" min="0" step="0.50" placeholder="0.00" value={saldoInicial} onChange={e => setSaldoInicial(e.target.value)} className="input-dark w-full font-mono text-center font-bold text-lg mb-6" />

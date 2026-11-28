@@ -43,7 +43,7 @@ export default function AdminPage() {
       supabase.from('cuotas').select('monto').neq('estado', 'pagada'),
       supabase.from('reparaciones').select('costo_mano_obra').gte('fecha_reparacion', inicioMes),
       // 036 (P1-A): lo pagado de verdad, como Balance y Egresos
-      supabase.from('vista_gastos_materia_prima').select('monto').gte('fecha', inicioMes),
+      supabase.from('vista_gastos_materia_prima').select('fecha, monto').gte('fecha', inicioMes),
       supabase.from('egresos_adicionales').select('monto').gte('fecha', inicioMes),
       supabase.from('mantenimientos_preventivos').select('costo_mano_obra').eq('estado', 'terminado').gte('fecha_fin', inicioMes),
     ])

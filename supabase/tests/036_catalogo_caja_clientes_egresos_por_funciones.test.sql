@@ -194,11 +194,19 @@ SELECT pg_temp.verificar((SELECT r->>'estado' = 'cerrada_sobrante' AND (r->>'dif
 -- La caja del día es la de Lima: lo que suma a la caja la encuentra aunque en UTC ya sea otro día
 SELECT pg_temp.verificar(NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid IN ('public._sumar_a_caja(uuid,text,numeric,boolean)'::regprocedure,
     'public.registrar_pago_proveedor(uuid,text,date,text,uuid)'::regprocedure, 'public.registrar_compra_repuesto(uuid,integer,numeric,text,date,uuid,boolean,uuid)'::regprocedure,
-    'public._caja_abierta_hoy(uuid)'::regprocedure) AND prosrc ~* '\mcurrent_date\M'), 'ninguna función de caja usa CURRENT_DATE (UTC)');
+    'public._caja_abierta_hoy(uuid)'::regprocedure, 'public.registrar_venta(jsonb,uuid,text,numeric,jsonb,jsonb,text)'::regprocedure,
+    'public.registrar_cobro_cuotas(uuid[],text,text,uuid)'::regprocedure) AND (prosrc ~* '\mcurrent_date\M' OR prosrc !~ 'America/Lima')),
+  'las funciones de caja, ventas y cobros usan el día de Lima, no CURRENT_DATE');
 INSERT INTO cajas_diarias (id, asesora_id, fecha, saldo_inicial, estado) VALUES
   ('00000000-0000-0000-0000-0000000036b9', '00000000-0000-0000-0000-0000000036a1', (NOW() AT TIME ZONE 'America/Lima')::date, 0, 'abierta');
+-- Con el servidor en dos husos extremos (UTC+14 y UTC-12) al menos uno da otro día que Lima a cualquier hora
+SET LOCAL timezone = 'Etc/GMT-14';
 SELECT _sumar_a_caja('00000000-0000-0000-0000-0000000036a1', 'efectivo', 15, true);
-SELECT pg_temp.verificar((SELECT ventas_efectivo = 15 FROM cajas_diarias WHERE id = '00000000-0000-0000-0000-0000000036b9'), 'la venta en efectivo entra a la caja abierta del día de Lima');
+SET LOCAL timezone = 'Etc/GMT+12';
+SELECT _sumar_a_caja('00000000-0000-0000-0000-0000000036a1', 'efectivo', 15, true);
+RESET timezone;
+SELECT pg_temp.verificar((SELECT ventas_efectivo = 30 FROM cajas_diarias WHERE id = '00000000-0000-0000-0000-0000000036b9'),
+  'la venta en efectivo entra a la caja abierta del día de Lima sea cual sea el huso del servidor');
 
 -- ── Egresos ────────────────────────────────────────────────────────────────
 SET LOCAL ROLE authenticated;
