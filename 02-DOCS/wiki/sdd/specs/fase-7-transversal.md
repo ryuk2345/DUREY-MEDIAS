@@ -7,12 +7,12 @@ timestamp: 2026-11-27T22:00:00Z
 topic: sdd
 slug: fase-7-transversal
 branch: fase-7/transversal
-status: draft
+status: approved
 ---
 
 # Spec — Fase 7, transversal
 
-> Slug: `fase-7-transversal` · Status: draft · Created: 2026-11-27
+> Slug: `fase-7-transversal` · Status: approved · Created: 2026-11-27
 > Inherits: [constitución v1.0.0](../constitution.md) y AGENTS.md. Plan: [plan-fases](../../plan-fases.md).
 
 ## Problem & why
@@ -77,13 +77,14 @@ Todos los roles en sus búsquedas; los roles con el módulo catálogo (hoy admin
 - **decidido (dueño, 2026-11-27)** — 1-A: sugerencias en todas las búsquedas de productos, clientes y máquinas.
 - **decidido (dueño, 2026-11-27)** — 2-A: se edita todo menos el SKU.
 - **decidido (dueño, 2026-11-27)** — El correo queda para después.
-- **P1** — Compras al contado: ¿cuentan el día de la compra (si se recibió) y las devueltas no cuentan? Recomendado: sí.
-- **P2** — ¿El código interno del producto también queda fijo, como el SKU? Recomendado: sí (también se usa en sacos y ventas).
-- **P3** — ¿Egresos adicionales (planilla, servicios) también solo por funciones? Recomendado: sí.
+- **decidido (dueño, 2026-11-27)** — P1-A: una compra al contado cuenta el día de la compra si se recibió; las devueltas no cuentan; las cuotas cuentan cuando se pagan.
+- **decidido (dueño, 2026-11-27)** — P2-A: el código interno queda fijo igual que el SKU.
+- **decidido (dueño, 2026-11-27)** — P3-A: egresos adicionales solo por funciones con el módulo egresos.
 - **supuesto** — La lista de sugerencias muestra hasta 8 coincidencias.
+- **supuesto (al construir)** — P3-A alcanza también a `compras_materia_prima`, `cuotas_compras` y `pagos_proveedores`: son dinero, el cálculo de gastos lee de ellas, ninguna pantalla las escribe directo y ya tienen sus funciones (024 y 027).
 
 ## Construction
 Migración 036 (SKU y código fijos, funciones de catálogo, caja, clientes y egresos con módulo; permisos), dominio y mock, pantallas, `proxy.ts` desde `MODULOS_POR_ROL`.
 
 ## Approval
-Pendiente de aprobación del dueño.
+Aprobada por el dueño el 2026-11-27 («1-a,2-a,3-a» a las preguntas abiertas).
